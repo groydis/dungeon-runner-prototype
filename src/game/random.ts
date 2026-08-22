@@ -1,6 +1,6 @@
 export type Rng = () => number;
 
-/** Mulberry32: small deterministic [0, 1) generator for row content only. */
+/** Mulberry32: small deterministic [0, 1) generator for seeded streams (rows, drops). */
 export function mulberry32(seed: number): Rng {
   let state = seed >>> 0;
   return () => {
