@@ -153,6 +153,7 @@ export class GameState {
   private activeShop: ActiveShop | null = null;
   private shopProgress: ShopProgress = createShopProgress();
   private readonly pendingLevelUps: number[] = [];
+  private activeCombatTargetId: string | null = null;
 
   private _distance = 0;
   private _status = '';
@@ -512,6 +513,7 @@ export class GameState {
       throw new Error('Cannot create a combat result for an evade event');
     }
     const monster = this.requireActiveMonster(event.monster.id);
+    this.activeCombatTargetId = monster.id;
 
     return resolveAutomaticCombat(
       player.stats,
@@ -522,6 +524,7 @@ export class GameState {
   }
 
   applyCombatLogEntry(entry: CombatLogEntry, target: EncounterTarget): void {
+    this.requireActiveCombatTarget(target);
     const player = this.requirePlayer();
     if (entry.target === 'player') {
       player.applyHealth(entry.targetHealthAfter);
@@ -531,6 +534,23 @@ export class GameState {
   }
 
   finishCombat(result: CombatResult, target: EncounterTarget): CombatFinishResult {
+    if (result.monsterId !== target.id) {
+      throw new Error(
+        `Combat result target mismatch: expected ${result.monsterId}, got ${target.id}`,
+      );
+    }
+    this.requireActiveCombatTarget(target);
+    try {
+      return this.resolveFinishedCombat(result, target);
+    } finally {
+      this.activeCombatTargetId = null;
+    }
+  }
+
+  private resolveFinishedCombat(
+    result: CombatResult,
+    target: EncounterTarget,
+  ): CombatFinishResult {
     const player = this.requirePlayer();
     const monster = this.requireMonsterById(target.id);
     player.applyHealth(result.playerHealthAfter);
@@ -662,6 +682,17 @@ export class GameState {
     return monster;
   }
 
+  private requireActiveCombatTarget(target: EncounterTarget): void {
+    if (this.activeCombatTargetId === null) {
+      throw new Error(`No active combat for target: ${target.id}`);
+    }
+    if (this.activeCombatTargetId !== target.id) {
+      throw new Error(
+        `Active combat target mismatch: expected ${this.activeCombatTargetId}, got ${target.id}`,
+      );
+    }
+  }
+
   private beginRun(classId: PlayerClassId): void {
     this._player = new Player(classId);
     this.clearRunSession();
@@ -677,6 +708,7 @@ export class GameState {
     this.activeShop = null;
     this.shopProgress = createShopProgress();
     this.pendingLevelUps.length = 0;
+    this.activeCombatTargetId = null;
   }
 
   private rebuildStreams(): void {

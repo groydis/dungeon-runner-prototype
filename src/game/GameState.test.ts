@@ -930,8 +930,9 @@ describe('XP and level-up', () => {
     expect(playerOf(state).experience).toBe(1);
     expect(playerOf(state).level).toBe(1);
 
-    const second = state.finishCombat(combatResult, combat.monster);
-    expect(second.experienceGained).toBe(0);
+    expect(() => state.finishCombat(combatResult, combat.monster)).toThrow(
+      `No active combat for target: ${DEMO_MONSTER_ID}`,
+    );
     expect(playerOf(state).experience).toBe(1);
     expect(() => state.createCombatResult(combat)).toThrow(
       /no longer active/,
@@ -1599,7 +1600,7 @@ describe('immutable encounter and player boundaries', () => {
         },
         { id: DEMO_MONSTER_ID },
       ),
-    ).toThrow(/no longer active|Unknown encounter target/);
+    ).toThrow(`No active combat for target: ${DEMO_MONSTER_ID}`);
     expect(playerOf(state).experience).toBe(1);
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
       'gold',
@@ -1644,6 +1645,43 @@ describe('immutable encounter and player boundaries', () => {
       getPlayerClassDefinition('ranger').startingStats.attack,
     );
     expect(playerOf(state).gold).toBe(0);
+  });
+
+  it('rejects a combat result paired with a different encounter target', () => {
+    const state = createState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+    const combat = state
+      .resolveCompletedMove(DEMO_MONSTER_COL)
+      .encounters.find((event) => event.kind === 'combat');
+    if (!combat || combat.kind !== 'combat') {
+      throw new Error('Expected a front-on Cave Rat fight');
+    }
+    const result = state.createCombatResult(combat);
+    const healthBefore = playerOf(state).stats.health;
+
+    expect(() => state.finishCombat(result, { id: 'other-rat' })).toThrow(
+      `Combat result target mismatch: expected ${result.monsterId}, got other-rat`,
+    );
+    expect(playerOf(state).stats.health).toBe(healthBefore);
+    expect(playerOf(state).experience).toBe(0);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
+      DEMO_MONSTER_ID,
+    );
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+
+    const monsterHit = result.log.find((entry) => entry.target === 'monster');
+    if (!monsterHit) {
+      throw new Error('Expected a player hit on the Cave Rat');
+    }
+    expect(() => state.applyCombatLogEntry(monsterHit, { id: 'other-rat' })).toThrow(
+      `Active combat target mismatch: expected ${DEMO_MONSTER_ID}, got other-rat`,
+    );
+    expect(
+      state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.health,
+    ).toBe(ENEMY_DEFINITIONS.caveRat.startingStats.health);
   });
 });
 
