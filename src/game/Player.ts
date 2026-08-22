@@ -11,6 +11,7 @@ import {
   getPlayerClassDefinition,
   type PlayerClassDefinition,
   type PlayerClassId,
+  type PlayerRenderKey,
 } from './definitions/classes';
 import { type DeepReadonly } from './freeze';
 import {
@@ -43,6 +44,10 @@ export class Player {
 
   get className(): string {
     return this.definition.name;
+  }
+
+  get renderKey(): PlayerRenderKey {
+    return this.definition.renderKey;
   }
 
   get definition(): DeepReadonly<PlayerClassDefinition> {

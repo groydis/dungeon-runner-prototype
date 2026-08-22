@@ -8,7 +8,22 @@ export type PlayerClassId =
   | 'knight'
   | 'barbarian';
 
+export type PlayerRenderKey =
+  | 'rogue'
+  | 'ranger'
+  | 'mage'
+  | 'knight'
+  | 'barbarian';
+
 export const PLAYER_CLASS_IDS: readonly PlayerClassId[] = [
+  'rogue',
+  'ranger',
+  'mage',
+  'knight',
+  'barbarian',
+];
+
+export const PLAYER_RENDER_KEYS: readonly PlayerRenderKey[] = [
   'rogue',
   'ranger',
   'mage',
@@ -22,6 +37,7 @@ export interface PlayerClassDefinition {
   readonly description: string;
   readonly startingStats: Readonly<CombatStats>;
   readonly startingEvade: number;
+  readonly renderKey: PlayerRenderKey;
 }
 
 export interface ClassOptionView {
@@ -60,6 +76,7 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     description: 'Nimble survivor with the best chance to slip past threats.',
     startingStats: classStats(18, 5, 1),
     startingEvade: 6,
+    renderKey: 'rogue',
   },
   ranger: {
     id: 'ranger',
@@ -67,6 +84,7 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     description: 'Flexible fighter with reliable early damage.',
     startingStats: classStats(20, 6, 1),
     startingEvade: 3,
+    renderKey: 'ranger',
   },
   mage: {
     id: 'mage',
@@ -74,6 +92,7 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     description: 'Fragile but devastating without needing magic abilities yet.',
     startingStats: classStats(16, 8, 0),
     startingEvade: 2,
+    renderKey: 'mage',
   },
   knight: {
     id: 'knight',
@@ -81,6 +100,7 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     description: 'Armoured and dependable under sustained damage.',
     startingStats: classStats(26, 4, 3),
     startingEvade: 0,
+    renderKey: 'knight',
   },
   barbarian: {
     id: 'barbarian',
@@ -88,6 +108,7 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     description: 'Huge health and damage, with no defensive tricks.',
     startingStats: classStats(28, 7, 0),
     startingEvade: 0,
+    renderKey: 'barbarian',
   },
 });
 

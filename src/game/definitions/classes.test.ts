@@ -19,6 +19,7 @@ import {
 import {
   PLAYER_CLASS_DEFINITIONS,
   PLAYER_CLASS_IDS,
+  PLAYER_RENDER_KEYS,
   buildClassSelectionView,
   getPlayerClassDefinition,
   type PlayerClassId,
@@ -57,6 +58,15 @@ describe('player class definitions', () => {
       expect(definition.startingStats.attack).toBe(expected.attack);
       expect(definition.startingStats.defence).toBe(expected.defence);
       expect(definition.startingEvade).toBe(expected.evade);
+    }
+  });
+
+  it('assigns every class a valid player render key', () => {
+    expect(PLAYER_RENDER_KEYS).toEqual([...PLAYER_CLASS_IDS]);
+    for (const id of PLAYER_CLASS_IDS) {
+      const definition = getPlayerClassDefinition(id);
+      expect(PLAYER_RENDER_KEYS).toContain(definition.renderKey);
+      expect(definition.renderKey).toBe(id);
     }
   });
 
@@ -101,6 +111,7 @@ describe('Player class construction', () => {
       const player = new Player(id);
       expect(player.classId).toBe(id);
       expect(player.className).toBe(definition.name);
+      expect(player.renderKey).toBe(definition.renderKey);
       expect(player.definition).toBe(definition);
       expect(player.stats).toEqual(definition.startingStats);
       expect(player.evade).toBe(definition.startingEvade);

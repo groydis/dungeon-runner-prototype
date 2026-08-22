@@ -1,4 +1,5 @@
 import {
+  AnimationMixer,
   BoxGeometry,
   CapsuleGeometry,
   CircleGeometry,
@@ -9,6 +10,8 @@ import {
   Fog,
   Group,
   HemisphereLight,
+  LoopOnce,
+  LoopRepeat,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -18,8 +21,10 @@ import {
   Scene,
   SphereGeometry,
   WebGLRenderer,
+  type AnimationAction,
   type Camera,
 } from 'three';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
   COLLECT_FX_SEC,
   LANE_COUNT,
@@ -39,8 +44,16 @@ import {
 } from '../game/BoardSnapshot';
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
+import { type PlayerRenderKey } from '../game/definitions/classes';
 import { type EnemyType } from '../game/definitions/enemies';
 import { type EnemyDropResult } from '../game/definitions/enemies';
+import {
+  fitPlayerModel,
+  loadPlayerClips,
+  loadPlayerTemplate,
+  playerModelUrl,
+  type PlayerClipMap,
+} from './playerAssets';
 
 const ENEMY_RENDER_KEYS: readonly EnemyType[] = ['caveRat', 'cryptGuard', 'boneBrute'];
 
@@ -113,6 +126,16 @@ export class SceneManager {
   private readonly rowViews: RowView[] = [];
   private readonly playerMesh: Group;
   private readonly playerBody: Mesh;
+  private playerModel: Group | null = null;
+  private playerMixer: AnimationMixer | null = null;
+  private playerClips: PlayerClipMap = {};
+  private playerLoopAction: AnimationAction | null = null;
+  private playerOneShotAction: AnimationAction | null = null;
+  private playerModelMaterials: MeshStandardMaterial[] = [];
+  private playerRenderKey: PlayerRenderKey | null = null;
+  private playerLoadToken = 0;
+  private playerMoving = false;
+  private playerDead = false;
   private readonly floorMaterialA: MeshStandardMaterial;
   private readonly floorMaterialB: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
@@ -290,6 +313,43 @@ export class SceneManager {
     this.playerMesh.position.set(colX, 0.62 + hopY, 0);
   }
 
+  setPlayerRenderKey(renderKey: PlayerRenderKey | null): void {
+    if (renderKey === this.playerRenderKey) {
+      return;
+    }
+    this.playerRenderKey = renderKey;
+    this.playerLoadToken += 1;
+    this.playerMoving = false;
+    this.playerDead = false;
+    this.removePlayerModel();
+    if (!renderKey) {
+      return;
+    }
+    void this.installPlayerModel(renderKey, this.playerLoadToken);
+  }
+
+  setPlayerMoving(moving: boolean): void {
+    if (this.playerMoving === moving) {
+      return;
+    }
+    this.playerMoving = moving;
+    if (!this.playerDead && !this.playerOneShotAction) {
+      this.playPlayerLocomotion(false);
+    }
+  }
+
+  playPlayerHit(): void {
+    if (this.playerDead) {
+      return;
+    }
+    this.playPlayerOneShot(this.playerClips.hit, 'hit');
+  }
+
+  playPlayerDeath(): void {
+    this.playerDead = true;
+    this.playPlayerOneShot(this.playerClips.death, 'death');
+  }
+
   /** Initial bind of the recycled row pool to the current logical window. */
   bindWindow(
     snapshot: BoardSnapshot,
@@ -302,6 +362,7 @@ export class SceneManager {
     this.refreshHighlights(snapshot, presentation);
     this.layoutRows(snapshot.originRow);
     this.setPlayerVisual(laneWorldX(snapshot.originCol), 0);
+    this.setPlayerRenderKey(snapshot.playerRenderKey);
   }
 
   /**
@@ -358,7 +419,9 @@ export class SceneManager {
   }
 
   update(elapsedSec: number): void {
+    const dt = Math.min(0.05, Math.max(0, elapsedSec - this.clock));
     this.clock = elapsedSec;
+    this.playerMixer?.update(dt);
     const pulse = 0.22 + 0.18 * Math.sin(elapsedSec * 3.4);
     this.highlightMaterial.emissiveIntensity = pulse;
     this.updateCollectibleIdle(elapsedSec);
@@ -619,7 +682,7 @@ export class SceneManager {
 
     const swing = Math.sin(t * Math.PI);
     const towardMonster = fx.monsterBaseX - fx.playerBaseX;
-    const playerMaterial = this.playerBody.material as MeshStandardMaterial;
+    const playerMaterials = this.playerFlashMaterials();
     const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
 
     if (fx.attacker === 'player') {
@@ -630,8 +693,11 @@ export class SceneManager {
       fx.monsterMesh.scale.setScalar(1 - swing * 0.14);
       monsterMaterial.emissive.setHex(0xfff1c8);
       monsterMaterial.emissiveIntensity = swing * (fx.isSurpriseStrike ? 1.1 : 0.7);
-      playerMaterial.emissive.setHex(fx.isSurpriseStrike ? 0xffe27a : 0x3ecf8e);
-      playerMaterial.emissiveIntensity = swing * (fx.isSurpriseStrike ? 0.9 : 0.2);
+      this.flashPlayerMaterials(
+        playerMaterials,
+        fx.isSurpriseStrike ? 0xffe27a : 0x3ecf8e,
+        swing * (fx.isSurpriseStrike ? 0.9 : 0.2),
+      );
       return;
     }
 
@@ -640,17 +706,14 @@ export class SceneManager {
     fx.monsterMesh.scale.setScalar(1 + swing * 0.12);
     this.playerMesh.position.x = fx.playerBaseX + towardPlayer * swing * 0.18;
     this.playerMesh.scale.setScalar(1 - swing * 0.08);
-    playerMaterial.emissive.setHex(0xff5a4a);
-    playerMaterial.emissiveIntensity = swing * 0.85;
+    this.flashPlayerMaterials(playerMaterials, 0xff5a4a, swing * 0.85);
     monsterMaterial.emissive.setHex(0xc4372e);
     monsterMaterial.emissiveIntensity = swing * 0.35;
   }
 
   endCombatHit(): void {
     const fx = this.combatHit;
-    const playerMaterial = this.playerBody.material as MeshStandardMaterial;
-    playerMaterial.emissive.setHex(0x000000);
-    playerMaterial.emissiveIntensity = 0;
+    this.flashPlayerMaterials(this.playerFlashMaterials(), 0x000000, 0);
     this.playerMesh.scale.setScalar(1);
     if (fx) {
       fx.monsterMesh.scale.setScalar(1);
@@ -707,6 +770,8 @@ export class SceneManager {
   }
 
   dispose(): void {
+    this.playerLoadToken += 1;
+    this.removePlayerModel();
     this.renderer.dispose();
   }
 
@@ -1256,6 +1321,127 @@ export class SceneManager {
     return 1;
   }
 
+  private async installPlayerModel(
+    key: PlayerRenderKey,
+    token: number,
+  ): Promise<void> {
+    try {
+      const [template, clips] = await Promise.all([
+        loadPlayerTemplate(key),
+        loadPlayerClips(),
+      ]);
+      if (token !== this.playerLoadToken || this.playerRenderKey !== key) {
+        return;
+      }
+      const model = cloneSkinned(template) as Group;
+      fitPlayerModel(model);
+      this.attachPlayerModel(model, clips);
+    } catch (error) {
+      if (token !== this.playerLoadToken) {
+        return;
+      }
+      console.error(
+        `Failed to load player model '${key}' from ${playerModelUrl(key)}`,
+        error,
+      );
+      this.playerBody.visible = true;
+    }
+  }
+
+  private attachPlayerModel(model: Group, clips: PlayerClipMap): void {
+    this.removePlayerModel();
+    this.playerModel = model;
+    this.playerClips = clips;
+    this.playerModelMaterials = collectStandardMaterials(model);
+    this.playerMesh.add(model);
+    this.playerBody.visible = false;
+    this.playerMixer = new AnimationMixer(model);
+    this.playPlayerLocomotion(true);
+  }
+
+  private removePlayerModel(): void {
+    this.playerMixer?.stopAllAction();
+    this.playerMixer = null;
+    this.playerLoopAction = null;
+    this.playerOneShotAction = null;
+    this.playerClips = {};
+    this.playerModelMaterials = [];
+    if (this.playerModel) {
+      this.playerMesh.remove(this.playerModel);
+      this.playerModel = null;
+    }
+    this.playerBody.visible = true;
+  }
+
+  private playPlayerLocomotion(immediate: boolean): void {
+    if (!this.playerMixer || this.playerDead) {
+      return;
+    }
+    const clip = this.playerMoving
+      ? (this.playerClips.walk ?? this.playerClips.idle)
+      : (this.playerClips.idle ?? this.playerClips.walk);
+    if (!clip) {
+      return;
+    }
+    const next = this.playerMixer.clipAction(clip);
+    next.setLoop(LoopRepeat, Infinity);
+    next.clampWhenFinished = false;
+    if (this.playerLoopAction === next && next.isRunning()) {
+      return;
+    }
+    const fade = immediate ? 0 : 0.16;
+    this.playerLoopAction?.fadeOut(fade);
+    next.reset().fadeIn(fade).play();
+    this.playerLoopAction = next;
+  }
+
+  private playPlayerOneShot(
+    clip: PlayerClipMap[keyof PlayerClipMap],
+    kind: 'hit' | 'death',
+  ): void {
+    const mixer = this.playerMixer;
+    if (!mixer || !clip) {
+      return;
+    }
+    this.playerLoopAction?.fadeOut(0.08);
+    const action = mixer.clipAction(clip);
+    action.setLoop(LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.reset().fadeIn(0.06).play();
+    this.playerOneShotAction = action;
+    const token = this.playerLoadToken;
+    const onFinished = (event: { action: AnimationAction }): void => {
+      if (event.action !== action) {
+        return;
+      }
+      mixer.removeEventListener('finished', onFinished);
+      if (token !== this.playerLoadToken || kind === 'death' || this.playerDead) {
+        return;
+      }
+      this.playerOneShotAction = null;
+      this.playPlayerLocomotion(false);
+    };
+    mixer.addEventListener('finished', onFinished);
+  }
+
+  private playerFlashMaterials(): MeshStandardMaterial[] {
+    if (this.playerModel && this.playerModelMaterials.length > 0) {
+      return this.playerModelMaterials;
+    }
+    return [this.playerBody.material as MeshStandardMaterial];
+  }
+
+  private flashPlayerMaterials(
+    materials: MeshStandardMaterial[],
+    hex: number,
+    intensity: number,
+  ): void {
+    for (const material of materials) {
+      material.emissive.setHex(hex);
+      material.emissiveIntensity = intensity;
+    }
+  }
+
   private createPlayer(): { group: Group; body: Mesh } {
     const group = new Group();
 
@@ -1284,6 +1470,23 @@ export class SceneManager {
     group.position.set(0, 0.62, 0);
     return { group, body };
   }
+}
+
+function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
+  const materials: MeshStandardMaterial[] = [];
+  root.traverse((child) => {
+    if (!('isMesh' in child) || !child.isMesh) {
+      return;
+    }
+    const mesh = child as Mesh;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of list) {
+      if (material instanceof MeshStandardMaterial) {
+        materials.push(material);
+      }
+    }
+  });
+  return materials;
 }
 
 function monsterBaseY(mesh: Mesh): number {

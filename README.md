@@ -11,7 +11,7 @@ You choose a class on launch, then start in the centre lane at the near end of t
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
 - Floor tiles are simple dark stone boxes.
-- The player is a green capsule.
+- The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback.
 - Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, health potions, or Alarm Traps.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
@@ -52,7 +52,7 @@ Not included:
 - Equipment, skill trees, crits, unique enemy abilities, or an inventory screen
 - Damaging traps, extra trap kinds, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
-- GLB characters or environment art
+- Environment art beyond the current simple tiles
 - Sound, saves, accounts, or networking
 
 ## Install and run
@@ -128,7 +128,7 @@ src/
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
     definitions/
-      classes.ts          Authoritative class names, copy, and starting stats
+      classes.ts          Authoritative class names, copy, starting stats, and render keys
       enemies.ts          Authoritative enemy names, base stats, XP, render keys
       encounterPools.ts   Distance-based enemy-type weights
   ui/
@@ -138,7 +138,8 @@ src/
     ShopOverlayView.ts    Merchant overlay
     LevelUpOverlayView.ts Level-up overlay
   rendering/
-    SceneManager.ts       Scene, lights, recycled row meshes, hit FX
+    SceneManager.ts       Scene, lights, recycled row meshes, player/hit FX
+    playerAssets.ts       KayKit player GLB URLs and shared Rig_Medium clip loading
     CameraController.ts   Elevated follow camera
   styles/
     main.css              Full-viewport HUD, class-select, shop, level-up, and game-over overlays
@@ -158,6 +159,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Cave Rat attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
+- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model and `Rig_Medium` animation URLs. Shared clips provide idle, walk, hit, and death. Models never change class rules or GameState.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -482,9 +484,11 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 - Further evade/perception tuning and more defined level thresholds
 - More shop stock or meta progression; more loot kinds
 - Damaging traps, more trap kinds, doors, and authored biomes
-- GLB models
+- Environment GLBs
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 
 ## License
 
 Private prototype. Add a license before publishing.
+
+Player character models and shared `Rig_Medium` animations are **KayKit Adventurers** by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).

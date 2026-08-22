@@ -174,6 +174,7 @@ export class Game {
 
     this.setBoardInteractive(false);
     this.camera.nudge();
+    this.scene.setPlayerMoving(true);
 
     const player = this.requirePlayerSnapshot();
     this.animation = {
@@ -207,6 +208,7 @@ export class Game {
     const toCol = this.animation.toCol;
     const leftBehindRow = this.animation.anchorRow;
     this.animation = null;
+    this.scene.setPlayerMoving(false);
 
     const resolution = this.state.resolveCompletedMove(toCol);
     this.scene.setScrollZ(0);
@@ -367,6 +369,13 @@ export class Game {
 
     this.state.applyCombatLogEntry(entry, playback.target);
     this.updateHud();
+    if (entry.target === 'player') {
+      if (entry.targetHealthAfter <= 0) {
+        this.scene.playPlayerDeath();
+      } else {
+        this.scene.playPlayerHit();
+      }
+    }
     this.scene.beginCombatHit(
       entry,
       this.requirePlayerSnapshot().col,

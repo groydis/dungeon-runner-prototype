@@ -1228,6 +1228,9 @@ describe('player class selection', () => {
       expect(state.hasSelectedClass).toBe(true);
       expect(state.selectedClassId).toBe(id);
       expect(playerOf(state).classId).toBe(id);
+      expect(playerOf(state).renderKey).toBe(definition.renderKey);
+      expect(state.getPlayerSnapshot()?.renderKey).toBe(definition.renderKey);
+      expect(state.getBoardSnapshot().playerRenderKey).toBe(definition.renderKey);
       expect(playerOf(state).stats).toEqual(definition.startingStats);
       expect(playerOf(state).evade).toBe(definition.startingEvade);
       expect(state.getHudSnapshot()).toMatchObject({
@@ -1248,6 +1251,7 @@ describe('player class selection', () => {
     expect(state.hasSelectedClass).toBe(false);
     expect(state.selectedClassId).toBeNull();
     expect(state.getPlayerSnapshot()).toBeNull();
+    expect(state.getBoardSnapshot().playerRenderKey).toBeNull();
     expect(state.isForwardTile(1, 1)).toBe(false);
     expect(() => state.resolveCompletedMove(1)).toThrow(
       'Cannot move before a class is selected',
@@ -1364,6 +1368,7 @@ describe('player class selection', () => {
     expect(state.hasSelectedClass).toBe(false);
     expect(state.selectedClassId).toBeNull();
     expect(state.getPlayerSnapshot()).toBeNull();
+    expect(state.getBoardSnapshot().playerRenderKey).toBeNull();
     expect(() => state.resolveCompletedMove(1)).toThrow(
       'Cannot move before a class is selected',
     );
@@ -1376,6 +1381,8 @@ describe('player class selection', () => {
 
     const rogue = getPlayerClassDefinition('rogue');
     state.selectClass('rogue');
+    expect(playerOf(state).renderKey).toBe('rogue');
+    expect(state.getBoardSnapshot().playerRenderKey).toBe('rogue');
     expect(playerOf(state).stats).toEqual(rogue.startingStats);
     expect(playerOf(state).gold).toBe(0);
     expect(playerOf(state).experience).toBe(0);
@@ -1481,6 +1488,7 @@ describe('board snapshots and no-class APIs', () => {
     expect(tileAt(snapshot, 7, 0)?.content.type).toBe('shop');
     expect(snapshot.legalMoveCols.length).toBeGreaterThan(0);
     expect(snapshot.hasSelectedClass).toBe(true);
+    expect(snapshot.playerRenderKey).toBe('ranger');
   });
 
   it('clears stale world entities when a class is reselected', () => {
@@ -1494,6 +1502,8 @@ describe('board snapshots and no-class APIs', () => {
 
     state.selectClass('mage');
     expect(state.distance).toBe(0);
+    expect(playerOf(state).renderKey).toBe('mage');
+    expect(state.getBoardSnapshot().playerRenderKey).toBe('mage');
     expect(playerOf(state).row).toBe(0);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe(
       'caveRat',
@@ -1519,6 +1529,7 @@ describe('board snapshots and no-class APIs', () => {
     expect(state.getLevelUpView()).toBeNull();
     expect(state.chooseLevelUp('vitality').reason).toBe('noLevelUp');
     expect(state.getBoardSnapshot().hasSelectedClass).toBe(false);
+    expect(state.getBoardSnapshot().playerRenderKey).toBeNull();
     expect(state.isForwardTile(1, 1)).toBe(false);
     expect(() => state.resolveCompletedMove(1)).toThrow(
       'Cannot move before a class is selected',
@@ -1633,6 +1644,7 @@ describe('immutable encounter and player boundaries', () => {
     const state = createState();
     const snapshot = state.getPlayerSnapshot();
     expect(snapshot?.className).toBe('Ranger');
+    expect(snapshot?.renderKey).toBe('ranger');
     expect(() => {
       (snapshot as unknown as { gold: number }).gold = 99;
     }).toThrow(TypeError);
@@ -1645,6 +1657,25 @@ describe('immutable encounter and player boundaries', () => {
       getPlayerClassDefinition('ranger').startingStats.attack,
     );
     expect(playerOf(state).gold).toBe(0);
+  });
+
+  it('does not keep a stale player render key after class switch or clear', () => {
+    const state = new GameState({ playerClass: 'ranger' });
+    expect(state.getPlayerSnapshot()?.renderKey).toBe('ranger');
+    expect(state.getBoardSnapshot().playerRenderKey).toBe('ranger');
+
+    state.selectClass('knight');
+    expect(state.getPlayerSnapshot()?.renderKey).toBe('knight');
+    expect(state.getBoardSnapshot().playerRenderKey).toBe('knight');
+
+    state.reset();
+    expect(state.getPlayerSnapshot()?.renderKey).toBe('knight');
+    expect(state.getBoardSnapshot().playerRenderKey).toBe('knight');
+
+    state.clearSelectedClass();
+    expect(state.getPlayerSnapshot()).toBeNull();
+    expect(state.getBoardSnapshot().playerRenderKey).toBeNull();
+    expect(state.getBoardSnapshot().hasSelectedClass).toBe(false);
   });
 
   it('rejects a combat result paired with a different encounter target', () => {

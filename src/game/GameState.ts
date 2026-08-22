@@ -260,6 +260,7 @@ export class GameState {
       playerRow: this._player.row,
       playerCol: this._player.col,
       hasSelectedClass: true,
+      playerRenderKey: this._player.renderKey,
       legalMoveCols: this.legalMoveCols(),
     });
   }
@@ -271,6 +272,7 @@ export class GameState {
     return freezeReadModel({
       classId: this._player.classId,
       className: this._player.className,
+      renderKey: this._player.renderKey,
       row: this._player.row,
       col: this._player.col,
       gold: this._player.gold,

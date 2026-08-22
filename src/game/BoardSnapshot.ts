@@ -2,7 +2,7 @@ import { type AlarmConsumedKind } from './alarm';
 import { type CollectibleKind } from './Collectible';
 import { type CombatStats } from './Combatant';
 import { LANE_COUNT, ROW_POOL_SIZE, START_COL, START_ROW } from './config';
-import { type PlayerClassId } from './definitions/classes';
+import { type PlayerClassId, type PlayerRenderKey } from './definitions/classes';
 import { type EnemyType } from './definitions/enemies';
 import { deepFreeze, type DeepReadonly } from './freeze';
 import { type GridPosition, type TileContentType } from './Tile';
@@ -37,6 +37,7 @@ export interface BoardSnapshot {
   readonly originRow: number;
   readonly originCol: number;
   readonly hasSelectedClass: boolean;
+  readonly playerRenderKey: PlayerRenderKey | null;
   readonly legalMoveCols: readonly number[];
   readonly rows: readonly BoardRowSnapshot[];
 }
@@ -71,6 +72,7 @@ export interface EncounterTarget {
 export interface PlayerSnapshot {
   readonly classId: PlayerClassId;
   readonly className: string;
+  readonly renderKey: PlayerRenderKey;
   readonly row: number;
   readonly col: number;
   readonly gold: number;
@@ -118,6 +120,7 @@ export interface BoardViewInput {
   playerRow: number;
   playerCol: number;
   hasSelectedClass: boolean;
+  playerRenderKey?: PlayerRenderKey | null;
   legalMoveCols: readonly number[];
   rowCount?: number;
 }
@@ -163,6 +166,7 @@ export function createBoardSnapshotFromTiles(
     originRow,
     originCol,
     hasSelectedClass: view.hasSelectedClass,
+    playerRenderKey: view.hasSelectedClass ? (view.playerRenderKey ?? null) : null,
     legalMoveCols: [...view.legalMoveCols],
     rows,
   });
