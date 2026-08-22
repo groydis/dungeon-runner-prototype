@@ -1,6 +1,9 @@
 import { Box3, type Group, type Object3D } from 'three';
 import { type EnemyType } from '../game/definitions/enemies';
-import { loadGltfScene } from './rigMediumAnimations';
+import {
+  loadGltfScene,
+  type RigMediumClipMap,
+} from './rigMediumAnimations';
 
 export type EnemyRenderKey = EnemyType;
 
@@ -14,6 +17,15 @@ export const ENEMY_MODEL_URLS: Record<EnemyRenderKey, string> = {
   caveRat: '/models/enemies/kaykit/Skeleton_Minion.glb',
   cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
   boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+};
+
+export const ENEMY_ATTACK_CLIPS: Record<
+  EnemyRenderKey,
+  'attackUnarmed' | 'attack1H' | 'attack2H'
+> = {
+  caveRat: 'attackUnarmed',
+  cryptGuard: 'attack1H',
+  boneBrute: 'attack2H',
 };
 
 export interface EnemyModelFit {
@@ -39,6 +51,10 @@ export function enemyModelUrl(key: EnemyRenderKey): string {
 
 export function loadEnemyTemplate(key: EnemyRenderKey): Promise<Group> {
   return loadGltfScene(enemyModelUrl(key));
+}
+
+export function enemyAttackClip(key: EnemyRenderKey, clips: RigMediumClipMap) {
+  return clips[ENEMY_ATTACK_CLIPS[key]];
 }
 
 export function fitEnemyModel(root: Object3D, key: EnemyRenderKey): void {

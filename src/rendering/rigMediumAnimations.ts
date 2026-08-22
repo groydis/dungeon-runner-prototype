@@ -5,6 +5,17 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 export const RIG_MEDIUM_ANIMATION_URLS = {
   general: '/models/players/kaykit/animations/Rig_Medium_General.glb',
   movement: '/models/players/kaykit/animations/Rig_Medium_MovementBasic.glb',
+  melee: '/models/players/kaykit/animations/Rig_Medium_CombatMelee.glb',
+  special: '/models/players/kaykit/animations/Rig_Medium_Special.glb',
+} as const;
+
+/** Download only when future gameplay needs these bundles. */
+export const RIG_MEDIUM_RESERVED_ANIMATION_URLS = {
+  ranged: '/models/players/kaykit/animations/Rig_Medium_CombatRanged.glb',
+  movementAdvanced:
+    '/models/players/kaykit/animations/Rig_Medium_MovementAdvanced.glb',
+  simulation: '/models/players/kaykit/animations/Rig_Medium_Simulation.glb',
+  tools: '/models/players/kaykit/animations/Rig_Medium_Tools.glb',
 } as const;
 
 export const RIG_MEDIUM_CLIP_NAMES = {
@@ -12,6 +23,12 @@ export const RIG_MEDIUM_CLIP_NAMES = {
   walk: 'Walking_A',
   hit: 'Hit_A',
   death: 'Death_A',
+  attack1H: 'Melee_1H_Attack_Slice_Diagonal',
+  attack2H: 'Melee_2H_Attack_Chop',
+  attackUnarmed: 'Melee_Unarmed_Attack_Punch_A',
+  skeletonIdle: 'Skeletons_Idle',
+  skeletonWalk: 'Skeletons_Walking',
+  skeletonDeath: 'Skeletons_Death',
 } as const;
 
 export type RigMediumClipId = keyof typeof RIG_MEDIUM_CLIP_NAMES;
@@ -42,13 +59,21 @@ export function loadRigMediumClips(): Promise<RigMediumClipMap> {
     clipsPromise = Promise.all([
       loadAnimationClips(RIG_MEDIUM_ANIMATION_URLS.general),
       loadAnimationClips(RIG_MEDIUM_ANIMATION_URLS.movement),
-    ]).then(([general, movement]) => {
-      const clips = [...general, ...movement];
+      loadAnimationClips(RIG_MEDIUM_ANIMATION_URLS.melee),
+      loadAnimationClips(RIG_MEDIUM_ANIMATION_URLS.special),
+    ]).then(([general, movement, melee, special]) => {
+      const clips = [...general, ...movement, ...melee, ...special];
       return {
         idle: findClip(clips, RIG_MEDIUM_CLIP_NAMES.idle),
         walk: findClip(clips, RIG_MEDIUM_CLIP_NAMES.walk),
         hit: findClip(clips, RIG_MEDIUM_CLIP_NAMES.hit),
         death: findClip(clips, RIG_MEDIUM_CLIP_NAMES.death),
+        attack1H: findClip(clips, RIG_MEDIUM_CLIP_NAMES.attack1H),
+        attack2H: findClip(clips, RIG_MEDIUM_CLIP_NAMES.attack2H),
+        attackUnarmed: findClip(clips, RIG_MEDIUM_CLIP_NAMES.attackUnarmed),
+        skeletonIdle: findClip(clips, RIG_MEDIUM_CLIP_NAMES.skeletonIdle),
+        skeletonWalk: findClip(clips, RIG_MEDIUM_CLIP_NAMES.skeletonWalk),
+        skeletonDeath: findClip(clips, RIG_MEDIUM_CLIP_NAMES.skeletonDeath),
       };
     });
   }

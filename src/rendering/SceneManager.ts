@@ -29,6 +29,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
   COLLECT_FX_SEC,
+  COMBAT_HIT_SEC,
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
@@ -50,6 +51,7 @@ import { type PlayerRenderKey } from '../game/definitions/classes';
 import { type EnemyDropResult } from '../game/definitions/enemies';
 import {
   ENEMY_RENDER_KEYS,
+  enemyAttackClip,
   enemyModelUrl,
   fitEnemyModel,
   isEnemyRenderKey,
@@ -57,10 +59,18 @@ import {
   type EnemyRenderKey,
 } from './enemyAssets';
 import {
+  DUNGEON_FLOOR_KEYS,
+  dungeonFloorVariant,
+  fitDungeonFloorModel,
+  loadDungeonFloorTemplate,
+  type DungeonFloorAssetKey,
+} from './environmentAssets';
+import {
   fitPlayerModel,
   loadPlayerClips,
   loadPlayerTemplate,
   playerModelUrl,
+  playerAttackClip,
   type PlayerClipMap,
 } from './playerAssets';
 import {
@@ -95,6 +105,7 @@ interface EnemySlot {
 interface RowView {
   group: Group;
   tiles: Mesh[];
+  floorModels: Partial<Record<DungeonFloorAssetKey, Group>>[];
   hitPlanes: Mesh[];
   enemySlots: Record<EnemyRenderKey, EnemySlot>[];
   golds: Mesh[];
@@ -168,7 +179,7 @@ export class SceneManager {
   private playerOneShotAction: AnimationAction | null = null;
   private playerModelMaterials: MeshStandardMaterial[] = [];
   private playerRenderKey: PlayerRenderKey | null = null;
-  private playerWeaponMount: Group | null = null;
+  private playerEquipmentMounts: Group[] = [];
   private playerLoadToken = 0;
   private playerMoving = false;
   private playerDead = false;
@@ -331,6 +342,7 @@ export class SceneManager {
     });
 
     this.buildRowPool();
+    void this.installDungeonFloorModels();
     const player = this.createPlayer();
     this.playerMesh = player.group;
     this.playerBody = player.body;
@@ -381,6 +393,16 @@ export class SceneManager {
     this.playPlayerOneShot(this.playerClips.hit, 'hit');
   }
 
+  playPlayerAttack(): void {
+    if (this.playerDead) {
+      return;
+    }
+    this.playPlayerOneShot(
+      playerAttackClip(this.playerRenderKey, this.playerClips),
+      'attack',
+    );
+  }
+
   playPlayerDeath(): void {
     this.playerDead = true;
     this.playPlayerOneShot(this.playerClips.death, 'death');
@@ -394,6 +416,24 @@ export class SceneManager {
     this.playEnemyOneShot(slot, slot.clips.hit, 'hit');
   }
 
+  playEnemyAttack(target: {
+    id: string;
+    row: number;
+    col: number;
+    renderKey: string;
+  }): void {
+    const slot = this.findEnemySlot(
+      target.row,
+      target.col,
+      target.renderKey,
+      target.id,
+    );
+    if (!slot || slot.dying) {
+      return;
+    }
+    this.playEnemyOneShot(slot, enemyAttackClip(slot.key, slot.clips), 'attack');
+  }
+
   playEnemyDeath(target: { id: string; row: number; col: number; renderKey: string }): void {
     const slot = this.findEnemySlot(target.row, target.col, target.renderKey, target.id);
     if (!slot) {
@@ -401,7 +441,11 @@ export class SceneManager {
     }
     slot.dying = true;
     slot.group.visible = true;
-    this.playEnemyOneShot(slot, slot.clips.death, 'death');
+    this.playEnemyOneShot(
+      slot,
+      slot.clips.skeletonDeath ?? slot.clips.death,
+      'death',
+    );
   }
 
   /** Initial bind of the recycled row pool to the current logical window. */
@@ -870,6 +914,7 @@ export class SceneManager {
     for (let i = 0; i < ROW_POOL_SIZE; i += 1) {
       const group = new Group();
       const tiles: Mesh[] = [];
+      const floorModels: Partial<Record<DungeonFloorAssetKey, Group>>[] = [];
       const hitPlanes: Mesh[] = [];
       const enemySlots: Record<EnemyRenderKey, EnemySlot>[] = [];
       const golds: Mesh[] = [];
@@ -917,6 +962,7 @@ export class SceneManager {
 
         group.add(tile, hit, ...Object.values(variants).map((slot) => slot.group), gold, potion, trap, merchant);
         tiles.push(tile);
+        floorModels.push({});
         hitPlanes.push(hit);
         enemySlots.push(variants);
         golds.push(gold);
@@ -929,6 +975,7 @@ export class SceneManager {
       this.rowViews.push({
         group,
         tiles,
+        floorModels,
         hitPlanes,
         enemySlots,
         golds,
@@ -937,6 +984,42 @@ export class SceneManager {
         merchants,
         assignedRow: i,
       });
+    }
+  }
+
+  private async installDungeonFloorModels(): Promise<void> {
+    try {
+      const templates = await Promise.all(
+        DUNGEON_FLOOR_KEYS.map(async (key) => ({
+          key,
+          template: await loadDungeonFloorTemplate(key),
+        })),
+      );
+      for (const view of this.rowViews) {
+        for (let col = 0; col < LANE_COUNT; col += 1) {
+          for (const { key, template } of templates) {
+            const model = template.clone(true);
+            model.name = `dungeonFloor-${key}`;
+            fitDungeonFloorModel(model);
+            model.visible = false;
+            view.tiles[col].add(model);
+            view.floorModels[col][key] = model;
+          }
+          this.applyDungeonFloorVariant(view, col);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit dungeon floor models', error);
+    }
+  }
+
+  private applyDungeonFloorVariant(view: RowView, col: number): void {
+    const selected = dungeonFloorVariant(view.assignedRow, col);
+    for (const key of DUNGEON_FLOOR_KEYS) {
+      const model = view.floorModels[col][key];
+      if (model) {
+        model.visible = key === selected;
+      }
     }
   }
 
@@ -986,6 +1069,7 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
+      this.applyDungeonFloorVariant(view, col);
       const occupant =
         tile?.content.type === 'monster' && tile.monster ? tile.monster : undefined;
       for (const key of ENEMY_RENDER_KEYS) {
@@ -1474,9 +1558,6 @@ export class SceneManager {
     token: number,
   ): Promise<void> {
     const loadout = playerEquipmentLoadout(key);
-    const equipmentPromise = loadout
-      ? loadPlayerEquipmentTemplate(loadout.assetKey)
-      : null;
     try {
       const [template, clips] = await Promise.all([
         loadPlayerTemplate(key),
@@ -1488,15 +1569,17 @@ export class SceneManager {
       const model = cloneSkinned(template) as Group;
       fitPlayerModel(model);
       this.attachPlayerModel(model, clips);
-      if (loadout && equipmentPromise) {
-        await this.installPlayerEquipment(
-          model,
-          loadout,
-          equipmentPromise,
-          key,
-          token,
-        );
-      }
+      await Promise.all(
+        loadout.map((visual) =>
+          this.installPlayerEquipment(
+            model,
+            visual,
+            loadPlayerEquipmentTemplate(visual.assetKey),
+            key,
+            token,
+          ),
+        ),
+      );
     } catch (error) {
       if (token !== this.playerLoadToken) {
         return;
@@ -1542,7 +1625,6 @@ export class SceneManager {
     template: Group,
     loadout: PlayerEquipmentVisual,
   ): void {
-    this.removePlayerEquipment();
     const slot = findEquipmentMount(model, loadout.mount);
     if (!slot) {
       console.error(
@@ -1551,21 +1633,20 @@ export class SceneManager {
       return;
     }
     const mount = new Group();
-    mount.name = PLAYER_WEAPON_MOUNT_NAME;
+    mount.name = `${PLAYER_WEAPON_MOUNT_NAME}-${loadout.assetKey}`;
     mount.position.set(...loadout.position);
     mount.rotation.set(...loadout.rotation);
     mount.scale.setScalar(loadout.scale);
     mount.add(template.clone());
     slot.add(mount);
-    this.playerWeaponMount = mount;
+    this.playerEquipmentMounts.push(mount);
   }
 
   private removePlayerEquipment(): void {
-    if (!this.playerWeaponMount) {
-      return;
+    for (const mount of this.playerEquipmentMounts) {
+      mount.removeFromParent();
     }
-    this.playerWeaponMount.removeFromParent();
-    this.playerWeaponMount = null;
+    this.playerEquipmentMounts = [];
   }
 
   private attachPlayerModel(model: Group, clips: PlayerClipMap): void {
@@ -1618,7 +1699,7 @@ export class SceneManager {
 
   private playPlayerOneShot(
     clip: PlayerClipMap[keyof PlayerClipMap],
-    kind: 'hit' | 'death',
+    kind: 'attack' | 'hit' | 'death',
   ): void {
     const mixer = this.playerMixer;
     if (!mixer || !clip) {
@@ -1628,6 +1709,11 @@ export class SceneManager {
     const action = mixer.clipAction(clip);
     action.setLoop(LoopOnce, 1);
     action.clampWhenFinished = true;
+    if (kind !== 'death') {
+      action.setEffectiveTimeScale(
+        Math.max(1, clip.duration / (COMBAT_HIT_SEC * 0.9)),
+      );
+    }
     action.reset().fadeIn(0.06).play();
     this.playerOneShotAction = action;
     const token = this.playerLoadToken;
@@ -1735,7 +1821,11 @@ export class SceneManager {
     slot.placeholder.visible = false;
     slot.mixer = new AnimationMixer(model);
     if (slot.dying) {
-      this.playEnemyOneShot(slot, clips.death, 'death');
+      this.playEnemyOneShot(
+        slot,
+        clips.skeletonDeath ?? clips.death,
+        'death',
+      );
       return;
     }
     this.playEnemyLocomotion(slot, false, true);
@@ -1784,8 +1874,8 @@ export class SceneManager {
       return;
     }
     const clip = walking
-      ? (slot.clips.walk ?? slot.clips.idle)
-      : (slot.clips.idle ?? slot.clips.walk);
+      ? (slot.clips.skeletonWalk ?? slot.clips.walk ?? slot.clips.idle)
+      : (slot.clips.skeletonIdle ?? slot.clips.idle ?? slot.clips.walk);
     if (!clip) {
       return;
     }
@@ -1804,7 +1894,7 @@ export class SceneManager {
   private playEnemyOneShot(
     slot: EnemySlot,
     clip: RigMediumClipMap[keyof RigMediumClipMap],
-    kind: 'hit' | 'death',
+    kind: 'attack' | 'hit' | 'death',
   ): void {
     const mixer = slot.mixer;
     if (!mixer || !clip) {
@@ -1817,6 +1907,11 @@ export class SceneManager {
     const action = mixer.clipAction(clip);
     action.setLoop(LoopOnce, 1);
     action.clampWhenFinished = true;
+    if (kind !== 'death') {
+      action.setEffectiveTimeScale(
+        Math.max(1, clip.duration / (COMBAT_HIT_SEC * 0.9)),
+      );
+    }
     action.reset().fadeIn(0.06).play();
     slot.oneShotAction = action;
     const token = slot.loadToken;
@@ -1940,4 +2035,3 @@ function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
 function monsterBaseY(object: Group): number {
   return typeof object.userData.baseY === 'number' ? object.userData.baseY : 0.46;
 }
-

@@ -4,6 +4,7 @@ import {
   getEnemyDefinition,
 } from '../game/definitions/enemies';
 import {
+  ENEMY_ATTACK_CLIPS,
   ENEMY_MODEL_FITS,
   ENEMY_MODEL_URLS,
   ENEMY_RENDER_KEYS,
@@ -24,6 +25,11 @@ describe('enemy asset mapping', () => {
       boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
     });
     expect(ENEMY_MODEL_URLS.caveRat).not.toContain('Skeleton_Mage');
+    expect(ENEMY_ATTACK_CLIPS).toEqual({
+      caveRat: 'attackUnarmed',
+      cryptGuard: 'attack1H',
+      boneBrute: 'attack2H',
+    });
     for (const key of ENEMY_RENDER_KEYS) {
       expect(isEnemyRenderKey(key)).toBe(true);
       expect(enemyModelUrl(key)).toBe(ENEMY_MODEL_URLS[key]);

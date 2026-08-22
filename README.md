@@ -11,7 +11,7 @@ You choose a class on launch, then start in the centre lane at the near end of t
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
 - Floor tiles are simple dark stone boxes.
-- The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Ranger holds a visual-only KayKit dagger; it does not change combat.
+- The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
 - Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, health potions, or Alarm Traps. Those three enemies use KayKit Skeleton models (Minion / Rogue / Warrior) with the old placeholders as a loading fallback.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
@@ -140,9 +140,11 @@ src/
   rendering/
     SceneManager.ts       Scene, lights, recycled row meshes, player/hit FX
     playerAssets.ts       KayKit player GLB URLs
-    playerEquipment.ts    Ranger visual-only KayKit dagger loadout
+    playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
     enemyAssets.ts        KayKit Skeleton enemy GLB URLs and per-model fits
     rigMediumAnimations.ts Shared Rig_Medium clip loader/cache
+    environmentAssets.ts  KayKit dungeon-floor GLBs and deterministic variants
+    reservedKaykitAssets.ts Lazy URLs for future characters/enemies/equipment
     CameraController.ts   Elevated follow camera
   styles/
     main.css              Full-viewport HUD, class-select, shop, level-up, and game-over overlays
@@ -162,9 +164,10 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Cave Rat attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
-- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. Ranger currently shows a visual-only KayKit dagger from `playerEquipment.ts`, parented to `handslot.r`. Equipment does not yet alter gameplay. Shared clips provide idle, walk, hit, and death. Models never change class rules or GameState.
+- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts a dagger, bow, staff, sword/shield, or two-handed axe on the authored hand slots. Equipment remains visual-only and never changes class rules or GameState.
 - **Enemy presentation** uses KayKit Skeleton GLBs for Cave Rat, Crypt Guard, and Bone Brute. `enemyAssets.ts` maps existing enemy render keys to model URLs. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
-- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. Player and enemy rendering reuse one clip cache (`Idle_A`, `Walking_A`, `Hit_A`, `Death_A`). Enemies walk only during Alarm Trap slides, not during ordinary player movement.
+- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. Player and enemy rendering reuse one clip cache for general, movement, melee, and skeleton-specific clips. Players and enemies play compatible attack clips during combat; Ranger bow and Mage magic bundles remain reserved until ranged gameplay exists.
+- **Dungeon floors** use three self-contained KayKit GLBs over the pooled box fallbacks. Broken variants are selected deterministically from row/column and do not affect generation or saved game state.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -317,7 +320,7 @@ The renderer plays a short trap flash, then a one-tile enemy slide, then any com
 
 ## Player classes
 
-Classes are starting stats and presentation only. They do not add spells, bows, crits, blocking, rage, or inventory. Ranger currently shows a visual-only KayKit dagger in the right hand; equipment does not yet alter gameplay.
+Classes are starting stats and presentation only. They do not add spells, ranged attacks, crits, blocking, rage, or inventory. Their class-appropriate KayKit equipment and melee animation choices are visual-only.
 
 | ID | Class | Max HP | ATK | DEF | EVA | Playstyle |
 |---|---|---:|---:|---:|---:|---|
@@ -410,7 +413,7 @@ Starting stats:
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
 
-Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. Placeholder meshes differ by `renderKey` (`caveRat` small red sphere, `cryptGuard` tall blue-grey capsule, `boneBrute` larger orange block). Unique abilities and GLB models are still future work. Damage is:
+Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. KayKit Skeleton GLBs map Minion to Cave Rat as an approved stand-in, Rogue to Crypt Guard, and Warrior to Bone Brute. The original placeholder meshes remain loading/failure fallbacks. Unique abilities are still future work. Damage is:
 
 ```text
 damage = Math.max(1, attacker.attack - defender.defence)
@@ -489,7 +492,7 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 - Further evade/perception tuning and more defined level thresholds
 - More shop stock or meta progression; more loot kinds
 - Damaging traps, more trap kinds, doors, and authored biomes
-- Environment GLBs
+- Additional walls, doors, props, and authored dungeon biomes
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 
 ## License
@@ -497,3 +500,5 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 Private prototype. Add a license before publishing.
 
 Player Adventurers, Skeleton enemies, and shared `Rig_Medium` animations are **KayKit** by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Exact source paths, export decisions, runtime targets, and future reservations are recorded in [`public/models/KAYKIT_ASSETS.md`](public/models/KAYKIT_ASSETS.md).

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PLAYER_RENDER_KEYS } from '../game/definitions/classes';
 import {
   PLAYER_ANIMATION_URLS,
+  PLAYER_ATTACK_CLIPS,
   PLAYER_CLIP_NAMES,
   PLAYER_MODEL_URLS,
   isPlayerRenderKey,
@@ -39,12 +40,25 @@ describe('player asset mapping', () => {
     expect(PLAYER_ANIMATION_URLS).toEqual({
       general: '/models/players/kaykit/animations/Rig_Medium_General.glb',
       movement: '/models/players/kaykit/animations/Rig_Medium_MovementBasic.glb',
+      melee: '/models/players/kaykit/animations/Rig_Medium_CombatMelee.glb',
+      special: '/models/players/kaykit/animations/Rig_Medium_Special.glb',
     });
     expect(PLAYER_CLIP_NAMES).toEqual({
       idle: 'Idle_A',
       walk: 'Walking_A',
       hit: 'Hit_A',
       death: 'Death_A',
+      attack1H: 'Melee_1H_Attack_Slice_Diagonal',
+      attack2H: 'Melee_2H_Attack_Chop',
+      attackUnarmed: 'Melee_Unarmed_Attack_Punch_A',
+      skeletonIdle: 'Skeletons_Idle',
+      skeletonWalk: 'Skeletons_Walking',
+      skeletonDeath: 'Skeletons_Death',
+    });
+    expect(PLAYER_ATTACK_CLIPS).toEqual({
+      rogue: 'attack1H',
+      knight: 'attack1H',
+      barbarian: 'attack2H',
     });
   });
 });

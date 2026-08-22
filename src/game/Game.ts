@@ -369,6 +369,11 @@ export class Game {
 
     this.state.applyCombatLogEntry(entry, playback.target);
     this.updateHud();
+    if (entry.attacker === 'player') {
+      this.scene.playPlayerAttack();
+    } else {
+      this.scene.playEnemyAttack(playback.target);
+    }
     if (entry.target === 'player') {
       if (entry.targetHealthAfter <= 0) {
         this.scene.playPlayerDeath();

@@ -22,6 +22,16 @@ export const PLAYER_MODEL_URLS: Record<PlayerRenderKey, string> = {
 export const PLAYER_ANIMATION_URLS = RIG_MEDIUM_ANIMATION_URLS;
 export const PLAYER_CLIP_NAMES = RIG_MEDIUM_CLIP_NAMES;
 export type PlayerClipMap = RigMediumClipMap;
+export type PlayerAttackClipId = 'attack1H' | 'attack2H';
+
+/** Ranger bow and Mage magic clips stay reserved until ranged gameplay exists. */
+export const PLAYER_ATTACK_CLIPS: {
+  readonly [K in PlayerRenderKey]?: PlayerAttackClipId;
+} = {
+  rogue: 'attack1H',
+  knight: 'attack1H',
+  barbarian: 'attack2H',
+};
 
 /** Target in-world height so KayKit adventurers match the old capsule. */
 export const PLAYER_MODEL_HEIGHT = 0.98;
@@ -44,6 +54,14 @@ export function loadPlayerTemplate(key: PlayerRenderKey): Promise<Group> {
 
 export function loadPlayerClips(): Promise<PlayerClipMap> {
   return loadRigMediumClips();
+}
+
+export function playerAttackClip(
+  key: PlayerRenderKey | null | undefined,
+  clips: PlayerClipMap,
+) {
+  const clipId = key ? PLAYER_ATTACK_CLIPS[key] : undefined;
+  return clipId ? clips[clipId] : undefined;
 }
 
 export function fitPlayerModel(root: Object3D): void {
