@@ -3,6 +3,7 @@ import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ID,
   DEMO_MONSTER_ROW,
+  PLAYER_BASE_EVADE,
 } from './config';
 import {
   ENEMY_DEFINITIONS,
@@ -21,6 +22,7 @@ import {
   type RowRecipeFactory,
 } from './rowGeneration';
 import { collectibleId } from './Collectible';
+import { evadeHudText } from '../ui/HudView';
 
 function seededState(): GameState {
   return new GameState({
@@ -56,7 +58,7 @@ function safestCol(state: GameState): number {
 function playEncounters(state: GameState, encounters: EncounterEvent[]): void {
   for (const event of encounters) {
     if (event.kind === 'evade') {
-      state.applyEvade(event.monster);
+      state.applyEvade(event.monster, event.evadeChance);
       continue;
     }
     const result = state.createCombatResult(event);
@@ -794,4 +796,43 @@ describe('enemy drops', () => {
     expect(state.getTile(10, 1)?.content.type).toBe('empty');
   });
 });
+
+describe('evade and perception', () => {
+  it('exposes base evade on the HUD snapshot and restores it on reset', () => {
+    const state = new GameState();
+    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.getHudSnapshot().evade).toBe(PLAYER_BASE_EVADE);
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 1%');
+
+    state.player.increaseEvade(5);
+    expect(state.getHudSnapshot().evade).toBe(6);
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 6%');
+
+    state.reset();
+    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.getHudSnapshot().evade).toBe(1);
+  });
+
+  it('uses Crypt Guard perception for a side pass', () => {
+    let rolledChance: number | undefined;
+    const state = new GameState({
+      createRowRecipe: scriptedRecipes({
+        5: [emptyRow()[0], emptyRow()[1], monsterLane('guard-5', 'cryptGuard')],
+      }),
+      rollAvoidance: (chance) => {
+        rolledChance = chance;
+        return true;
+      },
+    });
+    walkTo(state, 4, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(rolledChance).toBe(0);
+    expect(resolution.encounters[0]).toMatchObject({
+      kind: 'evade',
+      evadeChance: 0,
+    });
+    expect(state.status).toMatch(/Evade chance: 0%\./);
+  });
+});
+
 

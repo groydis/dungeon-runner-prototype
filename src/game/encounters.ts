@@ -1,5 +1,7 @@
+import { EVADE_CHANCE_MAX, PLAYER_BASE_EVADE } from './config';
 import { type Monster } from './Monster';
 import { type Player } from './Player';
+import { type Rng } from './random';
 
 export type CombatApproach = 'frontOn' | 'surprise';
 
@@ -8,23 +10,40 @@ export type EncounterEvent =
       kind: 'combat';
       approach: CombatApproach;
       monster: Monster;
+      evadeChance?: number;
     }
   | {
       kind: 'evade';
       monster: Monster;
+      evadeChance?: number;
     };
 
-export type AvoidanceRoll = () => boolean;
+export type AvoidanceRoll = (chance?: number) => boolean;
 
-export function rollAvoidance(random: () => number = Math.random): boolean {
-  return random() < 0.5;
+export function evadeChance(
+  playerEvade: number,
+  enemyPerception: number,
+): number {
+  return Math.min(
+    EVADE_CHANCE_MAX,
+    Math.max(0, playerEvade - enemyPerception),
+  );
+}
+
+/** `chance` is a percent. `random()` is [0, 1). */
+export function rollAvoidance(
+  chance: number,
+  random: () => number = Math.random,
+): boolean {
+  return random() * 100 < chance;
 }
 
 /**
  * Development helper: `?avoid=1` always evades, `?avoid=0` always starts
- * Surprise Attack combat. Production play uses a live 50/50 roll.
+ * Surprise Attack combat, ignoring Evade and Perception.
+ * When neither is set, returns undefined so GameState can use its evade RNG.
  */
-export function avoidanceRollerFromSearch(search: string): AvoidanceRoll {
+export function avoidanceOverrideFromSearch(search: string): AvoidanceRoll | undefined {
   const params = new URLSearchParams(
     search.startsWith('?') ? search.slice(1) : search,
   );
@@ -35,7 +54,21 @@ export function avoidanceRollerFromSearch(search: string): AvoidanceRoll {
   if (forced === '0' || forced === 'false') {
     return () => false;
   }
-  return () => rollAvoidance();
+  return undefined;
+}
+
+/**
+ * Testing helper. Forced `?avoid=` values win; otherwise rolls against chance
+ * with the optional RNG (defaults to `Math.random`).
+ */
+export function avoidanceRollerFromSearch(
+  search: string,
+  random?: Rng,
+): AvoidanceRoll {
+  return (
+    avoidanceOverrideFromSearch(search) ??
+    ((chance = PLAYER_BASE_EVADE) => rollAvoidance(chance, random))
+  );
 }
 
 /**
@@ -63,11 +96,12 @@ function isOnMonsterTile(
 
 /** Pure checks. Does not mutate monsters or tiles. */
 export function findAlignedMonsterEncounters(
-  player: Pick<Player, 'row' | 'col'>,
+  player: Pick<Player, 'row' | 'col'> & { evade?: number },
   monsters: Iterable<Monster>,
-  roll: AvoidanceRoll = () => rollAvoidance(),
+  roll: AvoidanceRoll = (chance = PLAYER_BASE_EVADE) => rollAvoidance(chance),
 ): EncounterEvent[] {
   const events: EncounterEvent[] = [];
+  const playerEvade = player.evade ?? PLAYER_BASE_EVADE;
 
   for (const monster of monsters) {
     if (monster.encounterResolved) {
@@ -89,11 +123,16 @@ export function findAlignedMonsterEncounters(
       continue;
     }
 
-    // Same row, adjacent lane: one avoidance roll.
-    if (roll()) {
-      events.push({ kind: 'evade', monster });
+    const chance = evadeChance(playerEvade, monster.perception);
+    if (roll(chance)) {
+      events.push({ kind: 'evade', monster, evadeChance: chance });
     } else {
-      events.push({ kind: 'combat', approach: 'surprise', monster });
+      events.push({
+        kind: 'combat',
+        approach: 'surprise',
+        monster,
+        evadeChance: chance,
+      });
     }
   }
 
@@ -102,11 +141,13 @@ export function findAlignedMonsterEncounters(
 
 export function encounterStartText(event: EncounterEvent): string {
   const { name } = event.monster;
+  const chanceSuffix =
+    event.evadeChance === undefined ? '' : ` Evade chance: ${event.evadeChance}%.`;
   if (event.kind === 'evade') {
-    return `You slip past the ${name}.`;
+    return `You slip past the ${name}.${chanceSuffix}`;
   }
   if (event.approach === 'surprise') {
-    return `You catch the ${name} off guard!`;
+    return `You catch the ${name} off guard!${chanceSuffix}`;
   }
   return `A ${name} blocks your path!`;
 }

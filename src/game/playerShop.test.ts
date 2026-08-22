@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPlayerStats } from './Combatant';
+import { EVADE_CHANCE_MAX, PLAYER_BASE_EVADE } from './config';
 import { GameState } from './GameState';
 import { Merchant } from './Merchant';
 import { Player } from './Player';
@@ -48,7 +49,7 @@ function walkTo(state: GameState, row: number, col: number): void {
 
     for (const event of resolution.encounters) {
       if (event.kind === 'evade') {
-        state.applyEvade(event.monster);
+        state.applyEvade(event.monster, event.evadeChance);
         continue;
       }
       const result = state.createCombatResult(event);
@@ -97,6 +98,17 @@ describe('Player', () => {
     player.reset();
     expect(player.stats).toEqual(createPlayerStats());
     expect(player.gold).toBe(0);
+  });
+
+  it('starts at 1 evade, clamps increases to 85, and restores 1 on reset', () => {
+    const player = new Player();
+    expect(player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(player.increaseEvade(5)).toBe(5);
+    expect(player.evade).toBe(6);
+    expect(player.increaseEvade(100)).toBe(EVADE_CHANCE_MAX - 6);
+    expect(player.evade).toBe(EVADE_CHANCE_MAX);
+    player.reset();
+    expect(player.evade).toBe(PLAYER_BASE_EVADE);
   });
 });
 

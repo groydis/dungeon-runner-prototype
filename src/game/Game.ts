@@ -11,11 +11,15 @@ import {
 import { type CombatResult } from './combat';
 import {
   type EncounterEvent,
-  avoidanceRollerFromSearch,
+  avoidanceOverrideFromSearch,
 } from './encounters';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
 import { GameState, type TrapResolution } from './GameState';
-import { dropRngFactoryFromSearch, rngFactoryFromSearch } from './random';
+import {
+  dropRngFactoryFromSearch,
+  evadeRngFactoryFromSearch,
+  rngFactoryFromSearch,
+} from './random';
 import { InputController, type TilePick } from './InputController';
 import { type Monster } from './Monster';
 import { type ShopOfferId } from './shop';
@@ -47,10 +51,11 @@ interface TrapPlayback {
 
 export class Game {
   private readonly state = new GameState({
-    rollAvoidance: avoidanceRollerFromSearch(window.location.search),
+    rollAvoidance: avoidanceOverrideFromSearch(window.location.search),
     createEnemyStats: enemyStatsFactoryFromSearch(window.location.search),
     createRng: rngFactoryFromSearch(window.location.search),
     createDropRng: dropRngFactoryFromSearch(window.location.search),
+    createEvadeRng: evadeRngFactoryFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
   private readonly scene: SceneManager;
@@ -263,7 +268,7 @@ export class Game {
     }
 
     if (event.kind === 'evade') {
-      this.state.applyEvade(event.monster);
+      this.state.applyEvade(event.monster, event.evadeChance);
       this.updateHud();
       this.scene.beginEncounterFx([event], this.state.player.col);
       this.encounterFxElapsed = 0;

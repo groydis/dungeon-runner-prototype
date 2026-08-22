@@ -65,7 +65,8 @@ body {
 
 #distance,
 #gold,
-#attack {
+#attack,
+#evade {
   margin: 6px 0 0;
   color: var(--hud-accent);
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
@@ -83,6 +84,10 @@ body {
 
 #attack {
   color: #c9b6ff;
+}
+
+#evade {
+  color: #8fd4c8;
 }
 
 .health {

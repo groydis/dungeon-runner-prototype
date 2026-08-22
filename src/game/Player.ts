@@ -1,4 +1,9 @@
-import { START_COL, START_ROW } from './config';
+import {
+  EVADE_CHANCE_MAX,
+  PLAYER_BASE_EVADE,
+  START_COL,
+  START_ROW,
+} from './config';
 import { type CombatStats, createCombatStats, createPlayerStats } from './Combatant';
 
 /** Logical player position, gold, and run-scoped combat stats. */
@@ -6,6 +11,7 @@ export class Player {
   private _row = START_ROW;
   private _col = START_COL;
   private _gold = 0;
+  private _evade = PLAYER_BASE_EVADE;
   private _stats: CombatStats = createPlayerStats();
 
   get row(): number {
@@ -18,6 +24,10 @@ export class Player {
 
   get gold(): number {
     return this._gold;
+  }
+
+  get evade(): number {
+    return this._evade;
   }
 
   /** Read-only copy so callers cannot mutate live combat stats. */
@@ -69,10 +79,19 @@ export class Player {
     return gained;
   }
 
+  increaseEvade(amount: number): number {
+    const gained = Math.max(0, amount);
+    const next = Math.min(EVADE_CHANCE_MAX, this._evade + gained);
+    const applied = next - this._evade;
+    this._evade = next;
+    return applied;
+  }
+
   reset(): void {
     this._row = START_ROW;
     this._col = START_COL;
     this._gold = 0;
+    this._evade = PLAYER_BASE_EVADE;
     this._stats = createPlayerStats();
   }
 }

@@ -46,6 +46,10 @@ export class Monster {
     return this.definition.renderKey;
   }
 
+  get perception(): number {
+    return this.definition.perception;
+  }
+
   get encounterResolved(): boolean {
     return this._encounterResolved;
   }

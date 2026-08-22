@@ -15,7 +15,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, health potions, or Alarm Traps.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
-- Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
+- Adjacent lane (same row) = roll Evade vs that enemy’s Perception to slip past, or take a Surprise Attack.
 - Combat is automatic and plays in place. There is no battle screen.
 - Gold can be spent at a rare Travelling Merchant for run-only upgrades.
 - An Alarm Trap does not deal damage. It pulls the closest visible enemy one legal tile closer.
@@ -37,7 +37,7 @@ Included:
 - Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, gold, attack, HP text/bar, and status
+- HUD with distance, gold, attack, evade, HP text/bar, and status
 - A rare Travelling Merchant shop overlay
 - Death overlay and in-place Restart Run
 - Responsive full-screen layout for phone and desktop
@@ -72,10 +72,10 @@ npm run preview
 
 Query-string helpers (no on-screen debug UI):
 
-- `/?avoid=1` — always evade a side pass
-- `/?avoid=0` — always Surprise Attack combat on a side pass
+- `/?avoid=1` — testing override: always evade a side pass, ignoring Evade and Perception
+- `/?avoid=0` — testing override: always Surprise Attack combat on a side pass, ignoring Evade and Perception
 - `/?fatal=1` — testing override: Cave Rat **attack** is raised on top of `ENEMY_DEFINITIONS`, enough to kill the player
-- `/?seed=123` — seeded row generation and a separate drop stream; Restart Run replays the same layouts and, for the same fights, the same drops
+- `/?seed=123` — seeded row generation plus separate drop and evade streams; Restart Run replays the same layouts, drops, and evade rolls for the same choices
 
 ## Controls
 
@@ -121,7 +121,7 @@ src/
       enemies.ts          Authoritative enemy names, base stats, render keys
       encounterPools.ts   Distance-based enemy-type weights
   ui/
-    HudView.ts            Distance, gold, attack, HP, status
+    HudView.ts            Distance, gold, attack, evade, HP, status
     GameOverView.ts       Death overlay and Restart Run
     ShopOverlayView.ts    Merchant overlay
   rendering/
@@ -138,7 +138,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
 - **GameState** is the single-run aggregate. It owns grid, entities, shop session, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
 - **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop result for spawn playback only.
-- **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, trap consume, and Merchant purchases.
+- **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
 - **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
@@ -234,7 +234,7 @@ Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14
 - Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
 - No monster, gold, potion, trap, or other content on that row
 
-`?seed=<number>` seeds **row generation** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Enemy drops use a **separate** Mulberry32 stream derived from the same seed with a fixed XOR salt (`DROP_RNG_SEED_SALT`), so fighting and drop rolls cannot change later layouts. Combat and avoidance still use their own rolls. Without `?seed`, generation and drops both use `Math.random`. Restart Run rebuilds both RNGs from the same seed, so `?seed=123` replays the same rows, Merchant lanes, trap placement, enemy types, and — for the same fights — the same drops.
+`?seed=<number>` seeds **row generation** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Enemy drops and side-pass evade rolls use **separate** Mulberry32 streams from the same seed (`DROP_RNG_SEED_SALT`, `EVADE_RNG_SEED_SALT`), so neither can change later layouts. `?avoid=1` / `?avoid=0` bypass the evade stream. Combat hit resolution is still deterministic from stats. Without `?seed`, generation, drops, and evade all use `Math.random`. Restart Run rebuilds every stream from the same seed.
 
 Gold and potions:
 
@@ -338,20 +338,23 @@ type EncounterEvent =
 ```
 
 - **Same lane** (in front or behind) — `{ kind: 'combat', approach: 'frontOn' }`
-- **Same row, adjacent lane** — one 50/50 roll
+- **Same row, adjacent lane** — roll Evade vs that enemy’s Perception
+  - chance: `clamp(player.evade − enemy.perception, 0, 85)`
   - success: `{ kind: 'evade' }` — monster is removed, no health change
   - failure: `{ kind: 'combat', approach: 'surprise' }`
+  - Status includes the chance used, e.g. `Evade chance: 16%.`
+  - `?avoid=1` / `?avoid=0` force the outcome for tests and ignore the formula.
 
 ## Combat
 
 Starting stats:
 
-|            | HP | Attack | Defence |
-|------------|----|--------|---------|
-| Player     | 20 | 5      | 1       |
-| Cave Rat   | 8  | 3      | 0       |
-| Crypt Guard | 12 | 4      | 1       |
-| Bone Brute | 20 | 6      | 1       |
+|            | HP | Attack | Defence | Evade / Perception |
+|------------|----|--------|---------|-------------------:|
+| Player     | 20 | 5      | 1       | EVA 1% |
+| Cave Rat   | 8  | 3      | 0       | Perception 0% |
+| Crypt Guard | 12 | 4      | 1       | Perception 5% |
+| Bone Brute | 20 | 6      | 1       | Perception 10% |
 
 Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. Placeholder meshes differ by `renderKey` (`caveRat` small red sphere, `cryptGuard` tall blue-grey capsule, `boneBrute` larger orange block). Unique abilities and GLB models are still future work. Damage is:
 
@@ -378,7 +381,7 @@ Outcomes:
 
 - Player wins: `You defeated the [enemy name].` If a drop rolled, a short extra sentence is appended. Movement unlocks after any drop-spawn playback.
 - Player dies: `You were killed by the [enemy name].` Input locks and the overlay appears.
-- Evade: `You slip past the [enemy name].` No combat, no HP change.
+- Evade: `You slip past the [enemy name]. Evade chance: [N]%.` No combat, no HP change.
 
 ## Death and restart
 
@@ -390,13 +393,13 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation RNG, drop RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
+Restart Run resets player stats (including attack and evade), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation / drop / evade RNGs, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
 
 ## Intended next steps
 
 - Equipment, levelling, crits, and unique enemy abilities
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
-- Smarter avoidance than a flat 50/50
+- Level-up UI that calls `player.increaseEvade()`, and further evade/perception tuning
 - More shop stock, defence upgrades, or meta progression; more loot kinds
 - Damaging traps, more trap kinds, doors, and authored biomes
 - GLB models

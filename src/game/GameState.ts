@@ -110,6 +110,7 @@ export interface HudSnapshot {
   distance: number;
   gold: number;
   attack: number;
+  evade: number;
   health: number;
   maxHealth: number;
   status: string;
@@ -120,6 +121,7 @@ export interface GameStateOptions {
   createEnemyStats?: EnemyStatsFactory;
   createRng?: () => Rng;
   createDropRng?: () => Rng;
+  createEvadeRng?: () => Rng;
   createRowRecipe?: RowRecipeFactory;
 }
 
@@ -142,18 +144,24 @@ export class GameState {
   private readonly createEnemyStats: EnemyStatsFactory;
   private readonly createRng: () => Rng;
   private readonly createDropRng: () => Rng;
+  private readonly createEvadeRng: () => Rng;
   private readonly createRowRecipe: RowRecipeFactory;
   private rng: Rng;
   private dropRng: Rng;
+  private evadeRng: Rng;
 
   constructor(options: GameStateOptions = {}) {
-    this.rollAvoidance = options.rollAvoidance ?? (() => rollAvoidance());
     this.createEnemyStats = options.createEnemyStats ?? createEnemyStats;
     this.createRng = options.createRng ?? (() => Math.random);
     this.createDropRng = options.createDropRng ?? (() => Math.random);
+    this.createEvadeRng = options.createEvadeRng ?? (() => Math.random);
     this.createRowRecipe = options.createRowRecipe ?? createRowRecipe;
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
+    this.evadeRng = this.createEvadeRng();
+    this.rollAvoidance =
+      options.rollAvoidance ??
+      ((chance = 0) => rollAvoidance(chance, this.evadeRng));
     this.populateInitialRows();
   }
 
@@ -187,6 +195,7 @@ export class GameState {
       distance: this._distance,
       gold: this.player.gold,
       attack: stats.attack,
+      evade: this.player.evade,
       health: stats.health,
       maxHealth: stats.maxHealth,
       status: this._status,
@@ -357,8 +366,8 @@ export class GameState {
     this.activeShop = null;
   }
 
-  applyEvade(monster: Monster): void {
-    this._status = encounterStartText({ kind: 'evade', monster });
+  applyEvade(monster: Monster, evadeChance?: number): void {
+    this._status = encounterStartText({ kind: 'evade', monster, evadeChance });
     this.removeMonster(monster);
   }
 
@@ -419,6 +428,7 @@ export class GameState {
     this.recipes.clear();
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
+    this.evadeRng = this.createEvadeRng();
     this.grid.clear();
     this.populateInitialRows();
   }
