@@ -4,12 +4,14 @@ import {
   DEMO_MONSTER_ROW,
   LANE_COUNT,
   SAFE_ROWS_AFTER_START,
+  SHOP_ROW_INTERVAL,
   START_ROW,
 } from './config';
 import { collectibleId, type CollectibleKind } from './Collectible';
+import { merchantId } from './Merchant';
 import { pickWeighted, randomInt, type Rng } from './random';
 
-export type LaneKind = 'empty' | 'monster' | 'gold' | 'potion';
+export type LaneKind = 'empty' | 'monster' | 'gold' | 'potion' | 'shop';
 
 export interface LaneRecipe {
   kind: LaneKind;
@@ -47,7 +49,20 @@ export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
     return empty;
   }
 
+  if (isMerchantRow(row)) {
+    const col = randomInt(rng, LANE_COUNT);
+    empty[col] = {
+      kind: 'shop',
+      entityId: merchantId(row),
+    };
+    return empty;
+  }
+
   return recipeFromPattern(row, pickWeighted(ROW_PATTERN_WEIGHTS, rng), rng);
+}
+
+export function isMerchantRow(row: number): boolean {
+  return row >= SHOP_ROW_INTERVAL && row % SHOP_ROW_INTERVAL === 0;
 }
 
 function emptyRow(): LaneRecipe[] {

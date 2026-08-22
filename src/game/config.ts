@@ -19,6 +19,14 @@ export const SAFE_ROWS_AFTER_START = 3;
 export const GOLD_AMOUNT = 1;
 export const POTION_HEAL = 4;
 
+/** First shop at this row, then every N rows: 14, 28, 42, … */
+export const SHOP_ROW_INTERVAL = 14;
+export const SHOP_HEAL_COST = 1;
+export const SHOP_HEAL_AMOUNT = 5;
+export const SHOP_ATTACK_COST = 3;
+export const SHOP_ATTACK_BONUS = 1;
+export const MERCHANT_LEAVE_FX_SEC = 0.36;
+
 /** Demo Cave Rat after the safe opening, centre lane, for front-on / side-pass tests. */
 export const DEMO_MONSTER_ROW = 4;
 export const DEMO_MONSTER_COL = 1;
