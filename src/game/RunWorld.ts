@@ -99,6 +99,10 @@ export class RunWorld {
     return this.monsters.values();
   }
 
+  monsterById(id: string): Monster | undefined {
+    return this.monsters.get(id);
+  }
+
   monsterAt(row: number, col: number): Monster | undefined {
     const tile = this.grid.getTile(row, col);
     if (!tile || tile.content.type !== 'monster' || !tile.content.id) {

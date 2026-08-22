@@ -16,13 +16,13 @@ import {
 import { PLAYER_CLASS_IDS, type PlayerClassId } from './definitions/classes';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
 import { GameState, type TrapResolution } from './GameState';
+import { type EncounterMonsterView } from './BoardSnapshot';
 import {
   dropRngFactoryFromSearch,
   evadeRngFactoryFromSearch,
   rngFactoryFromSearch,
 } from './random';
 import { InputController, type TilePick } from './InputController';
-import { type Monster } from './Monster';
 import { type LevelUpChoice } from './levelUp';
 import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
 import { CameraController } from '../rendering/CameraController';
@@ -42,7 +42,7 @@ interface MoveAnimation {
 
 interface CombatPlayback {
   result: CombatResult;
-  monster: Monster;
+  target: EncounterMonsterView;
   entryIndex: number;
   elapsed: number;
 }
@@ -175,10 +175,11 @@ export class Game {
     this.setBoardInteractive(false);
     this.camera.nudge();
 
+    const player = this.requirePlayerSnapshot();
     this.animation = {
-      fromCol: this.state.player.col,
+      fromCol: player.col,
       toCol: tile.col,
-      anchorRow: this.state.player.row,
+      anchorRow: player.row,
       elapsed: 0,
     };
   }
@@ -210,8 +211,9 @@ export class Game {
     const resolution = this.state.resolveCompletedMove(toCol);
     this.scene.setScrollZ(0);
     this.scene.recycleDepartingRow(leftBehindRow, this.state.getBoardSnapshot());
-    this.scene.layoutRows(this.state.player.row);
-    this.scene.setPlayerVisual(laneWorldX(this.state.player.col), 0);
+    const player = this.requirePlayerSnapshot();
+    this.scene.layoutRows(player.row);
+    this.scene.setPlayerVisual(laneWorldX(player.col), 0);
 
     if (resolution.pickup) {
       this.scene.beginCollectFx(resolution.pickup);
@@ -229,7 +231,8 @@ export class Game {
         phase: 'flash',
         elapsed: 0,
       };
-      this.scene.beginTrapTriggerFx(this.state.player.row, this.state.player.col);
+      const player = this.requirePlayerSnapshot();
+      this.scene.beginTrapTriggerFx(player.row, player.col);
       if (resolution.trap.enemyMove) {
         this.scene.beginEnemyAdvanceFx(resolution.trap.enemyMove);
         this.scene.updateEnemyAdvanceFx(0);
@@ -292,7 +295,7 @@ export class Game {
     if (event.kind === 'evade') {
       this.state.applyEvade(event.monster, event.evadeChance);
       this.updateHud();
-      this.scene.beginEncounterFx([event], this.state.player.col);
+      this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
       this.encounterFxElapsed = 0;
       return;
     }
@@ -300,7 +303,7 @@ export class Game {
     const result = this.state.createCombatResult(event);
     this.combatPlayback = {
       result,
-      monster: event.monster,
+      target: event.monster,
       entryIndex: 0,
       elapsed: 0,
     };
@@ -343,7 +346,7 @@ export class Game {
     this.combatPlayback.elapsed = 0;
 
     if (this.combatPlayback.entryIndex >= this.combatPlayback.result.log.length) {
-      this.concludeCombat(this.combatPlayback.result, this.combatPlayback.monster);
+      this.concludeCombat(this.combatPlayback.result, this.combatPlayback.target);
       return;
     }
 
@@ -358,22 +361,22 @@ export class Game {
 
     const entry = playback.result.log[playback.entryIndex];
     if (!entry) {
-      this.concludeCombat(playback.result, playback.monster);
+      this.concludeCombat(playback.result, playback.target);
       return;
     }
 
-    this.state.applyCombatLogEntry(entry, playback.monster);
+    this.state.applyCombatLogEntry(entry, playback.target);
     this.updateHud();
     this.scene.beginCombatHit(
       entry,
-      this.state.player.col,
-      playback.monster.row,
-      playback.monster.col,
+      this.requirePlayerSnapshot().col,
+      playback.target.row,
+      playback.target.col,
     );
   }
 
-  private concludeCombat(result: CombatResult, monster: Monster): void {
-    const finish = this.state.finishCombat(result, monster);
+  private concludeCombat(result: CombatResult, target: EncounterMonsterView): void {
+    const finish = this.state.finishCombat(result, target);
     this.combatPlayback = null;
     this.setBoardInteractive(false);
     this.updateHud();
@@ -528,6 +531,14 @@ export class Game {
       this.trapPlayback !== null ||
       this.dropSpawnElapsed !== null
     );
+  }
+
+  private requirePlayerSnapshot() {
+    const player = this.state.getPlayerSnapshot();
+    if (!player) {
+      throw new Error('No class selected');
+    }
+    return player;
   }
 
   private setBoardInteractive(interactive: boolean): void {

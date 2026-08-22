@@ -2,6 +2,7 @@ import { type AlarmConsumedKind } from './alarm';
 import { type CollectibleKind } from './Collectible';
 import { type CombatStats } from './Combatant';
 import { LANE_COUNT, ROW_POOL_SIZE, START_COL, START_ROW } from './config';
+import { type PlayerClassId } from './definitions/classes';
 import { type EnemyType } from './definitions/enemies';
 import { deepFreeze, type DeepReadonly } from './freeze';
 import { type GridPosition, type TileContentType } from './Tile';
@@ -51,6 +52,33 @@ export interface MonsterSnapshot {
   readonly perception: number;
   readonly experience: number;
   readonly stats: Readonly<CombatStats>;
+}
+
+/** Frozen encounter/combat target. No domain methods or live stats. */
+export interface EncounterMonsterView {
+  readonly id: string;
+  readonly type: EnemyType;
+  readonly name: string;
+  readonly row: number;
+  readonly col: number;
+  readonly renderKey: string;
+}
+
+export interface EncounterTarget {
+  readonly id: string;
+}
+
+export interface PlayerSnapshot {
+  readonly classId: PlayerClassId;
+  readonly className: string;
+  readonly row: number;
+  readonly col: number;
+  readonly gold: number;
+  readonly level: number;
+  readonly experience: number;
+  readonly nextLevelExperience: number | null;
+  readonly stats: Readonly<CombatStats>;
+  readonly evade: number;
 }
 
 export interface CollectibleSnapshot {
@@ -158,4 +186,22 @@ export function snapshotContentType(
 
 export function freezeReadModel<T>(value: T): DeepReadonly<T> {
   return deepFreeze(value);
+}
+
+export function encounterMonsterView(monster: {
+  id: string;
+  type: EnemyType;
+  name: string;
+  row: number;
+  col: number;
+  renderKey: string;
+}): EncounterMonsterView {
+  return freezeReadModel({
+    id: monster.id,
+    type: monster.type,
+    name: monster.name,
+    row: monster.row,
+    col: monster.col,
+    renderKey: monster.renderKey,
+  });
 }

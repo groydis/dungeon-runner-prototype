@@ -1,3 +1,7 @@
+import {
+  encounterMonsterView,
+  type EncounterMonsterView,
+} from './BoardSnapshot';
 import { PLAYER_BASE_EVADE } from './config';
 import { type Monster } from './Monster';
 import { type Player } from './Player';
@@ -9,12 +13,12 @@ export type EncounterEvent =
   | {
       kind: 'combat';
       approach: CombatApproach;
-      monster: Monster;
+      monster: EncounterMonsterView;
       evadeChance?: number;
     }
   | {
       kind: 'evade';
-      monster: Monster;
+      monster: EncounterMonsterView;
       evadeChance?: number;
     };
 
@@ -106,8 +110,10 @@ export function findAlignedMonsterEncounters(
       continue;
     }
 
+    const view = encounterMonsterView(monster);
+
     if (isOnMonsterTile(player, monster)) {
-      events.push({ kind: 'combat', approach: 'frontOn', monster });
+      events.push({ kind: 'combat', approach: 'frontOn', monster: view });
       continue;
     }
 
@@ -117,18 +123,18 @@ export function findAlignedMonsterEncounters(
 
     // Same lane, one row in front or behind: guaranteed front-on fight.
     if (monster.col === player.col) {
-      events.push({ kind: 'combat', approach: 'frontOn', monster });
+      events.push({ kind: 'combat', approach: 'frontOn', monster: view });
       continue;
     }
 
     const chance = evadeChance(playerEvade, monster.perception);
     if (roll(chance)) {
-      events.push({ kind: 'evade', monster, evadeChance: chance });
+      events.push({ kind: 'evade', monster: view, evadeChance: chance });
     } else {
       events.push({
         kind: 'combat',
         approach: 'surprise',
-        monster,
+        monster: view,
         evadeChance: chance,
       });
     }

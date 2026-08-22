@@ -32,9 +32,30 @@ describe('encounters', () => {
     const evade = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => true);
     const surprise = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => false);
 
-    expect(evade).toEqual([{ kind: 'evade', monster, evadeChance: 1 }]);
+    expect(evade).toEqual([
+      {
+        kind: 'evade',
+        monster: expect.objectContaining({
+          id: monster.id,
+          name: 'Cave Rat',
+          row: 5,
+          col: 2,
+          renderKey: 'caveRat',
+        }),
+        evadeChance: 1,
+      },
+    ]);
     expect(surprise).toEqual([
-      { kind: 'combat', approach: 'surprise', monster, evadeChance: 1 },
+      {
+        kind: 'combat',
+        approach: 'surprise',
+        monster: expect.objectContaining({
+          id: monster.id,
+          row: 5,
+          col: 2,
+        }),
+        evadeChance: 1,
+      },
     ]);
   });
 

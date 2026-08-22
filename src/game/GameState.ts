@@ -6,12 +6,16 @@ import {
 import {
   type BoardSnapshot,
   type CollectibleSnapshot,
+  type EncounterTarget,
   type EnemyMoveResult,
   type MonsterSnapshot,
   type PickupResult,
+  type PlayerSnapshot,
   type TileSnapshot,
   type TrapSnapshot,
   emptyBoardSnapshot,
+  encounterMonsterView,
+  freezeReadModel,
 } from './BoardSnapshot';
 import {
   GOLD_AMOUNT,
@@ -24,7 +28,6 @@ import {
   type CombatLogEntry,
   resolveAutomaticCombat,
 } from './combat';
-import { createCombatStats, type CombatStats } from './Combatant';
 import {
   createEnemyStats,
   enemyDropCollectibleId,
@@ -57,6 +60,7 @@ import {
   type PlayerClassId,
 } from './definitions/classes';
 import { Player } from './Player';
+import { type ExperienceGain } from './progression';
 import { type Rng } from './random';
 import { createRowRecipe, type RowRecipeFactory } from './rowGeneration';
 import { RunWorld } from './RunWorld';
@@ -78,9 +82,12 @@ import { type TrapKind } from './Trap';
 export type {
   BoardSnapshot,
   CollectibleSnapshot,
+  EncounterMonsterView,
+  EncounterTarget,
   EnemyMoveResult,
   MonsterSnapshot,
   PickupResult,
+  PlayerSnapshot,
   TileSnapshot,
   TrapSnapshot,
 } from './BoardSnapshot';
@@ -180,13 +187,6 @@ export class GameState {
     }
   }
 
-  get player(): Player {
-    if (!this._player) {
-      throw new Error('No class selected');
-    }
-    return this._player;
-  }
-
   get hasSelectedClass(): boolean {
     return this._player !== null;
   }
@@ -205,15 +205,6 @@ export class GameState {
 
   get runOver(): boolean {
     return this._runOver;
-  }
-
-  get playerStats(): CombatStats {
-    return this._player?.stats ?? createCombatStats({
-      maxHealth: 0,
-      health: 0,
-      attack: 0,
-      defence: 0,
-    });
   }
 
   get gold(): number {
@@ -270,6 +261,52 @@ export class GameState {
       hasSelectedClass: true,
       legalMoveCols: this.legalMoveCols(),
     });
+  }
+
+  getPlayerSnapshot(): PlayerSnapshot | null {
+    if (!this._player) {
+      return null;
+    }
+    return freezeReadModel({
+      classId: this._player.classId,
+      className: this._player.className,
+      row: this._player.row,
+      col: this._player.col,
+      gold: this._player.gold,
+      level: this._player.level,
+      experience: this._player.experience,
+      nextLevelExperience: this._player.nextLevelExperience,
+      stats: this._player.stats,
+      evade: this._player.evade,
+    });
+  }
+
+  addGold(amount: number): number {
+    return this.requirePlayer().addGold(amount);
+  }
+
+  takeDamage(amount: number): number {
+    return this.requirePlayer().takeDamage(amount);
+  }
+
+  addExperience(amount: number): ExperienceGain {
+    return this.requirePlayer().addExperience(amount);
+  }
+
+  increaseAttack(amount: number): number {
+    return this.requirePlayer().increaseAttack(amount);
+  }
+
+  increaseDefence(amount: number): number {
+    return this.requirePlayer().increaseDefence(amount);
+  }
+
+  increaseMaxHealth(amount: number): number {
+    return this.requirePlayer().increaseMaxHealth(amount);
+  }
+
+  increaseEvade(amount: number): number {
+    return this.requirePlayer().increaseEvade(amount);
   }
 
   getClassSelectionView(): ClassSelectionView {
@@ -459,50 +496,51 @@ export class GameState {
     this.activeShop = null;
   }
 
-  applyEvade(monster: Monster, evadeChance?: number): void {
-    this._status = encounterStartText({ kind: 'evade', monster, evadeChance });
+  applyEvade(target: EncounterTarget, evadeChance?: number): void {
+    const monster = this.requireActiveMonster(target.id);
+    this._status = encounterStartText({
+      kind: 'evade',
+      monster: encounterMonsterView(monster),
+      evadeChance,
+    });
     this.world.removeMonster(monster);
   }
 
   createCombatResult(event: EncounterEvent): CombatResult {
-    if (!this._player) {
-      throw new Error('Cannot resolve combat before a class is selected');
-    }
+    const player = this.requirePlayer();
     if (event.kind !== 'combat') {
       throw new Error('Cannot create a combat result for an evade event');
     }
+    const monster = this.requireActiveMonster(event.monster.id);
 
     return resolveAutomaticCombat(
-      this._player.stats,
-      event.monster.stats,
+      player.stats,
+      monster.stats,
       event.approach,
-      { id: event.monster.id, name: event.monster.name },
+      { id: monster.id, name: monster.name },
     );
   }
 
-  applyCombatLogEntry(entry: CombatLogEntry, monster: Monster): void {
-    if (!this._player) {
-      throw new Error('Cannot resolve combat before a class is selected');
-    }
+  applyCombatLogEntry(entry: CombatLogEntry, target: EncounterTarget): void {
+    const player = this.requirePlayer();
     if (entry.target === 'player') {
-      this._player.applyHealth(entry.targetHealthAfter);
+      player.applyHealth(entry.targetHealthAfter);
       return;
     }
-    monster.applyHealth(entry.targetHealthAfter);
+    this.requireActiveMonster(target.id).applyHealth(entry.targetHealthAfter);
   }
 
-  finishCombat(result: CombatResult, monster: Monster): CombatFinishResult {
-    if (!this._player) {
-      throw new Error('Cannot resolve combat before a class is selected');
-    }
-    this._player.applyHealth(result.playerHealthAfter);
+  finishCombat(result: CombatResult, target: EncounterTarget): CombatFinishResult {
+    const player = this.requirePlayer();
+    const monster = this.requireMonsterById(target.id);
+    player.applyHealth(result.playerHealthAfter);
 
     if (result.winner === 'player') {
       const awardRewards = !monster.encounterResolved && monster.defeated;
       this.world.removeMonster(monster);
       const drop = awardRewards ? this.trySpawnDefeatDrop(monster) : null;
       const xpGain = awardRewards
-        ? this._player.addExperience(
+        ? player.addExperience(
             this.enemyExperience?.(monster.type) ?? monster.experience,
           )
         : { gained: 0, levelsReached: [] as number[] };
@@ -522,7 +560,7 @@ export class GameState {
       };
     }
 
-    this._player.applyHealth(0);
+    player.applyHealth(0);
     this._runOver = true;
     this._status = combatDefeatText(result.monsterName);
     return {
@@ -601,6 +639,29 @@ export class GameState {
     this.beginRun(this._player.classId);
   }
 
+  private requirePlayer(): Player {
+    if (!this._player) {
+      throw new Error('No class selected');
+    }
+    return this._player;
+  }
+
+  private requireMonsterById(id: string): Monster {
+    const monster = this.world.monsterById(id);
+    if (!monster) {
+      throw new Error(`Unknown encounter target: ${id}`);
+    }
+    return monster;
+  }
+
+  private requireActiveMonster(id: string): Monster {
+    const monster = this.requireMonsterById(id);
+    if (monster.encounterResolved) {
+      throw new Error(`Encounter target is no longer active: ${id}`);
+    }
+    return monster;
+  }
+
   private beginRun(classId: PlayerClassId): void {
     this._player = new Player(classId);
     this.clearRunSession();
@@ -639,7 +700,7 @@ export class GameState {
   }
 
   private commitMove(toCol: number): MoveResult {
-    const player = this.player;
+    const player = this.requirePlayer();
     const fromCol = player.col;
     const fromRow = player.row;
     const toRow = fromRow + 1;
@@ -669,7 +730,7 @@ export class GameState {
    * together.
    */
   private resolveLandedPickup(): PickupResult | null {
-    const player = this.player;
+    const player = this.requirePlayer();
     const content = this.world.tileContent(player.row, player.col);
     if (!content || (content.type !== 'gold' && content.type !== 'potion')) {
       return null;

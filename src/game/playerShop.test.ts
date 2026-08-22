@@ -23,6 +23,15 @@ import {
   type ShopView,
 } from './shop';
 
+
+function playerOf(state: GameState) {
+  const snapshot = state.getPlayerSnapshot();
+  if (!snapshot) {
+    throw new Error('No class selected');
+  }
+  return snapshot;
+}
+
 function createState(options: GameStateOptions = {}): GameState {
   return new GameState({ playerClass: 'ranger', ...options });
 }
@@ -48,7 +57,7 @@ function shopColAt(state: GameState, row: number): number {
 }
 
 function safestCol(state: GameState): number {
-  const nextRow = state.player.row + 1;
+  const nextRow = playerOf(state).row + 1;
   for (let col = 0; col < 3; col += 1) {
     if (!state.isForwardTile(nextRow, col)) {
       continue;
@@ -59,12 +68,12 @@ function safestCol(state: GameState): number {
       return col;
     }
   }
-  return state.player.col;
+  return playerOf(state).col;
 }
 
 function walkTo(state: GameState, row: number, col: number): void {
-  while (state.player.row < row) {
-    const nextRow = state.player.row + 1;
+  while (playerOf(state).row < row) {
+    const nextRow = playerOf(state).row + 1;
     const nextCol =
       nextRow === row && state.isForwardTile(nextRow, col)
         ? col
@@ -89,7 +98,7 @@ function walkTo(state: GameState, row: number, col: number): void {
     while (state.levelUpOpen) {
       state.chooseLevelUp('vitality');
     }
-    if (state.shopOpen && state.player.row < row) {
+    if (state.shopOpen && playerOf(state).row < row) {
       state.leaveShop();
     }
   }
@@ -266,10 +275,10 @@ describe('GameState shop flow', () => {
     ]);
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
 
-    state.player.addGold(3);
+    state.addGold(3);
     expect(state.canBuyShopOffer('sharpened')).toBe(true);
     expect(state.buyShopOffer('sharpened').success).toBe(true);
-    expect(state.playerStats.attack).toBe(rangerClass().startingStats.attack + 1);
+    expect(playerOf(state).stats.attack).toBe(rangerClass().startingStats.attack + 1);
     expect(state.gold).toBe(0);
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
     expect(state.buyShopOffer('sharpened').reason).toBe('unaffordable');
@@ -277,47 +286,47 @@ describe('GameState shop flow', () => {
     expect(offerOf(state.getShopView(), 'vitality').cost).toBe(2);
 
     state.reset();
-    expect(state.playerStats).toEqual(rangerClass().startingStats);
-    expect(state.player.evade).toBe(rangerClass().startingEvade);
+    expect(playerOf(state).stats).toEqual(rangerClass().startingStats);
+    expect(playerOf(state).evade).toBe(rangerClass().startingEvade);
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
   });
 
   it('buys each stat for +1 and refuses capped or unaffordable offers', () => {
     const state = openSeededShop();
-    state.player.addGold(20);
-    state.player.takeDamage(4);
-    const before = shopStatSnapshot(state.player);
-    const healthBefore = state.player.stats.health;
+    state.addGold(20);
+    state.takeDamage(4);
+    const before = shopStatSnapshot(playerOf(state));
+    const healthBefore = playerOf(state).stats.health;
 
     expect(state.buyShopOffer('vitality')).toMatchObject({
       success: true,
       maxHealthGained: 1,
       goldSpent: 2,
     });
-    expect(state.player.stats.maxHealth).toBe(before.maxHealth + 1);
-    expect(state.player.stats.health).toBe(healthBefore);
+    expect(playerOf(state).stats.maxHealth).toBe(before.maxHealth + 1);
+    expect(playerOf(state).stats.health).toBe(healthBefore);
 
     expect(state.buyShopOffer('sharpened')).toMatchObject({
       success: true,
       attackGained: 1,
       goldSpent: 3,
     });
-    expect(state.player.stats.attack).toBe(before.attack + 1);
+    expect(playerOf(state).stats.attack).toBe(before.attack + 1);
 
     expect(state.buyShopOffer('armoured')).toMatchObject({
       success: true,
       defenceGained: 1,
       goldSpent: 3,
     });
-    expect(state.player.stats.defence).toBe(before.defence + 1);
+    expect(playerOf(state).stats.defence).toBe(before.defence + 1);
 
     expect(state.buyShopOffer('evasive')).toMatchObject({
       success: true,
       evadeGained: 1,
       goldSpent: 2,
     });
-    expect(state.player.evade).toBe(before.evade + 1);
+    expect(playerOf(state).evade).toBe(before.evade + 1);
 
     expect(
       Object.fromEntries(
@@ -330,36 +339,36 @@ describe('GameState shop flow', () => {
       evasive: 3,
     });
 
-    state.player.increaseAttack(SHOP_OFFER_CATALOG.sharpened.cap - state.player.stats.attack);
-    expect(state.player.stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
+    state.increaseAttack(SHOP_OFFER_CATALOG.sharpened.cap - playerOf(state).stats.attack);
+    expect(playerOf(state).stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
     expect(state.buyShopOffer('sharpened').reason).toBe('capped');
-    expect(state.player.stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
+    expect(playerOf(state).stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
     expect(state.gold).toBe(10);
     expect(state.canBuyShopOffer('vitality')).toBe(true);
   });
 
   it('stops Merchant Evade purchases at 20', () => {
     const state = openSeededShop();
-    state.player.increaseEvade(SHOP_OFFER_CATALOG.evasive.cap - state.player.evade);
-    expect(state.player.evade).toBe(20);
-    state.player.addGold(10);
+    state.increaseEvade(SHOP_OFFER_CATALOG.evasive.cap - playerOf(state).evade);
+    expect(playerOf(state).evade).toBe(20);
+    state.addGold(10);
     expect(state.canBuyShopOffer('evasive')).toBe(false);
     expect(state.buyShopOffer('evasive').reason).toBe('capped');
-    expect(state.player.evade).toBe(20);
+    expect(playerOf(state).evade).toBe(20);
     expect(state.gold).toBe(10);
   });
 
   it('never lets Merchant Evade purchases exceed 20', () => {
     const state = openSeededShop();
-    state.player.addGold(300);
+    state.addGold(300);
     while (state.canBuyShopOffer('evasive')) {
       expect(state.buyShopOffer('evasive').success).toBe(true);
-      expect(state.player.evade).toBeLessThanOrEqual(PLAYER_EVADE_MAX);
+      expect(playerOf(state).evade).toBeLessThanOrEqual(PLAYER_EVADE_MAX);
     }
-    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(playerOf(state).evade).toBe(PLAYER_EVADE_MAX);
     expect(state.buyShopOffer('evasive').reason).toBe('capped');
-    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(playerOf(state).evade).toBe(PLAYER_EVADE_MAX);
   });
 
   it('never lets level-up Evasive raise Evade above 20', () => {
@@ -367,9 +376,9 @@ describe('GameState shop flow', () => {
       createDropRng: () => () => 0,
       rollAvoidance: () => true,
     });
-    state.player.increaseEvade(13);
-    expect(state.player.evade).toBe(16);
-    state.player.addExperience(2);
+    state.increaseEvade(13);
+    expect(playerOf(state).evade).toBe(16);
+    state.addExperience(2);
 
     walkTo(state, DEMO_MONSTER_ROW - 2, 1);
     const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
@@ -387,7 +396,7 @@ describe('GameState shop flow', () => {
       success: true,
       evadeGained: 4,
     });
-    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(playerOf(state).evade).toBe(PLAYER_EVADE_MAX);
   });
 
   it('leaves a Merchant and restores prices, stats, and availability on Restart Run', () => {
@@ -395,15 +404,15 @@ describe('GameState shop flow', () => {
     walkTo(state, 13, 1);
     const col = shopColAt(state, 14);
     state.resolveCompletedMove(col);
-    state.player.addGold(3);
+    state.addGold(3);
     expect(state.buyShopOffer('sharpened').success).toBe(true);
     expect(state.leaveShop()).toEqual({ row: 14, col });
     expect(state.shopOpen).toBe(false);
     expect(state.status).toBe('You leave the merchant behind.');
 
     state.reset();
-    expect(state.player.stats).toEqual(rangerClass().startingStats);
-    expect(state.player.evade).toBe(rangerClass().startingEvade);
+    expect(playerOf(state).stats).toEqual(rangerClass().startingStats);
+    expect(playerOf(state).evade).toBe(rangerClass().startingEvade);
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
 
@@ -419,7 +428,7 @@ describe('GameState shop flow', () => {
       ['armoured', 3, false],
       ['evasive', 2, false],
     ]);
-    restored.player.addGold(3);
+    restored.addGold(3);
     expect(restored.canBuyShopOffer('sharpened')).toBe(true);
   });
 });
