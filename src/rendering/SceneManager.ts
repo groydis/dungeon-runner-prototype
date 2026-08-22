@@ -218,12 +218,12 @@ export class SceneManager {
   }
 
   /** Initial bind of the recycled row pool to the current logical window. */
-  bindWindow(state: GameState): void {
+  bindWindow(state: GameState, presentation: { interactive: boolean }): void {
     for (let i = 0; i < this.rowViews.length; i += 1) {
       const row = state.player.row + i;
-      this.bindRow(this.rowViews[i], row, state.grid.getRow(row));
+      this.bindRow(this.rowViews[i], row, state.getRow(row));
     }
-    this.refreshHighlights(state);
+    this.refreshHighlights(state, presentation);
     this.layoutRows(state.player.row);
     this.setPlayerVisual(laneWorldX(state.player.col), 0);
   }
@@ -236,14 +236,14 @@ export class SceneManager {
     const farRow = state.player.row + ROW_POOL_SIZE - 1;
     const view = this.rowViews.find((rowView) => rowView.assignedRow === leftBehindRow);
     if (view) {
-      this.bindRow(view, farRow, state.grid.getRow(farRow));
+      this.bindRow(view, farRow, state.getRow(farRow));
     }
   }
 
-  refreshHighlights(state: GameState): void {
-    this.highlightRow = state.isAnimating ? Number.NaN : state.player.row + 1;
+  refreshHighlights(state: GameState, presentation: { interactive: boolean }): void {
+    this.highlightRow = presentation.interactive ? state.player.row + 1 : Number.NaN;
     for (const view of this.rowViews) {
-      this.applyTileChrome(view, state.grid.getRow(view.assignedRow));
+      this.applyTileChrome(view, state.getRow(view.assignedRow));
     }
   }
 

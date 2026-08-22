@@ -1,13 +1,7 @@
+import { type HudSnapshot } from '../game/GameState';
 import { requireElement } from './dom';
 
-export interface HudSnapshot {
-  distance: number;
-  gold: number;
-  attack: number;
-  health: number;
-  maxHealth: number;
-  status: string;
-}
+export type { HudSnapshot };
 
 export class HudView {
   private readonly distanceEl: HTMLElement;

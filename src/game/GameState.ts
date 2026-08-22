@@ -10,12 +10,16 @@ import {
   type CombatLogEntry,
   resolveAutomaticCombat,
 } from './combat';
-import { type CombatStats, createCaveRatStats } from './Combatant';
+import { type CombatStats } from './Combatant';
 import {
   createCollectible,
   type Collectible,
   type CollectibleKind,
 } from './Collectible';
+import {
+  createEnemyStats,
+  type EnemyStatsFactory,
+} from './definitions/enemies';
 import {
   type AvoidanceRoll,
   type EncounterEvent,
@@ -67,37 +71,58 @@ export interface TurnResolution {
   encounters: EncounterEvent[];
 }
 
+export interface HudSnapshot {
+  distance: number;
+  gold: number;
+  attack: number;
+  health: number;
+  maxHealth: number;
+  status: string;
+}
+
 export interface GameStateOptions {
   rollAvoidance?: AvoidanceRoll;
-  createCaveRatStats?: () => CombatStats;
+  createEnemyStats?: EnemyStatsFactory;
   createRng?: () => Rng;
 }
 
 export class GameState {
   readonly player = new Player();
-  readonly grid = new Grid();
-  readonly monsters = new Map<string, Monster>();
-  readonly collectibles = new Map<string, Collectible>();
-  readonly merchants = new Map<string, Merchant>();
-  activeShop: ActiveShop | null = null;
 
-  distance = 0;
-  status = '';
-  isAnimating = false;
-  runOver = false;
+  private readonly grid = new Grid();
+  private readonly monsters = new Map<string, Monster>();
+  private readonly collectibles = new Map<string, Collectible>();
+  private readonly merchants = new Map<string, Merchant>();
+  private readonly recipes = new Map<number, LaneRecipe[]>();
+  private activeShop: ActiveShop | null = null;
+
+  private _distance = 0;
+  private _status = '';
+  private _runOver = false;
 
   private readonly rollAvoidance: AvoidanceRoll;
-  private readonly createCaveRatStats: () => CombatStats;
+  private readonly createEnemyStats: EnemyStatsFactory;
   private readonly createRng: () => Rng;
   private rng: Rng;
-  private readonly recipes = new Map<number, LaneRecipe[]>();
 
   constructor(options: GameStateOptions = {}) {
     this.rollAvoidance = options.rollAvoidance ?? (() => rollAvoidance());
-    this.createCaveRatStats = options.createCaveRatStats ?? createCaveRatStats;
+    this.createEnemyStats = options.createEnemyStats ?? createEnemyStats;
     this.createRng = options.createRng ?? (() => Math.random);
     this.rng = this.createRng();
     this.populateInitialRows();
+  }
+
+  get distance(): number {
+    return this._distance;
+  }
+
+  get status(): string {
+    return this._status;
+  }
+
+  get runOver(): boolean {
+    return this._runOver;
   }
 
   get playerStats(): CombatStats {
@@ -110,6 +135,34 @@ export class GameState {
 
   get shopOpen(): boolean {
     return this.activeShop !== null;
+  }
+
+  getHudSnapshot(): HudSnapshot {
+    const stats = this.player.stats;
+    return {
+      distance: this._distance,
+      gold: this.player.gold,
+      attack: stats.attack,
+      health: stats.health,
+      maxHealth: stats.maxHealth,
+      status: this._status,
+    };
+  }
+
+  getTile(row: number, col: number): Tile | undefined {
+    return this.grid.getTile(row, col);
+  }
+
+  getRow(row: number): Tile[] | undefined {
+    return this.grid.getRow(row);
+  }
+
+  getMonsterAt(row: number, col: number): Monster | undefined {
+    const tile = this.grid.getTile(row, col);
+    if (!tile || tile.content.type !== 'monster' || !tile.content.id) {
+      return undefined;
+    }
+    return this.monsters.get(tile.content.id);
   }
 
   isValidLane(col: number): boolean {
@@ -125,6 +178,16 @@ export class GameState {
    * Combat is not played back here; callers still apply the ordered log.
    */
   resolveCompletedMove(toCol: number): TurnResolution {
+    if (this._runOver) {
+      throw new Error('Cannot move after the run is over');
+    }
+    if (this.activeShop) {
+      throw new Error('Cannot move while a merchant shop is open');
+    }
+    if (!this.isValidLane(toCol)) {
+      throw new Error(`Invalid lane: ${toCol}`);
+    }
+
     this.commitMove(toCol);
     const pickup = this.resolveLandedPickup();
     this.openShopForCurrentTile();
@@ -175,14 +238,14 @@ export class GameState {
       this.player.stats,
     );
     if (!result.success) {
-      this.status = result.status;
+      this._status = result.status;
       return result;
     }
 
     this.player.trySpendGold(result.goldSpent);
     this.player.heal(result.healthRestored);
     this.player.increaseAttack(result.attackGained);
-    this.status = result.status;
+    this._status = result.status;
     return result;
   }
 
@@ -199,7 +262,7 @@ export class GameState {
       tile.content = { type: 'empty' };
     }
     this.activeShop = null;
-    this.status = 'You leave the merchant behind.';
+    this._status = 'You leave the merchant behind.';
     return { row, col };
   }
 
@@ -209,7 +272,7 @@ export class GameState {
   }
 
   applyEvade(monster: Monster): void {
-    this.status = encounterStartText({ kind: 'evade', monster });
+    this._status = encounterStartText({ kind: 'evade', monster });
     this.removeMonster(monster);
   }
 
@@ -238,22 +301,21 @@ export class GameState {
     this.player.applyHealth(result.playerHealthAfter);
 
     if (result.winner === 'player') {
-      this.status = combatVictoryText(result.monsterName);
+      this._status = combatVictoryText(result.monsterName);
       this.removeMonster(monster);
       return;
     }
 
     this.player.applyHealth(0);
-    this.runOver = true;
-    this.status = combatDefeatText(result.monsterName);
+    this._runOver = true;
+    this._status = combatDefeatText(result.monsterName);
   }
 
   reset(): void {
     this.player.reset();
-    this.distance = 0;
-    this.status = '';
-    this.isAnimating = false;
-    this.runOver = false;
+    this._distance = 0;
+    this._status = '';
+    this._runOver = false;
     this.monsters.clear();
     this.collectibles.clear();
     this.merchants.clear();
@@ -265,7 +327,7 @@ export class GameState {
   }
 
   private prepareAhead(): void {
-    if (this.runOver) {
+    if (this._runOver) {
       return;
     }
     this.grid.ensureRange(
@@ -279,19 +341,12 @@ export class GameState {
   }
 
   private commitMove(toCol: number): MoveResult {
-    if (this.runOver) {
-      throw new Error('Cannot move after the run is over');
-    }
-    if (!this.isValidLane(toCol)) {
-      throw new Error(`Invalid lane: ${toCol}`);
-    }
-
     const fromCol = this.player.col;
     const fromRow = this.player.row;
     const toRow = fromRow + 1;
 
     this.player.moveTo(toRow, toCol);
-    this.distance += 1;
+    this._distance += 1;
 
     this.prepareAhead();
 
@@ -332,7 +387,7 @@ export class GameState {
 
     if (collectible.kind === 'gold') {
       this.player.addGold(GOLD_AMOUNT);
-      this.status = `You found ${GOLD_AMOUNT} gold.`;
+      this._status = `You found ${GOLD_AMOUNT} gold.`;
       return {
         kind: 'gold',
         id: collectible.id,
@@ -345,7 +400,7 @@ export class GameState {
     }
 
     const restored = this.player.heal(POTION_HEAL);
-    this.status =
+    this._status =
       restored > 0
         ? `You drink a potion and restore ${restored} HP.`
         : 'You find a potion, but are already at full health.';
@@ -366,7 +421,7 @@ export class GameState {
    * in the cardinal plus. Leaves pickup status untouched when nothing engages.
    */
   private resolveMonsterEncountersAfterMove(): EncounterEvent[] {
-    if (this.runOver) {
+    if (this._runOver) {
       return [];
     }
 
@@ -376,7 +431,7 @@ export class GameState {
       this.rollAvoidance,
     );
     if (events.length > 0) {
-      this.status = events.map(encounterStartText).join(' ');
+      this._status = events.map(encounterStartText).join(' ');
     }
     return events;
   }
@@ -386,7 +441,7 @@ export class GameState {
    * Shop rows have no other content, so encounters should not fire here.
    */
   private openShopForCurrentTile(): boolean {
-    if (this.runOver || this.activeShop) {
+    if (this._runOver || this.activeShop) {
       return false;
     }
 
@@ -402,7 +457,7 @@ export class GameState {
     }
 
     this.activeShop = createActiveShop(merchant);
-    this.status = 'A travelling merchant beckons.';
+    this._status = 'A travelling merchant beckons.';
     return true;
   }
 
@@ -458,23 +513,23 @@ export class GameState {
   private createTile(row: number, col: number): Tile {
     const lane = this.recipeFor(row)[col] ?? { kind: 'empty' };
 
-    if (lane.kind === 'monster' && lane.entityId) {
+    if (lane.kind === 'monster') {
       if (!this.monsters.has(lane.entityId)) {
         this.monsters.set(
           lane.entityId,
           createMonster(
             lane.entityId,
-            'caveRat',
+            lane.enemyType,
             row,
             col,
-            this.createCaveRatStats(),
+            this.createEnemyStats(lane.enemyType),
           ),
         );
       }
       return createTile(row, col, { type: 'monster', id: lane.entityId });
     }
 
-    if (lane.kind === 'shop' && lane.entityId) {
+    if (lane.kind === 'shop') {
       if (!this.merchants.has(lane.entityId)) {
         this.merchants.set(
           lane.entityId,
@@ -484,7 +539,7 @@ export class GameState {
       return createTile(row, col, { type: 'shop', id: lane.entityId });
     }
 
-    if ((lane.kind === 'gold' || lane.kind === 'potion') && lane.entityId) {
+    if (lane.kind === 'gold' || lane.kind === 'potion') {
       if (!this.collectibles.has(lane.entityId)) {
         this.collectibles.set(
           lane.entityId,

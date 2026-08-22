@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { createCaveRatStats, createCombatStats, createPlayerStats } from './Combatant';
+import { createPlayerStats } from './Combatant';
 import { calculateDamage, calculateSurpriseDamage, resolveAutomaticCombat } from './combat';
+import {
+  ENEMY_DEFINITIONS,
+  createEnemyStats,
+  enemyStatsFactoryFromSearch,
+} from './definitions/enemies';
 
 const player = createPlayerStats();
-const caveRat = createCaveRatStats();
+const caveRat = createEnemyStats('caveRat');
 
 describe('combat', () => {
   it('deals existing Cave Rat damage values', () => {
@@ -49,11 +54,14 @@ describe('combat', () => {
     });
   });
 
+  it('uses definition stats for the default Cave Rat', () => {
+    expect(caveRat).toEqual(ENEMY_DEFINITIONS.caveRat.startingStats);
+  });
+
   it('lets injected fatal rat stats kill the player', () => {
-    const fatalRat = createCombatStats({
-      ...caveRat,
-      attack: 99,
-    });
+    const fatalRat = enemyStatsFactoryFromSearch('?fatal=1')('caveRat');
+    expect(fatalRat.attack).not.toBe(ENEMY_DEFINITIONS.caveRat.startingStats.attack);
+    expect(fatalRat.maxHealth).toBe(ENEMY_DEFINITIONS.caveRat.startingStats.maxHealth);
     const result = resolveAutomaticCombat(player, fatalRat, 'frontOn', {
       id: 'fatal-rat',
       name: 'Cave Rat',

@@ -71,7 +71,7 @@ Query-string helpers (no on-screen debug UI):
 
 - `/?avoid=1` — always evade a side pass
 - `/?avoid=0` — always Surprise Attack combat on a side pass
-- `/?fatal=1` — Cave Rats hit hard enough to kill, for death/restart testing
+- `/?fatal=1` — testing override: Cave Rat **attack** is raised on top of `ENEMY_DEFINITIONS`, enough to kill the player
 - `/?seed=123` — seeded row generation only, including Merchant lane placement; Restart Run replays the same content sequence
 
 ## Controls
@@ -100,7 +100,7 @@ src/
     Merchant.ts           Shop entity, used/purchased state
     shop.ts               Offers, eligibility, gold spend, and shop views
     Player.ts             Position, gold, and run-scoped combat stats
-    Combatant.ts          Combat stat types and starting values
+    Combatant.ts          Combat stat types and player starting values
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
     rowGeneration.ts      Weighted row recipes and safety rules
@@ -108,7 +108,7 @@ src/
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
     definitions/
-      enemies.ts          Static Cave Rat definition
+      enemies.ts          Authoritative enemy names, base stats, render keys
   ui/
     HudView.ts            Distance, gold, attack, HP, status
     GameOverView.ts       Death overlay and Restart Run
@@ -125,13 +125,13 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the single-run aggregate. It owns the grid, entities, and shop session, and exposes high-level actions such as `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, and `finishCombat()`.
+- **GameState** is the single-run aggregate. It owns grid, entities, shop session, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
+- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
-- **Game.ts** orchestrates animation, input lock, and combat/shop playback. It requests domain outcomes and plays them. It does not calculate damage, shop prices, or eligibility.
 - **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
-- **SceneManager** remains rendering-only: meshes, camera-adjacent layout, and visual FX. It does not decide purchases, combat, or row content.
-- Static enemy data lives in `src/game/definitions/enemies.ts`. A Monster instance holds run state plus that definition. There is no enemy inheritance tree.
+- **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
+- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, and render key. Row recipes include `enemyType`. `?fatal=1` is a test override layered on that definition, not a second stats table.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -142,7 +142,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, player gold/healing, and Merchant purchases. They use injected RNG, avoidance rolls, and stats. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, player gold/healing, Merchant purchases, enemy-definition spawning, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -277,7 +277,7 @@ Starting stats:
 | Player | 20 | 5      | 1       |
 | Cave Rat | 8 | 3      | 0       |
 
-Each Cave Rat gets a fresh stats object. Damage is:
+Each Cave Rat is spawned from `ENEMY_DEFINITIONS.caveRat` and gets a fresh stats clone. Damage is:
 
 ```text
 damage = Math.max(1, attacker.attack - defender.defence)

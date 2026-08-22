@@ -15,7 +15,7 @@ function seededState(): GameState {
 
 function shopColAt(state: GameState, row: number): number {
   for (let col = 0; col < 3; col += 1) {
-    if (state.grid.getTile(row, col)?.content.type === 'shop') {
+    if (state.getTile(row, col)?.content.type === 'shop') {
       return col;
     }
   }
@@ -25,8 +25,8 @@ function shopColAt(state: GameState, row: number): number {
 function safestCol(state: GameState): number {
   const nextRow = state.player.row + 1;
   for (let col = 0; col < 3; col += 1) {
-    const here = state.grid.getTile(nextRow, col)?.content.type;
-    const ahead = state.grid.getTile(nextRow + 1, col)?.content.type;
+    const here = state.getTile(nextRow, col)?.content.type;
+    const ahead = state.getTile(nextRow + 1, col)?.content.type;
     if (here !== 'monster' && ahead !== 'monster') {
       return col;
     }

@@ -31,7 +31,6 @@ export const MERCHANT_LEAVE_FX_SEC = 0.36;
 export const DEMO_MONSTER_ROW = 4;
 export const DEMO_MONSTER_COL = 1;
 export const DEMO_MONSTER_ID = 'demo-cave-rat';
-export const DEMO_MONSTER_NAME = 'Cave Rat';
 
 export const START_ROW = 0;
 export const START_COL = 1;

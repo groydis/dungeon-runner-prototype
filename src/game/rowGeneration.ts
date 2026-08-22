@@ -8,15 +8,37 @@ import {
   START_ROW,
 } from './config';
 import { collectibleId, type CollectibleKind } from './Collectible';
+import { type EnemyType } from './definitions/enemies';
 import { merchantId } from './Merchant';
 import { pickWeighted, randomInt, type Rng } from './random';
 
 export type LaneKind = 'empty' | 'monster' | 'gold' | 'potion' | 'shop';
 
-export interface LaneRecipe {
-  kind: LaneKind;
-  entityId?: string;
+export interface EmptyLaneRecipe {
+  kind: 'empty';
 }
+
+export interface MonsterLaneRecipe {
+  kind: 'monster';
+  entityId: string;
+  enemyType: EnemyType;
+}
+
+export interface CollectibleLaneRecipe {
+  kind: 'gold' | 'potion';
+  entityId: string;
+}
+
+export interface ShopLaneRecipe {
+  kind: 'shop';
+  entityId: string;
+}
+
+export type LaneRecipe =
+  | EmptyLaneRecipe
+  | MonsterLaneRecipe
+  | CollectibleLaneRecipe
+  | ShopLaneRecipe;
 
 /**
  * Early prototype weights. Must sum to 100.
@@ -42,10 +64,7 @@ export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
   }
 
   if (row === DEMO_MONSTER_ROW) {
-    empty[DEMO_MONSTER_COL] = {
-      kind: 'monster',
-      entityId: DEMO_MONSTER_ID,
-    };
+    empty[DEMO_MONSTER_COL] = caveRatLane(DEMO_MONSTER_ID);
     return empty;
   }
 
@@ -69,6 +88,14 @@ function emptyRow(): LaneRecipe[] {
   return Array.from({ length: LANE_COUNT }, () => ({ kind: 'empty' as const }));
 }
 
+function caveRatLane(entityId: string): MonsterLaneRecipe {
+  return {
+    kind: 'monster',
+    entityId,
+    enemyType: 'caveRat',
+  };
+}
+
 function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneRecipe[] {
   const lanes = emptyRow();
 
@@ -77,10 +104,7 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
   }
 
   if (pattern === 'rat') {
-    place(lanes, randomInt(rng, LANE_COUNT), {
-      kind: 'monster',
-      entityId: `monster-${row}`,
-    });
+    place(lanes, randomInt(rng, LANE_COUNT), caveRatLane(`monster-${row}`));
     return lanes;
   }
 
@@ -99,10 +123,7 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
     second += 1;
   }
   const lootKind: CollectibleKind = rng() < 0.5 ? 'gold' : 'potion';
-  place(lanes, first, {
-    kind: 'monster',
-    entityId: `monster-${row}`,
-  });
+  place(lanes, first, caveRatLane(`monster-${row}`));
   place(lanes, second, {
     kind: lootKind,
     entityId: collectibleId(lootKind, row, second),

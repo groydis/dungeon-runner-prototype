@@ -33,6 +33,11 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
   expect(occupied.length).toBeLessThan(LANE_COUNT);
 
   const kinds = countKinds(recipe);
+  for (const lane of recipe) {
+    if (lane.kind === 'monster') {
+      expect(lane.enemyType).toBe('caveRat');
+    }
+  }
   expect((kinds.monster ?? 0) <= 1).toBe(true);
   expect((kinds.gold ?? 0) + (kinds.potion ?? 0) <= 1).toBe(true);
   expect((kinds.shop ?? 0) <= 1).toBe(true);
@@ -56,6 +61,7 @@ describe('row generation', () => {
     expect(demo[DEMO_MONSTER_COL]).toEqual({
       kind: 'monster',
       entityId: DEMO_MONSTER_ID,
+      enemyType: 'caveRat',
     });
     expect(demo.filter((lane) => lane.kind === 'empty')).toHaveLength(2);
   });

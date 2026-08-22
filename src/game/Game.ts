@@ -10,7 +10,7 @@ import {
   type EncounterEvent,
   avoidanceRollerFromSearch,
 } from './encounters';
-import { caveRatStatsFromSearch } from './Combatant';
+import { enemyStatsFactoryFromSearch } from './definitions/enemies';
 import { GameState } from './GameState';
 import { rngFactoryFromSearch } from './random';
 import { InputController, type TilePick } from './InputController';
@@ -39,7 +39,7 @@ interface CombatPlayback {
 export class Game {
   private readonly state = new GameState({
     rollAvoidance: avoidanceRollerFromSearch(window.location.search),
-    createCaveRatStats: () => caveRatStatsFromSearch(window.location.search),
+    createEnemyStats: enemyStatsFactoryFromSearch(window.location.search),
     createRng: rngFactoryFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
@@ -80,7 +80,7 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
 
-    this.scene.bindWindow(this.state);
+    this.scene.bindWindow(this.state, { interactive: true });
     this.handleResize();
     this.updateHud();
   }
@@ -123,17 +123,15 @@ export class Game {
 
   private tryMove(tile: TilePick): void {
     if (
+      this.boardLocked ||
       this.state.runOver ||
       this.state.shopOpen ||
-      this.state.isAnimating ||
       !this.state.isForwardTile(tile.row, tile.col)
     ) {
       return;
     }
 
-    this.state.isAnimating = true;
-    this.input.setEnabled(false);
-    this.scene.refreshHighlights(this.state);
+    this.setBoardInteractive(false);
     this.camera.nudge();
 
     this.animation = {
@@ -181,7 +179,7 @@ export class Game {
       this.shop.show(resolution.shop);
     }
     this.pendingEvents = resolution.encounters;
-    this.scene.refreshHighlights(this.state);
+    this.setBoardInteractive(false);
     this.updateHud();
     this.playNextPendingEvent();
   }
@@ -249,7 +247,7 @@ export class Game {
     if (this.combatPlayback.entryIndex >= this.combatPlayback.result.log.length) {
       this.state.finishCombat(this.combatPlayback.result, this.combatPlayback.monster);
       this.combatPlayback = null;
-      this.scene.refreshHighlights(this.state);
+      this.setBoardInteractive(false);
       this.updateHud();
       this.playNextPendingEvent();
       return;
@@ -268,7 +266,7 @@ export class Game {
     if (!entry) {
       this.state.finishCombat(playback.result, playback.monster);
       this.combatPlayback = null;
-      this.scene.refreshHighlights(this.state);
+      this.setBoardInteractive(false);
       this.updateHud();
       this.playNextPendingEvent();
       return;
@@ -285,12 +283,10 @@ export class Game {
   }
 
   private finishEncounterSequence(): void {
-    this.scene.refreshHighlights(this.state);
     this.updateHud();
 
     if (this.state.runOver) {
-      this.state.isAnimating = false;
-      this.input.setEnabled(false);
+      this.setBoardInteractive(false);
       this.shop.hide();
       this.state.dismissOpenShop();
       this.gameOver.show(this.state.distance);
@@ -298,15 +294,11 @@ export class Game {
     }
 
     if (this.state.shopOpen) {
-      this.state.isAnimating = true;
-      this.input.setEnabled(false);
-      this.scene.refreshHighlights(this.state);
+      this.setBoardInteractive(false);
       return;
     }
 
-    this.state.isAnimating = false;
-    this.scene.refreshHighlights(this.state);
-    this.input.setEnabled(true);
+    this.setBoardInteractive(true);
   }
 
   private restartRun(): void {
@@ -317,9 +309,9 @@ export class Game {
     this.scene.clearTransientFx();
     this.shop.hide();
     this.state.reset();
-    this.scene.bindWindow(this.state);
+    this.scene.bindWindow(this.state, { interactive: true });
     this.gameOver.hide();
-    this.input.setEnabled(true);
+    this.setBoardInteractive(true);
     this.updateHud();
   }
 
@@ -339,22 +331,25 @@ export class Game {
 
     this.shop.hide();
     this.scene.beginMerchantLeaveFx(left.row, left.col);
-    this.state.isAnimating = false;
-    this.scene.refreshHighlights(this.state);
-    this.input.setEnabled(true);
+    this.setBoardInteractive(true);
     this.updateHud();
   }
 
+  private get boardLocked(): boolean {
+    return (
+      this.animation !== null ||
+      this.combatPlayback !== null ||
+      this.encounterFxElapsed !== null
+    );
+  }
+
+  private setBoardInteractive(interactive: boolean): void {
+    this.input.setEnabled(interactive);
+    this.scene.refreshHighlights(this.state, { interactive });
+  }
+
   private updateHud(): void {
-    const stats = this.state.playerStats;
-    this.hud.update({
-      distance: this.state.distance,
-      gold: this.state.gold,
-      attack: stats.attack,
-      health: stats.health,
-      maxHealth: stats.maxHealth,
-      status: this.state.status,
-    });
+    this.hud.update(this.state.getHudSnapshot());
     const shopView = this.state.getShopView();
     if (shopView) {
       this.shop.render(shopView);
