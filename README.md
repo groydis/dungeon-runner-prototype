@@ -17,7 +17,8 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Same lane (in front or behind) = a normal front-on fight.
 - Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
 - Combat is automatic and plays in place. There is no battle screen.
-- The loop is: choose a lane, fight or evade, collect gold or potions, keep moving.
+- Gold can be spent at a rare Travelling Merchant for run-only upgrades.
+- The loop is: choose a lane, fight or evade, collect gold or potions, spend gold at a Merchant, survive.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -33,14 +34,15 @@ Included:
 - Gold and potion pickups with run-scoped gold and healing
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, gold, HP text/bar, and status
+- HUD with distance, gold, attack, HP text/bar, and status
+- A rare Travelling Merchant shop overlay
 - Death overlay and in-place Restart Run
 - Responsive full-screen layout for phone and desktop
 
 Not included:
 
 - Equipment, levelling, crits, extra enemy types, or an inventory screen
-- Shops, traps, doors
+- Traps, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - GLB characters or environment art
 - Sound, saves, accounts, or networking
@@ -70,7 +72,7 @@ Query-string helpers (no on-screen debug UI):
 - `/?avoid=1` — always evade a side pass
 - `/?avoid=0` — always Surprise Attack combat on a side pass
 - `/?fatal=1` — Cave Rats hit hard enough to kill, for death/restart testing
-- `/?seed=123` — seeded row generation only; Restart Run replays the same content sequence
+- `/?seed=123` — seeded row generation only, including Merchant lane placement; Restart Run replays the same content sequence
 
 ## Controls
 
@@ -78,7 +80,7 @@ There is no keyboard movement and no combat input.
 
 - **Tap or click** one of the three glowing tiles in the next row.
 - Left tile = forward-left, centre = forward, right = forward-right.
-- Input is locked during the step animation and while combat or evade feedback plays.
+- Input is locked during the step animation, while combat or evade feedback plays, and while a Merchant shop is open.
 - After death, use **Restart Run**. The page does not reload.
 
 Selection uses pointer events and a Three.js raycaster against invisible hit planes on the highlighted tiles, so the same path works for mouse and touch.
@@ -89,12 +91,14 @@ Selection uses pointer events and a Three.js raycaster against invisible hit pla
 src/
   main.ts                 Entry point: canvas + game loop bootstrap
   game/
-    Game.ts               Orchestration, animation, HUD, restart
-    GameState.ts          Turn state, health, gold, entities, pickups
+    Game.ts               Orchestration, animation, HUD, shop overlay, restart
+    GameState.ts          Turn state, health, gold, entities, pickups, shop
     Grid.ts               Logical 3-wide sliding tile window
     Tile.ts               Cell coordinates + content type
     Monster.ts            Monster entity plus independent combat stats
     Collectible.ts        Gold and potion entities
+    Merchant.ts           Shop entity and stable merchant IDs
+    shop.ts               Offers, eligibility, gold spend, and shop views
     Player.ts             Logical lane / row, gold, and combat stats
     Combatant.ts          Combat stat types and starting values
     combat.ts             Pure automatic-combat resolver and log
@@ -107,7 +111,7 @@ src/
     SceneManager.ts       Scene, lights, recycled row meshes, hit FX
     CameraController.ts   Elevated follow camera
   styles/
-    main.css              Full-viewport HUD and game-over overlay
+    main.css              Full-viewport HUD, shop, and game-over overlays
 public/                   Static assets
 ```
 
@@ -119,7 +123,7 @@ Each board cell is a logical `Tile`:
 
 - `row` — world row index. `0` is the starting row; values increase as the dungeon extends forward.
 - `col` — lane index: `0` left, `1` centre, `2` right.
-- `content.type` — `empty` | `monster` | `gold` | `potion` | plus unused future types.
+- `content.type` — `empty` | `monster` | `gold` | `potion` | `shop` | plus unused future types.
 
 `Grid` stores rows in a map and creates them on demand through a factory. After each step it prunes rows more than a couple of indexes behind the player so a long run does not grow forever.
 
@@ -145,9 +149,10 @@ World layout (rendering only):
 After `commitMove()`, resolution order is:
 
 1. `resolveLandedPickup()` — gold or potion on the occupied tile
-2. `resolveMonsterEncountersAfterMove()` — cardinal-plus combat / evade
+2. `openShopForCurrentTile()` — landing on a Merchant opens the shop and locks movement
+3. `resolveMonsterEncountersAfterMove()` — cardinal-plus combat / evade
 
-A tile never holds both loot and a monster, so those two steps cannot conflict. If both a pickup and an encounter happen in one step (loot in one lane, rat beside it), the pickup is applied first; an encounter then overwrites the status line.
+A tile never holds loot, a shop, and a monster together. Shop rows are otherwise empty, so a Merchant and a fight cannot share a step. If both a pickup and an encounter happen in one step (loot in one lane, rat beside it), the pickup is applied first; an encounter then overwrites the status line.
 
 ## Procedural row content
 
@@ -157,7 +162,8 @@ Safety guarantees:
 
 - Rows `0..3` are empty. The first three moves are therefore safe.
 - Row `4` always has the demo Cave Rat in the centre lane so front-on and side-pass combat stay easy to test.
-- From row `5` onward, each row is rolled from early prototype weights:
+- Merchant rows never appear in `0..4`.
+- From row `5` onward, each row is rolled from early prototype weights unless a Merchant is due:
   - 45% all empty
   - 25% one Cave Rat
   - 15% one gold
@@ -167,7 +173,13 @@ Safety guarantees:
 - At most one Cave Rat and at most one collectible per row.
 - Two entities never share a tile.
 
-`?seed=<number>` seeds **row generation only** (Mulberry32). Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence.
+Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14`):
+
+- First shop at row `14`, then every 14 rows: `28`, `42`, `56`, …
+- Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
+- No monster, gold, potion, or other content on that row
+
+`?seed=<number>` seeds **row generation only** (Mulberry32), including which lane the Merchant occupies. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence and Merchant lanes.
 
 Gold and potions:
 
@@ -176,6 +188,30 @@ Gold and potions:
   - Heal: `You drink a potion and restore [N] HP.`
   - Full: `You find a potion, but are already at full health.`
 - Pickup meshes pop/fade in place and do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
+
+## Travelling Merchant
+
+Landing on a Merchant tile pauses the run and opens a centred shop overlay. The shop is not consumed just by opening it. Board input stays locked until **Leave**.
+
+Each Merchant may be used once. After Leave, the Merchant is marked used and removed from the board. Movement then continues from that tile. Returning in normal forward play is impossible; leftover state still treats a used Merchant as empty.
+
+Opening the shop does not spend gold. Offers are fixed for this prototype and last only for the current run:
+
+| Offer | Cost | Effect |
+|---|---:|---|
+| Field dressing | 1 gold | Restore 5 HP, capped at maximum HP |
+| Sharpen weapon | 3 gold | +1 player attack for the rest of this run |
+| Leave | 0 gold | Close the shop and continue |
+
+Rules:
+
+- Purchase buttons disable when the player cannot afford the offer, already bought it at this Merchant, or field dressing would heal 0 HP (already at full health).
+- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so the other offer can still be bought.
+- Field dressing never takes gold for zero healing.
+- Attack upgrades persist until Restart Run, which restores base attack (`5`).
+- Shop costs, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
+
+Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run restores an untouched fresh run: gold, purchases, attack upgrades, merchant entities, and meshes.
 
 ## Monster encounters
 
@@ -248,14 +284,14 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats, gold, position, distance, monsters, collectibles, generation RNG, grid, meshes, and status without reloading the page.
+Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, merchants, open shop state, generation RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
 
 ## Intended next steps
 
 - Equipment, levelling, crits, and more enemy types
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
 - Smarter avoidance than a flat 50/50
-- Spend gold at shops; more loot kinds
+- More shop stock, defence upgrades, or meta progression; more loot kinds
 - Traps, doors, and authored biomes
 - GLB models
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)

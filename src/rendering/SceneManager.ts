@@ -22,6 +22,7 @@ import {
 import {
   COLLECT_FX_SEC,
   LANE_COUNT,
+  MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
   TILE_PITCH,
   TILE_SIZE,
@@ -41,6 +42,7 @@ interface RowView {
   monsters: Mesh[];
   golds: Mesh[];
   potions: Mesh[];
+  merchants: Group[];
   assignedRow: number;
 }
 
@@ -66,6 +68,12 @@ interface CollectFx {
   baseY: number;
 }
 
+interface MerchantLeaveFx {
+  group: Group;
+  startedAt: number;
+  baseY: number;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
@@ -79,6 +87,10 @@ export class SceneManager {
   private readonly monsterMaterial: MeshStandardMaterial;
   private readonly goldMaterial: MeshStandardMaterial;
   private readonly potionMaterial: MeshStandardMaterial;
+  private readonly merchantStallMaterial: MeshStandardMaterial;
+  private readonly merchantPillarMaterial: MeshStandardMaterial;
+  private readonly merchantHoodMaterial: MeshStandardMaterial;
+  private readonly merchantLanternMaterial: MeshStandardMaterial;
   private readonly hitMaterial: MeshBasicMaterial;
 
   private scrollZ = 0;
@@ -86,6 +98,7 @@ export class SceneManager {
   private encounterFx: EncounterFxView[] = [];
   private combatHit: CombatHitFx | null = null;
   private collectFx: CollectFx[] = [];
+  private merchantLeaveFx: MerchantLeaveFx[] = [];
   private clock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -143,6 +156,38 @@ export class SceneManager {
       emissiveIntensity: 0.4,
       roughness: 0.32,
       metalness: 0.18,
+      transparent: true,
+      opacity: 1,
+    });
+    this.merchantStallMaterial = new MeshStandardMaterial({
+      color: 0x2a2438,
+      roughness: 0.78,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 1,
+    });
+    this.merchantPillarMaterial = new MeshStandardMaterial({
+      color: 0x5b4aa8,
+      emissive: 0x6a5cff,
+      emissiveIntensity: 0.42,
+      roughness: 0.38,
+      metalness: 0.22,
+      transparent: true,
+      opacity: 1,
+    });
+    this.merchantHoodMaterial = new MeshStandardMaterial({
+      color: 0x241833,
+      roughness: 0.7,
+      metalness: 0.06,
+      transparent: true,
+      opacity: 1,
+    });
+    this.merchantLanternMaterial = new MeshStandardMaterial({
+      color: 0x8ec8ff,
+      emissive: 0x7ab8ff,
+      emissiveIntensity: 0.95,
+      roughness: 0.22,
+      metalness: 0.28,
       transparent: true,
       opacity: 1,
     });
@@ -228,6 +273,8 @@ export class SceneManager {
     this.highlightMaterial.emissiveIntensity = pulse;
     this.updateCollectibleIdle(elapsedSec);
     this.updateCollectFx(elapsedSec);
+    this.updateMerchantIdle(elapsedSec);
+    this.updateMerchantLeaveFx(elapsedSec);
   }
 
   beginCollectFx(pickup: PickupResult): void {
@@ -370,10 +417,25 @@ export class SceneManager {
     this.combatHit = null;
   }
 
+  beginMerchantLeaveFx(row: number, col: number): void {
+    const group = this.findMerchantGroup(row, col);
+    if (!group) {
+      return;
+    }
+    group.visible = true;
+    this.merchantLeaveFx = this.merchantLeaveFx.filter((fx) => fx.group !== group);
+    this.merchantLeaveFx.push({
+      group,
+      startedAt: this.clock,
+      baseY: group.position.y,
+    });
+  }
+
   clearTransientFx(): void {
     this.endEncounterFx();
     this.endCombatHit();
     this.collectFx = [];
+    this.resetMerchantLeaveFx();
   }
 
   endEncounterFx(): void {
@@ -415,6 +477,10 @@ export class SceneManager {
     const monsterGeo = new SphereGeometry(0.28, 10, 8);
     const goldGeo = new CylinderGeometry(0.16, 0.16, 0.05, 14);
     const potionGeo = new CapsuleGeometry(0.09, 0.16, 3, 8);
+    const stallGeo = new BoxGeometry(0.38, 0.16, 0.26);
+    const pillarGeo = new CylinderGeometry(0.07, 0.09, 0.7, 8);
+    const hoodGeo = new CylinderGeometry(0.02, 0.16, 0.14, 8);
+    const lanternGeo = new SphereGeometry(0.11, 10, 8);
 
     for (let i = 0; i < ROW_POOL_SIZE; i += 1) {
       const group = new Group();
@@ -423,6 +489,7 @@ export class SceneManager {
       const monsters: Mesh[] = [];
       const golds: Mesh[] = [];
       const potions: Mesh[] = [];
+      const merchants: Group[] = [];
 
       for (let col = 0; col < LANE_COUNT; col += 1) {
         const tile = new Mesh(tileGeo, this.floorMaterialA);
@@ -445,12 +512,21 @@ export class SceneManager {
         potion.position.set(laneWorldX(col), 0.42, 0);
         potion.visible = false;
 
-        group.add(tile, hit, monster, gold, potion);
+        const merchant = this.createMerchantPlaceholder(
+          col,
+          stallGeo,
+          pillarGeo,
+          hoodGeo,
+          lanternGeo,
+        );
+
+        group.add(tile, hit, monster, gold, potion, merchant);
         tiles.push(tile);
         hitPlanes.push(hit);
         monsters.push(monster);
         golds.push(gold);
         potions.push(potion);
+        merchants.push(merchant);
       }
 
       this.scene.add(group);
@@ -461,12 +537,16 @@ export class SceneManager {
         monsters,
         golds,
         potions,
+        merchants,
         assignedRow: i,
       });
     }
   }
 
   private bindRow(view: RowView, row: number, tiles: Tile[] | undefined): void {
+    this.merchantLeaveFx = this.merchantLeaveFx.filter(
+      (fx) => !view.merchants.includes(fx.group),
+    );
     view.assignedRow = row;
     this.applyTileChrome(view, tiles);
   }
@@ -480,6 +560,7 @@ export class SceneManager {
       const monster = view.monsters[col];
       const gold = view.golds[col];
       const potion = view.potions[col];
+      const merchant = view.merchants[col];
       const tile = tiles?.[col];
 
       mesh.userData.row = view.assignedRow;
@@ -508,6 +589,12 @@ export class SceneManager {
       }
       gold.visible = collectingGold || tile?.content.type === 'gold';
       potion.visible = collectingPotion || tile?.content.type === 'potion';
+
+      const leavingMerchant = this.isMerchantLeaving(merchant);
+      if (!leavingMerchant) {
+        this.resetMerchantGroup(merchant, col);
+      }
+      merchant.visible = leavingMerchant || tile?.content.type === 'shop';
     }
   }
 
@@ -586,6 +673,125 @@ export class SceneManager {
   private findPotionMesh(row: number, col: number): Mesh | undefined {
     const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
     return view?.potions[col];
+  }
+
+  private findMerchantGroup(row: number, col: number): Group | undefined {
+    const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
+    return view?.merchants[col];
+  }
+
+  private createMerchantPlaceholder(
+    col: number,
+    stallGeo: BoxGeometry,
+    pillarGeo: CylinderGeometry,
+    hoodGeo: CylinderGeometry,
+    lanternGeo: SphereGeometry,
+  ): Group {
+    const group = new Group();
+    group.position.set(laneWorldX(col), 0, 0);
+
+    const stall = new Mesh(stallGeo, this.merchantStallMaterial.clone());
+    stall.position.set(0.14, 0.18, 0.02);
+
+    const pillar = new Mesh(pillarGeo, this.merchantPillarMaterial.clone());
+    pillar.position.set(-0.05, 0.45, 0);
+
+    const lantern = new Mesh(lanternGeo, this.merchantLanternMaterial.clone());
+    lantern.position.set(-0.05, 0.78, 0);
+    lantern.userData.role = 'lantern';
+
+    const hood = new Mesh(hoodGeo, this.merchantHoodMaterial.clone());
+    hood.position.set(-0.05, 0.9, 0);
+
+    group.add(stall, pillar, lantern, hood);
+    group.visible = false;
+    return group;
+  }
+
+  private resetMerchantGroup(group: Group, col: number): void {
+    group.position.set(laneWorldX(col), 0, 0);
+    group.scale.setScalar(1);
+    for (const child of group.children) {
+      const mesh = child as Mesh;
+      const material = mesh.material as MeshStandardMaterial | undefined;
+      if (material) {
+        material.opacity = 1;
+      }
+    }
+  }
+
+  private isMerchantLeaving(group: Group): boolean {
+    return this.merchantLeaveFx.some((fx) => fx.group === group);
+  }
+
+  private updateMerchantIdle(elapsedSec: number): void {
+    for (const view of this.rowViews) {
+      if (!view.group.visible) {
+        continue;
+      }
+      for (let col = 0; col < LANE_COUNT; col += 1) {
+        const merchant = view.merchants[col];
+        if (!merchant.visible || this.isMerchantLeaving(merchant)) {
+          continue;
+        }
+        const phase = elapsedSec * 2.2 + view.assignedRow + col;
+        merchant.position.y = Math.sin(phase) * 0.045;
+        const lantern = merchant.children.find(
+          (child) => child.userData.role === 'lantern',
+        ) as Mesh | undefined;
+        if (lantern) {
+          const material = lantern.material as MeshStandardMaterial;
+          material.emissiveIntensity = 0.7 + 0.5 * (0.5 + 0.5 * Math.sin(phase * 1.6));
+        }
+      }
+    }
+  }
+
+  private updateMerchantLeaveFx(elapsedSec: number): void {
+    const remaining: MerchantLeaveFx[] = [];
+    for (const fx of this.merchantLeaveFx) {
+      const t = Math.min(1, (elapsedSec - fx.startedAt) / MERCHANT_LEAVE_FX_SEC);
+      fx.group.position.y = fx.baseY + t * 0.38;
+      fx.group.scale.setScalar(Math.max(0.02, 1 - t * 0.88));
+      this.setMerchantOpacity(fx.group, 1 - t);
+      if (t < 1) {
+        remaining.push(fx);
+        continue;
+      }
+      fx.group.visible = false;
+      this.resetMerchantGroup(
+        fx.group,
+        this.merchantColFromGroup(fx.group),
+      );
+    }
+    this.merchantLeaveFx = remaining;
+  }
+
+  private resetMerchantLeaveFx(): void {
+    for (const fx of this.merchantLeaveFx) {
+      fx.group.visible = false;
+      this.resetMerchantGroup(fx.group, this.merchantColFromGroup(fx.group));
+    }
+    this.merchantLeaveFx = [];
+  }
+
+  private setMerchantOpacity(group: Group, opacity: number): void {
+    for (const child of group.children) {
+      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
+      if (material) {
+        material.opacity = opacity;
+      }
+    }
+  }
+
+  private merchantColFromGroup(group: Group): number {
+    for (const view of this.rowViews) {
+      const col = view.merchants.indexOf(group);
+      if (col >= 0) {
+        return col;
+      }
+    }
+    return 1;
   }
 
   private createPlayer(): { group: Group; body: Mesh } {

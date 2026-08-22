@@ -64,14 +64,25 @@ body {
 }
 
 #distance,
-#gold {
+#gold,
+#attack {
   margin: 6px 0 0;
   color: var(--hud-accent);
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
 }
 
+.hud-resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.1rem;
+}
+
 #gold {
   color: #f0d27a;
+}
+
+#attack {
+  color: #c9b6ff;
 }
 
 .health {
@@ -124,6 +135,7 @@ body {
   font-size: clamp(0.85rem, 3vw, 1rem);
 }
 
+.shop,
 .game-over {
   position: absolute;
   inset: 0;
@@ -133,12 +145,23 @@ body {
   padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right))
     calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
   background: rgba(8, 8, 10, 0.72);
+  pointer-events: auto;
 }
 
+.shop {
+  z-index: 2;
+}
+
+.game-over {
+  z-index: 3;
+}
+
+.shop[hidden],
 .game-over[hidden] {
   display: none;
 }
 
+.shop-card,
 .game-over-card {
   width: min(22rem, 100%);
   padding: 28px 24px;
@@ -149,10 +172,87 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.shop-card h2,
 .game-over-card h2 {
   margin: 0;
   letter-spacing: 0.08em;
+  font-size: clamp(1.35rem, 5.5vw, 2rem);
+  text-align: center;
+}
+
+.game-over-card h2 {
   font-size: clamp(1.8rem, 7vw, 2.4rem);
+}
+
+#shop-gold {
+  margin: 0;
+  color: #f0d27a;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.shop-offer,
+#shop-leave {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(201, 182, 255, 0.28);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #25222f;
+  color: var(--hud);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shop-offer-title {
+  color: #d8ccff;
+  font-size: 1rem;
+}
+
+.shop-offer-desc,
+.shop-offer-reason {
+  color: var(--hud-muted);
+  font-size: 0.9rem;
+}
+
+.shop-offer-reason:empty {
+  display: none;
+}
+
+.shop-offer:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.shop-offer:focus-visible,
+#shop-leave:focus-visible {
+  outline: 2px solid #c9b6ff;
+  outline-offset: 3px;
+}
+
+#shop-leave {
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: #e4c36a;
+  color: #1b1c20;
+  font-size: 1rem;
+  text-align: center;
 }
 
 #game-over-distance {

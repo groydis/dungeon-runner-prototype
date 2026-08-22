@@ -17,7 +17,10 @@
         <header class="hud-top">
           <h1>Dungeon Runner</h1>
           <p id="distance">Distance: 0</p>
-          <p id="gold">Gold: 0</p>
+          <div class="hud-resources">
+            <p id="gold">Gold: 0</p>
+            <p id="attack">ATK: 5</p>
+          </div>
           <div class="health">
             <p id="health-text">HP 20 / 20</p>
             <div
@@ -50,6 +53,42 @@
           <h2 id="game-over-title">YOU DIED</h2>
           <p id="game-over-distance">Distance: 0</p>
           <button type="button" id="restart-run">Restart Run</button>
+        </div>
+      </div>
+      <div
+        id="shop"
+        class="shop"
+        hidden
+        role="dialog"
+        aria-labelledby="shop-title"
+        aria-modal="true"
+      >
+        <div class="shop-card">
+          <h2 id="shop-title">TRAVELLING MERCHANT</h2>
+          <p id="shop-gold">Gold: 0</p>
+          <button
+            type="button"
+            id="shop-offer-heal"
+            class="shop-offer"
+            aria-label="Field dressing, 1 gold. Restore 5 HP"
+          >
+            <span id="shop-heal-title" class="shop-offer-title">Field dressing — 1 gold</span>
+            <span id="shop-heal-desc" class="shop-offer-desc">Restore 5 HP</span>
+            <span id="shop-heal-reason" class="shop-offer-reason"></span>
+          </button>
+          <button
+            type="button"
+            id="shop-offer-attack"
+            class="shop-offer"
+            aria-label="Sharpen weapon, 3 gold. +1 attack for this run"
+          >
+            <span id="shop-attack-title" class="shop-offer-title">Sharpen weapon — 3 gold</span>
+            <span id="shop-attack-desc" class="shop-offer-desc">+1 attack for this run</span>
+            <span id="shop-attack-reason" class="shop-offer-reason"></span>
+          </button>
+          <button type="button" id="shop-leave" aria-label="Leave the travelling merchant">
+            Leave
+          </button>
         </div>
       </div>
     </div>
