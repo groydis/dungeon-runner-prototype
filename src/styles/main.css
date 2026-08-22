@@ -64,6 +64,7 @@ body {
 }
 
 #distance,
+#class-name,
 #gold,
 #attack,
 #evade,
@@ -80,6 +81,7 @@ body {
   gap: 0 1.1rem;
 }
 
+#class-name,
 #level {
   color: #9ecbff;
 }
@@ -158,7 +160,8 @@ body {
 
 .shop,
 .level-up,
-.game-over {
+.game-over,
+.class-select {
   position: absolute;
   inset: 0;
   display: flex;
@@ -182,15 +185,21 @@ body {
   z-index: 4;
 }
 
+.class-select {
+  z-index: 5;
+}
+
 .shop[hidden],
 .level-up[hidden],
-.game-over[hidden] {
+.game-over[hidden],
+.class-select[hidden] {
   display: none;
 }
 
 .shop-card,
 .level-up-card,
-.game-over-card {
+.game-over-card,
+.class-select-card {
   width: min(22rem, 100%);
   padding: 28px 24px;
   border-radius: 12px;
@@ -201,7 +210,8 @@ body {
 }
 
 .shop-card,
-.level-up-card {
+.level-up-card,
+.class-select-card {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -210,7 +220,8 @@ body {
 
 .shop-card h2,
 .level-up-card h2,
-.game-over-card h2 {
+.game-over-card h2,
+.class-select-card h2 {
   margin: 0;
   letter-spacing: 0.08em;
   font-size: clamp(1.35rem, 5.5vw, 2rem);
@@ -243,6 +254,7 @@ body {
 
 .shop-offer,
 .level-up-choice,
+.class-option,
 #shop-leave {
   appearance: none;
   display: flex;
@@ -262,7 +274,8 @@ body {
 }
 
 .shop-offer-title,
-.level-up-choice-title {
+.level-up-choice-title,
+.class-option-name {
   color: #d8ccff;
   font-size: 1rem;
 }
@@ -270,7 +283,9 @@ body {
 .shop-offer-desc,
 .shop-offer-reason,
 .level-up-choice-desc,
-.level-up-choice-reason {
+.level-up-choice-reason,
+.class-option-desc,
+.class-option-stats {
   color: var(--hud-muted);
   font-size: 0.9rem;
 }
@@ -288,6 +303,7 @@ body {
 
 .shop-offer:focus-visible,
 .level-up-choice:focus-visible,
+.class-option:focus-visible,
 #shop-leave:focus-visible {
   outline: 2px solid #c9b6ff;
   outline-offset: 3px;
@@ -303,6 +319,17 @@ body {
   color: #1b1c20;
   font-size: 1rem;
   text-align: center;
+}
+
+.class-option-select {
+  margin-top: 4px;
+  color: #e4c36a;
+  font-size: 0.95rem;
+}
+
+.class-select-card {
+  max-height: min(40rem, calc(100vh - 48px));
+  overflow: auto;
 }
 
 #game-over-distance {

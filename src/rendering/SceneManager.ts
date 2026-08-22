@@ -25,6 +25,8 @@ import {
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
+  START_COL,
+  START_ROW,
   TILE_PITCH,
   TILE_SIZE,
   laneWorldX,
@@ -291,13 +293,15 @@ export class SceneManager {
 
   /** Initial bind of the recycled row pool to the current logical window. */
   bindWindow(state: GameState, presentation: { interactive: boolean }): void {
+    const originRow = state.hasSelectedClass ? state.player.row : START_ROW;
+    const originCol = state.hasSelectedClass ? state.player.col : START_COL;
     for (let i = 0; i < this.rowViews.length; i += 1) {
-      const row = state.player.row + i;
+      const row = originRow + i;
       this.bindRow(this.rowViews[i], row, state);
     }
     this.refreshHighlights(state, presentation);
-    this.layoutRows(state.player.row);
-    this.setPlayerVisual(laneWorldX(state.player.col), 0);
+    this.layoutRows(originRow);
+    this.setPlayerVisual(laneWorldX(originCol), 0);
   }
 
   /**
@@ -313,7 +317,10 @@ export class SceneManager {
   }
 
   refreshHighlights(state: GameState, presentation: { interactive: boolean }): void {
-    this.highlightRow = presentation.interactive ? state.player.row + 1 : Number.NaN;
+    this.highlightRow =
+      presentation.interactive && state.hasSelectedClass
+        ? state.player.row + 1
+        : Number.NaN;
     this.highlightCols.clear();
     if (presentation.interactive) {
       for (let col = 0; col < LANE_COUNT; col += 1) {

@@ -1,4 +1,9 @@
-import { PLAYER_EVADE_MAX } from './config';
+import {
+  PLAYER_ATTACK_CAP,
+  PLAYER_DEFENCE_CAP,
+  PLAYER_EVADE_MAX,
+  PLAYER_MAX_HEALTH_CAP,
+} from './config';
 import { type Merchant } from './Merchant';
 import { type CombatStats } from './Combatant';
 
@@ -30,21 +35,21 @@ export const SHOP_OFFER_CATALOG: Record<ShopOfferId, ShopOfferCatalogEntry> = {
     title: 'Vitality',
     description: '+1 max HP',
     firstPrice: 2,
-    cap: 30,
+    cap: PLAYER_MAX_HEALTH_CAP,
     stat: 'maxHealth',
   },
   sharpened: {
     title: 'Sharpened',
     description: '+1 attack',
     firstPrice: 3,
-    cap: 12,
+    cap: PLAYER_ATTACK_CAP,
     stat: 'attack',
   },
   armoured: {
     title: 'Armoured',
     description: '+1 defence',
     firstPrice: 3,
-    cap: 8,
+    cap: PLAYER_DEFENCE_CAP,
     stat: 'defence',
   },
   evasive: {

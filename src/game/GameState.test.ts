@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { createPlayerStats } from './Combatant';
+import {
+  PLAYER_CLASS_IDS,
+  getPlayerClassDefinition,
+} from './definitions/classes';
 import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ID,
   DEMO_MONSTER_ROW,
-  PLAYER_BASE_EVADE,
+  PLAYER_ATTACK_CAP,
+  PLAYER_DEFENCE_CAP,
   PLAYER_EVADE_MAX,
+  PLAYER_MAX_HEALTH_CAP,
 } from './config';
 import {
   ENEMY_DEFINITIONS,
@@ -14,7 +19,7 @@ import {
   enemyStatsFactoryFromSearch,
 } from './definitions/enemies';
 import { type EncounterEvent } from './encounters';
-import { GameState, type CombatFinishResult, type TurnResolution } from './GameState';
+import { GameState, type CombatFinishResult, type GameStateOptions, type TurnResolution } from './GameState';
 import { mulberry32 } from './random';
 import {
   alarmLane,
@@ -26,8 +31,12 @@ import {
 import { collectibleId } from './Collectible';
 import { evadeHudText } from '../ui/HudView';
 
+function createState(options: GameStateOptions = {}): GameState {
+  return new GameState({ playerClass: 'ranger', ...options });
+}
+
 function seededState(): GameState {
-  return new GameState({
+  return createState({
     createRng: () => mulberry32(123),
     rollAvoidance: () => true,
   });
@@ -100,7 +109,7 @@ function walkTo(state: GameState, row: number, col: number): TurnResolution | nu
 
 describe('enemy definitions', () => {
   it('spawns the demo Cave Rat from the enemy definition', () => {
-    const state = new GameState({
+    const state = createState({
       createRng: () => mulberry32(1),
       rollAvoidance: () => true,
     });
@@ -117,13 +126,13 @@ describe('enemy definitions', () => {
   });
 
   it('does not need a separate Cave Rat stats factory for default spawning', () => {
-    const state = new GameState();
+    const state = createState();
     const monster = state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
     expect(monster?.stats).toEqual(ENEMY_DEFINITIONS.caveRat.startingStats);
   });
 
   it('applies the fatal query-string override on top of the Cave Rat definition', () => {
-    const state = new GameState({
+    const state = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       rollAvoidance: () => true,
     });
@@ -155,7 +164,7 @@ describe('enemy definitions', () => {
 
 describe('turn action validity', () => {
   it('rejects movement after the run is over', () => {
-    const state = new GameState({
+    const state = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       rollAvoidance: () => true,
     });
@@ -180,7 +189,7 @@ describe('turn action validity', () => {
   });
 
   it('rejects landing on a tile occupied by an enemy', () => {
-    const state = new GameState();
+    const state = createState();
     walkTo(state, DEMO_MONSTER_ROW - 1, 0);
 
     expect(state.isForwardTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBe(false);
@@ -200,7 +209,7 @@ describe('turn action validity', () => {
   });
 
   it('rejects invalid lanes', () => {
-    const state = new GameState();
+    const state = createState();
     expect(() => state.resolveCompletedMove(-1)).toThrow(/Invalid lane: -1/);
     expect(() => state.resolveCompletedMove(3)).toThrow(/Invalid lane: 3/);
     expect(state.player.row).toBe(0);
@@ -209,7 +218,7 @@ describe('turn action validity', () => {
 
 describe('one-lane sideways movement', () => {
   it('from the centre lane, left, centre, and right are valid', () => {
-    const state = new GameState();
+    const state = createState();
     expect(state.player.col).toBe(1);
     expect(state.isForwardTile(1, 0)).toBe(true);
     expect(state.isForwardTile(1, 1)).toBe(true);
@@ -217,7 +226,7 @@ describe('one-lane sideways movement', () => {
   });
 
   it('from the left lane, left and centre are valid and right is invalid', () => {
-    const state = new GameState();
+    const state = createState();
     state.resolveCompletedMove(0);
     expect(state.player.col).toBe(0);
     expect(state.isForwardTile(2, 0)).toBe(true);
@@ -226,7 +235,7 @@ describe('one-lane sideways movement', () => {
   });
 
   it('from the right lane, centre and right are valid and left is invalid', () => {
-    const state = new GameState();
+    const state = createState();
     state.resolveCompletedMove(2);
     expect(state.player.col).toBe(2);
     expect(state.isForwardTile(2, 0)).toBe(false);
@@ -235,7 +244,7 @@ describe('one-lane sideways movement', () => {
   });
 
   it('does not advance the run when a two-lane jump is rejected', () => {
-    const state = new GameState();
+    const state = createState();
     state.resolveCompletedMove(0);
     const before = {
       row: state.player.row,
@@ -257,7 +266,7 @@ describe('one-lane sideways movement', () => {
 
 describe('turn resolution order', () => {
   it('returns an empty TurnResolution for a safe opening move', () => {
-    const state = new GameState();
+    const state = createState();
     const resolution = state.resolveCompletedMove(1);
 
     expect(resolution).toEqual({
@@ -326,7 +335,7 @@ function trapState(
   scripts: Record<number, LaneRecipe[]>,
   rollAvoidance: () => boolean = () => true,
 ): GameState {
-  return new GameState({
+  return createState({
     createRowRecipe: scriptedRecipes(scripts),
     rollAvoidance,
   });
@@ -566,7 +575,7 @@ describe('alarm reset and pruning', () => {
     const recipes: RowRecipeFactory = scriptedRecipes({
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
     });
-    const state = new GameState({ createRowRecipe: recipes });
+    const state = createState({ createRowRecipe: recipes });
     walkTo(state, 7, 1);
     state.resolveCompletedMove(1);
     expect(state.getTile(8, 1)?.content.type).toBe('empty');
@@ -598,7 +607,7 @@ describe('alarm reset and pruning', () => {
     const recipes = scriptedRecipes({
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
     });
-    const state = new GameState({ createRowRecipe: recipes });
+    const state = createState({ createRowRecipe: recipes });
     walkTo(state, 7, 1);
     state.resolveCompletedMove(1);
     expect(state.getTrapAt(8, 1)).toBeUndefined();
@@ -632,7 +641,7 @@ function rowContent(state: GameState, fromRow: number, toRow: number): string[][
 
 describe('enemy drops', () => {
   it('places gold on a defeated enemy tile and collects it by landing', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -657,7 +666,7 @@ describe('enemy drops', () => {
   });
 
   it('places a potion drop that heals through normal landing rules', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.9),
       rollAvoidance: () => true,
     });
@@ -677,7 +686,7 @@ describe('enemy drops', () => {
   });
 
   it('leaves the tile empty when the drop roll is none', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -690,7 +699,7 @@ describe('enemy drops', () => {
   });
 
   it('does not create a drop on evade', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -707,7 +716,7 @@ describe('enemy drops', () => {
   });
 
   it('does not create a drop when the player dies', () => {
-    const state = new GameState({
+    const state = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
@@ -722,7 +731,7 @@ describe('enemy drops', () => {
   });
 
   it('clears spawned drops on reset and does not resurrect them after pruning', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -743,12 +752,12 @@ describe('enemy drops', () => {
   });
 
   it('keeps row generation unchanged when a separate drop stream rolls', () => {
-    const goldState = new GameState({
+    const goldState = createState({
       createRng: () => mulberry32(77),
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    const noneState = new GameState({
+    const noneState = createState({
       createRng: () => mulberry32(77),
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
@@ -765,7 +774,7 @@ describe('enemy drops', () => {
   });
 
   it('replays the same drop sequence after Restart Run with a fixed drop stream', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -781,7 +790,7 @@ describe('enemy drops', () => {
   });
 
   it('can drop after an Alarm Trap pulls an enemy into a fight', () => {
-    const state = new GameState({
+    const state = createState({
       createRowRecipe: scriptedRecipes({
         8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
         10: [emptyRow()[0], monsterLane('closer', 'caveRat'), emptyRow()[2]],
@@ -808,23 +817,29 @@ describe('enemy drops', () => {
 
 describe('evade and perception', () => {
   it('exposes base evade on the HUD snapshot and restores it on reset', () => {
-    const state = new GameState();
-    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
-    expect(state.getHudSnapshot().evade).toBe(PLAYER_BASE_EVADE);
-    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 1');
+    const state = createState();
+    const ranger = getPlayerClassDefinition('ranger');
+    expect(state.player.evade).toBe(ranger.startingEvade);
+    expect(state.getHudSnapshot().evade).toBe(ranger.startingEvade);
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe(
+      `EVA: ${ranger.startingEvade}`,
+    );
+    expect(state.getHudSnapshot().className).toBe(ranger.name);
 
     state.player.increaseEvade(5);
-    expect(state.getHudSnapshot().evade).toBe(6);
-    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 6');
+    expect(state.getHudSnapshot().evade).toBe(ranger.startingEvade + 5);
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe(
+      `EVA: ${ranger.startingEvade + 5}`,
+    );
 
     state.reset();
-    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
-    expect(state.getHudSnapshot().evade).toBe(1);
+    expect(state.player.evade).toBe(ranger.startingEvade);
+    expect(state.getHudSnapshot().evade).toBe(ranger.startingEvade);
   });
 
   it('uses Crypt Guard perception for a side pass', () => {
     let rolledChance: number | undefined;
-    const state = new GameState({
+    const state = createState({
       createRowRecipe: scriptedRecipes({
         5: [emptyRow()[0], emptyRow()[1], monsterLane('guard-5', 'cryptGuard')],
       }),
@@ -875,7 +890,7 @@ function fightDemoRatPending(state: GameState): CombatFinishResult {
 
 describe('XP and level-up', () => {
   it('starts a run at level 1, 0 XP, and next threshold 3', () => {
-    const state = new GameState();
+    const state = createState();
     const hud = state.getHudSnapshot();
     expect(hud.level).toBe(1);
     expect(hud.experience).toBe(0);
@@ -884,7 +899,7 @@ describe('XP and level-up', () => {
   });
 
   it('awards enemy XP exactly once on a combat win', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -908,7 +923,7 @@ describe('XP and level-up', () => {
   });
 
   it('does not award XP for evade or a player defeat', () => {
-    const evadeState = new GameState({
+    const evadeState = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -919,7 +934,7 @@ describe('XP and level-up', () => {
     expect(evadeState.player.experience).toBe(0);
     expect(evadeState.levelUpOpen).toBe(false);
 
-    const deathState = new GameState({
+    const deathState = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
@@ -933,7 +948,7 @@ describe('XP and level-up', () => {
   });
 
   it('queues a pending level-up that blocks movement until a choice is made', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -961,7 +976,7 @@ describe('XP and level-up', () => {
   });
 
   it('applies each level-up choice through Player methods', () => {
-    const vitality = new GameState({
+    const vitality = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -976,7 +991,7 @@ describe('XP and level-up', () => {
     expect(vitality.player.stats.maxHealth).toBe(21);
     expect(vitality.player.stats.health).toBe(healthBefore);
 
-    const sharpened = new GameState({
+    const sharpened = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -986,9 +1001,11 @@ describe('XP and level-up', () => {
       success: true,
       attackGained: 1,
     });
-    expect(sharpened.player.stats.attack).toBe(6);
+    expect(sharpened.player.stats.attack).toBe(
+      getPlayerClassDefinition('ranger').startingStats.attack + 1,
+    );
 
-    const armoured = new GameState({
+    const armoured = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -1000,7 +1017,7 @@ describe('XP and level-up', () => {
     });
     expect(armoured.player.stats.defence).toBe(2);
 
-    const evasive = new GameState({
+    const evasive = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -1010,13 +1027,15 @@ describe('XP and level-up', () => {
       success: true,
       evadeGained: 5,
     });
-    expect(evasive.player.evade).toBe(6);
+    expect(evasive.player.evade).toBe(
+      getPlayerClassDefinition('ranger').startingEvade + 5,
+    );
 
-    const partial = new GameState({
+    const partial = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
-    partial.player.increaseEvade(15);
+    partial.player.increaseEvade(13);
     expect(partial.player.evade).toBe(16);
     partial.player.addExperience(2);
     fightDemoRatPending(partial);
@@ -1029,7 +1048,7 @@ describe('XP and level-up', () => {
     });
     expect(partial.player.evade).toBe(PLAYER_EVADE_MAX);
 
-    const atCap = new GameState({
+    const atCap = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -1068,7 +1087,7 @@ describe('XP and level-up', () => {
     const original = ENEMY_DEFINITIONS.caveRat.experience;
     ENEMY_DEFINITIONS.caveRat.experience = 12;
     try {
-      const state = new GameState({
+      const state = createState({
         createDropRng: alwaysDrop(0),
         rollAvoidance: () => true,
       });
@@ -1088,7 +1107,7 @@ describe('XP and level-up', () => {
   });
 
   it('returns typed drop and level-up results so playback can keep drop-then-choice order', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -1109,7 +1128,7 @@ describe('XP and level-up', () => {
   });
 
   it('restores level, XP, pending choices, and combat stats on reset', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
@@ -1117,7 +1136,9 @@ describe('XP and level-up', () => {
     fightDemoRatPending(state);
     state.chooseLevelUp('sharpened');
     expect(state.player.level).toBe(2);
-    expect(state.player.stats.attack).toBe(6);
+    expect(state.player.stats.attack).toBe(
+      getPlayerClassDefinition('ranger').startingStats.attack + 1,
+    );
 
     state.reset();
     expect(state.player.level).toBe(1);
@@ -1125,15 +1146,244 @@ describe('XP and level-up', () => {
     expect(state.player.nextLevelExperience).toBe(3);
     expect(state.levelUpOpen).toBe(false);
     expect(state.getLevelUpView()).toBeNull();
-    expect(state.player.stats).toEqual(createPlayerStats());
-    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.player.stats).toEqual(
+      getPlayerClassDefinition('ranger').startingStats,
+    );
+    expect(state.player.evade).toBe(
+      getPlayerClassDefinition('ranger').startingEvade,
+    );
     expect(state.getHudSnapshot()).toMatchObject({
+      className: 'Ranger',
       level: 1,
       experience: 0,
       nextLevelExperience: 3,
-      attack: 5,
+      attack: getPlayerClassDefinition('ranger').startingStats.attack,
     });
   });
+
+  it('disables every level-up choice at its universal cap', () => {
+    const state = createState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    state.player.increaseMaxHealth(PLAYER_MAX_HEALTH_CAP);
+    state.player.increaseAttack(PLAYER_ATTACK_CAP);
+    state.player.increaseDefence(PLAYER_DEFENCE_CAP);
+    state.player.increaseEvade(PLAYER_EVADE_MAX);
+    state.player.addExperience(2);
+    fightDemoRatPending(state);
+
+    const view = state.getLevelUpView();
+    expect(view?.choices.every((choice) => !choice.available && choice.reason === 'capped')).toBe(
+      true,
+    );
+    expect(state.chooseLevelUp('vitality')).toMatchObject({
+      success: false,
+      reason: 'capped',
+      maxHealthGained: 0,
+      pendingRemaining: 1,
+    });
+    expect(state.chooseLevelUp('sharpened')).toMatchObject({
+      success: false,
+      reason: 'capped',
+      attackGained: 0,
+    });
+    expect(state.chooseLevelUp('armoured')).toMatchObject({
+      success: false,
+      reason: 'capped',
+      defenceGained: 0,
+    });
+    expect(state.chooseLevelUp('evasive')).toMatchObject({
+      success: false,
+      reason: 'capped',
+      evadeGained: 0,
+      pendingRemaining: 1,
+    });
+    expect(state.levelUpOpen).toBe(true);
+    expect(state.player.stats.maxHealth).toBe(PLAYER_MAX_HEALTH_CAP);
+    expect(state.player.stats.attack).toBe(PLAYER_ATTACK_CAP);
+    expect(state.player.stats.defence).toBe(PLAYER_DEFENCE_CAP);
+    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+  });
 });
+
+describe('player class selection', () => {
+  it('starts each selected class with its definition stats and HUD name', () => {
+    for (const id of PLAYER_CLASS_IDS) {
+      const definition = getPlayerClassDefinition(id);
+      const state = new GameState({ playerClass: id });
+      expect(state.hasSelectedClass).toBe(true);
+      expect(state.selectedClassId).toBe(id);
+      expect(state.player.classId).toBe(id);
+      expect(state.player.stats).toEqual(definition.startingStats);
+      expect(state.player.evade).toBe(definition.startingEvade);
+      expect(state.getHudSnapshot()).toMatchObject({
+        className: definition.name,
+        attack: definition.startingStats.attack,
+        evade: definition.startingEvade,
+        health: definition.startingStats.health,
+        maxHealth: definition.startingStats.maxHealth,
+        gold: 0,
+        level: 1,
+        experience: 0,
+      });
+    }
+  });
+
+  it('rejects movement and board highlights before a class is selected', () => {
+    const state = new GameState();
+    expect(state.hasSelectedClass).toBe(false);
+    expect(state.selectedClassId).toBeNull();
+    expect(() => state.player).toThrow('No class selected');
+    expect(state.isForwardTile(1, 1)).toBe(false);
+    expect(() => state.resolveCompletedMove(1)).toThrow(
+      'Cannot move before a class is selected',
+    );
+    expect(state.getHudSnapshot()).toMatchObject({
+      className: '',
+      gold: 0,
+      attack: 0,
+      evade: 0,
+      health: 0,
+      maxHealth: 0,
+    });
+  });
+
+  it('does not consume seeded row, drop, or evade streams when a class is chosen', () => {
+    const rngOptions = {
+      createRng: () => mulberry32(123),
+      createDropRng: () => mulberry32(456),
+      createEvadeRng: () => mulberry32(789),
+    };
+    const injected = new GameState({ playerClass: 'ranger', ...rngOptions });
+    const selected = new GameState(rngOptions);
+    selected.selectClass('ranger');
+
+    expect(rowWindow(selected)).toEqual(rowWindow(injected));
+
+    const injectedDrop = fightDemoRatPending(injected);
+    const selectedDrop = fightDemoRatPending(selected);
+    expect(selectedDrop.drop).toEqual(injectedDrop.drop);
+
+    const injectedEvade = new GameState({ playerClass: 'ranger', ...rngOptions });
+    const selectedEvade = new GameState(rngOptions);
+    selectedEvade.selectClass('ranger');
+    walkTo(injectedEvade, 3, 0);
+    walkTo(selectedEvade, 3, 0);
+    expect(summarizeEncounters(selectedEvade.resolveCompletedMove(0).encounters)).toEqual(
+      summarizeEncounters(injectedEvade.resolveCompletedMove(0).encounters),
+    );
+  });
+
+  it('reset restores the selected class’s original base stats', () => {
+    const mage = getPlayerClassDefinition('mage');
+    const state = new GameState({ playerClass: 'mage' });
+    state.player.addGold(6);
+    state.player.addExperience(9);
+    state.player.increaseAttack(2);
+    state.player.increaseEvade(4);
+    state.reset();
+    expect(state.selectedClassId).toBe('mage');
+    expect(state.player.stats).toEqual(mage.startingStats);
+    expect(state.player.evade).toBe(mage.startingEvade);
+    expect(state.player.gold).toBe(0);
+    expect(state.player.experience).toBe(0);
+    expect(state.player.level).toBe(1);
+    expect(state.distance).toBe(0);
+    expect(state.levelUpOpen).toBe(false);
+  });
+
+  it('selecting a different class starts a fully clean run', () => {
+    const state = createState({
+      createRng: () => mulberry32(123),
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    state.player.addGold(10);
+    state.player.addExperience(2);
+    fightDemoRatPending(state);
+    expect(state.levelUpOpen).toBe(true);
+    expect(state.player.gold).toBe(10);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    resolvePendingLevelUps(state);
+
+    walkTo(state, 13, 1);
+    state.resolveCompletedMove(shopColAt(state, 14));
+    expect(state.buyShopOffer('sharpened').success).toBe(true);
+    expect(state.player.stats.attack).toBe(
+      getPlayerClassDefinition('ranger').startingStats.attack + 1,
+    );
+
+    const knight = getPlayerClassDefinition('knight');
+    state.selectClass('knight');
+    expect(state.selectedClassId).toBe('knight');
+    expect(state.player.stats).toEqual(knight.startingStats);
+    expect(state.player.evade).toBe(knight.startingEvade);
+    expect(state.player.gold).toBe(0);
+    expect(state.player.experience).toBe(0);
+    expect(state.player.level).toBe(1);
+    expect(state.levelUpOpen).toBe(false);
+    expect(state.shopOpen).toBe(false);
+    expect(state.distance).toBe(0);
+    expect(state.player.row).toBe(0);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe('caveRat');
+    expect(state.getHudSnapshot()).toMatchObject({
+      className: knight.name,
+      gold: 0,
+      attack: knight.startingStats.attack,
+    });
+
+    walkTo(state, 13, 1);
+    state.resolveCompletedMove(shopColAt(state, 14));
+    expect(state.getShopView()?.offers.map((offer) => offer.cost)).toEqual([2, 3, 3, 2]);
+    expect(state.player.gold).toBe(0);
+  });
+
+  it('clears the prior run so Restart can return to class selection', () => {
+    const state = createState({
+      createRng: () => mulberry32(123),
+      rollAvoidance: () => true,
+    });
+    state.player.addGold(5);
+    state.player.addExperience(4);
+    state.clearSelectedClass();
+
+    expect(state.hasSelectedClass).toBe(false);
+    expect(state.selectedClassId).toBeNull();
+    expect(() => state.player).toThrow('No class selected');
+    expect(() => state.resolveCompletedMove(1)).toThrow(
+      'Cannot move before a class is selected',
+    );
+    expect(state.getHudSnapshot()).toMatchObject({
+      className: '',
+      gold: 0,
+      attack: 0,
+    });
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+
+    const rogue = getPlayerClassDefinition('rogue');
+    state.selectClass('rogue');
+    expect(state.player.stats).toEqual(rogue.startingStats);
+    expect(state.player.gold).toBe(0);
+    expect(state.player.experience).toBe(0);
+    expect(state.distance).toBe(0);
+  });
+});
+
+function rowWindow(state: GameState): Array<Array<string | undefined>> {
+  const rows: Array<Array<string | undefined>> = [];
+  for (let row = 0; row <= 8; row += 1) {
+    rows.push([0, 1, 2].map((col) => state.getTile(row, col)?.content.type));
+  }
+  return rows;
+}
+
+function summarizeEncounters(encounters: EncounterEvent[]) {
+  return encounters.map((event) =>
+    event.kind === 'evade'
+      ? { kind: event.kind, evadeChance: event.evadeChance, monsterId: event.monster.id }
+      : { kind: event.kind, approach: event.approach, monsterId: event.monster.id },
+  );
+}
 
 

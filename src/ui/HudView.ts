@@ -1,5 +1,6 @@
 import { type HudSnapshot } from '../game/GameState';
 import { requireElement } from './dom';
+import { classHudText } from './ClassSelectionView';
 import { experienceHudText, levelHudText } from './LevelUpOverlayView';
 
 export type { HudSnapshot };
@@ -10,6 +11,7 @@ export function evadeHudText(evade: number): string {
 
 export class HudView {
   private readonly distanceEl: HTMLElement;
+  private readonly classEl: HTMLElement;
   private readonly goldEl: HTMLElement;
   private readonly attackEl: HTMLElement;
   private readonly evadeEl: HTMLElement;
@@ -22,6 +24,7 @@ export class HudView {
 
   constructor(root: ParentNode = document) {
     this.distanceEl = requireElement(root, '#distance');
+    this.classEl = requireElement(root, '#class-name');
     this.goldEl = requireElement(root, '#gold');
     this.attackEl = requireElement(root, '#attack');
     this.evadeEl = requireElement(root, '#evade');
@@ -37,6 +40,7 @@ export class HudView {
     const { health, maxHealth } = snapshot;
     const ratio = maxHealth <= 0 ? 0 : Math.max(0, Math.min(1, health / maxHealth));
     this.distanceEl.textContent = `Distance: ${snapshot.distance}`;
+    this.classEl.textContent = classHudText(snapshot.className);
     this.goldEl.textContent = `Gold: ${snapshot.gold}`;
     this.attackEl.textContent = `ATK: ${snapshot.attack}`;
     this.evadeEl.textContent = evadeHudText(snapshot.evade);

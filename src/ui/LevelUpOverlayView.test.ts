@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_BASE_EVADE, PLAYER_EVADE_MAX } from '../game/config';
 import {
+  PLAYER_ATTACK_CAP,
+  PLAYER_DEFENCE_CAP,
+  PLAYER_EVADE_MAX,
+  PLAYER_MAX_HEALTH_CAP,
+} from '../game/config';
+import { getPlayerClassDefinition } from '../game/definitions/classes';
+import {
+  LEVEL_UP_CAPPED_REASONS,
   LEVEL_UP_EVASIVE_CAPPED_REASON,
   buildLevelUpView,
+  type LevelUpStatSnapshot,
 } from '../game/levelUp';
 import {
   LevelUpOverlayView,
@@ -24,7 +32,7 @@ describe('level and XP HUD text', () => {
   });
 
   it('shows the reached level and next threshold on a level-up view', () => {
-    const view = buildLevelUpView(2, 3, PLAYER_BASE_EVADE);
+    const view = buildLevelUpView(2, 3, rangerLevelUpStats());
     expect(view.level).toBe(2);
     expect(experienceHudText(view.experience, view.nextLevelExperience)).toBe(
       'XP: 3 / 7',
@@ -45,12 +53,12 @@ describe('level and XP HUD text', () => {
   });
 
   it('disables Evasive at 20 and keeps the other choices available', () => {
-    const available = buildLevelUpView(2, 3, 16);
+    const available = buildLevelUpView(2, 3, rangerLevelUpStats({ evade: 16 }));
     expect(available.choices.find((choice) => choice.id === 'evasive')?.available).toBe(
       true,
     );
 
-    const capped = buildLevelUpView(2, 3, PLAYER_EVADE_MAX);
+    const capped = buildLevelUpView(2, 3, rangerLevelUpStats({ evade: PLAYER_EVADE_MAX }));
     const evasive = capped.choices.find((choice) => choice.id === 'evasive');
     expect(evasive).toMatchObject({
       available: false,
@@ -70,7 +78,7 @@ describe('level-up overlay disabled state', () => {
   it('disables the Evasive button and exposes why it is unavailable', () => {
     const root = createLevelUpRoot();
     const overlay = new LevelUpOverlayView(root);
-    overlay.render(buildLevelUpView(2, 3, PLAYER_EVADE_MAX));
+    overlay.render(buildLevelUpView(2, 3, rangerLevelUpStats({ evade: PLAYER_EVADE_MAX })));
 
     expect(root.button('level-up-evasive').disabled).toBe(true);
     expect(root.button('level-up-evasive').getAttribute('aria-label')).toBe(
@@ -84,7 +92,48 @@ describe('level-up overlay disabled state', () => {
     expect(root.button('level-up-armoured').disabled).toBe(false);
     overlay.dispose();
   });
+
+  it('disables every choice when its universal cap is reached', () => {
+    const root = createLevelUpRoot();
+    const overlay = new LevelUpOverlayView(root);
+    overlay.render(
+      buildLevelUpView(6, 25, {
+        maxHealth: PLAYER_MAX_HEALTH_CAP,
+        attack: PLAYER_ATTACK_CAP,
+        defence: PLAYER_DEFENCE_CAP,
+        evade: PLAYER_EVADE_MAX,
+      }),
+    );
+
+    for (const id of ['vitality', 'sharpened', 'armoured', 'evasive'] as const) {
+      expect(root.button(`level-up-${id}`).disabled).toBe(true);
+      expect(root.button(`level-up-${id}`).getAttribute('aria-label')).toBe(
+        levelUpChoiceAriaLabel({
+          id,
+          title: id === 'vitality' ? 'Vitality' : id === 'sharpened' ? 'Sharpened' : id === 'armoured' ? 'Armoured' : 'Evasive',
+          description: '',
+          available: false,
+          reason: 'capped',
+          disabledReason: LEVEL_UP_CAPPED_REASONS[id],
+        }),
+      );
+    }
+    overlay.dispose();
+  });
 });
+
+function rangerLevelUpStats(
+  overrides: Partial<LevelUpStatSnapshot> = {},
+): LevelUpStatSnapshot {
+  const ranger = getPlayerClassDefinition('ranger');
+  return {
+    maxHealth: ranger.startingStats.maxHealth,
+    attack: ranger.startingStats.attack,
+    defence: ranger.startingStats.defence,
+    evade: ranger.startingEvade,
+    ...overrides,
+  };
+}
 
 function createLevelUpRoot(): ParentNode & {
   button(id: string): HTMLButtonElement;

@@ -1,4 +1,9 @@
-import { PLAYER_EVADE_MAX } from './config';
+import {
+  PLAYER_ATTACK_CAP,
+  PLAYER_DEFENCE_CAP,
+  PLAYER_EVADE_MAX,
+  PLAYER_MAX_HEALTH_CAP,
+} from './config';
 import { type Player } from './Player';
 import { nextLevelExperience } from './progression';
 
@@ -68,18 +73,39 @@ export const LEVEL_UP_CATALOG: Record<
   },
 };
 
-export const LEVEL_UP_EVASIVE_CAPPED_REASON =
-  `Evade is already at maximum (${PLAYER_EVADE_MAX}).`;
+export interface LevelUpStatSnapshot {
+  maxHealth: number;
+  attack: number;
+  defence: number;
+  evade: number;
+}
+
+export const LEVEL_UP_CAPS: Record<LevelUpChoice, number> = {
+  vitality: PLAYER_MAX_HEALTH_CAP,
+  sharpened: PLAYER_ATTACK_CAP,
+  armoured: PLAYER_DEFENCE_CAP,
+  evasive: PLAYER_EVADE_MAX,
+};
+
+export const LEVEL_UP_CAPPED_REASONS: Record<LevelUpChoice, string> = {
+  vitality: `Max HP is already at maximum (${PLAYER_MAX_HEALTH_CAP}).`,
+  sharpened: `Attack is already at maximum (${PLAYER_ATTACK_CAP}).`,
+  armoured: `Defence is already at maximum (${PLAYER_DEFENCE_CAP}).`,
+  evasive: `Evade is already at maximum (${PLAYER_EVADE_MAX}).`,
+};
+
+export const LEVEL_UP_EVASIVE_CAPPED_REASON = LEVEL_UP_CAPPED_REASONS.evasive;
 
 export function evaluateLevelUpChoice(
   choice: LevelUpChoice,
-  evade: number,
+  stats: LevelUpStatSnapshot,
 ): { available: boolean; reason?: 'capped'; disabledReason?: string } {
-  if (choice === 'evasive' && evade >= PLAYER_EVADE_MAX) {
+  const current = currentLevelUpStat(choice, stats);
+  if (current >= LEVEL_UP_CAPS[choice]) {
     return {
       available: false,
       reason: 'capped',
-      disabledReason: LEVEL_UP_EVASIVE_CAPPED_REASON,
+      disabledReason: LEVEL_UP_CAPPED_REASONS[choice],
     };
   }
   return { available: true };
@@ -88,14 +114,14 @@ export function evaluateLevelUpChoice(
 export function buildLevelUpView(
   level: number,
   experience: number,
-  evade: number,
+  stats: LevelUpStatSnapshot,
 ): LevelUpView {
   return {
     level,
     experience,
     nextLevelExperience: nextLevelExperience(experience),
     choices: LEVEL_UP_CHOICES.map((id) => {
-      const evaluation = evaluateLevelUpChoice(id, evade);
+      const evaluation = evaluateLevelUpChoice(id, stats);
       return {
         id,
         title: LEVEL_UP_CATALOG[id].title,
@@ -106,6 +132,22 @@ export function buildLevelUpView(
       };
     }),
   };
+}
+
+function currentLevelUpStat(
+  choice: LevelUpChoice,
+  stats: LevelUpStatSnapshot,
+): number {
+  if (choice === 'vitality') {
+    return stats.maxHealth;
+  }
+  if (choice === 'sharpened') {
+    return stats.attack;
+  }
+  if (choice === 'armoured') {
+    return stats.defence;
+  }
+  return stats.evade;
 }
 
 export function applyLevelUpChoice(player: Player, choice: LevelUpChoice): {

@@ -13,6 +13,7 @@ import {
   type EncounterEvent,
   avoidanceOverrideFromSearch,
 } from './encounters';
+import { PLAYER_CLASS_IDS, type PlayerClassId } from './definitions/classes';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
 import { GameState, type TrapResolution } from './GameState';
 import {
@@ -26,6 +27,7 @@ import { type LevelUpChoice } from './levelUp';
 import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
 import { CameraController } from '../rendering/CameraController';
 import { SceneManager } from '../rendering/SceneManager';
+import { ClassSelectionView } from '../ui/ClassSelectionView';
 import { GameOverView } from '../ui/GameOverView';
 import { HudView } from '../ui/HudView';
 import { LevelUpOverlayView } from '../ui/LevelUpOverlayView';
@@ -67,6 +69,7 @@ export class Game {
   private readonly gameOver: GameOverView;
   private readonly shop: ShopOverlayView;
   private readonly levelUp: LevelUpOverlayView;
+  private readonly classSelect: ClassSelectionView;
   private readonly resizeObserver: ResizeObserver;
 
   private animation: MoveAnimation | null = null;
@@ -93,7 +96,11 @@ export class Game {
     this.gameOver = new GameOverView();
     this.shop = new ShopOverlayView();
     this.levelUp = new LevelUpOverlayView();
-    this.gameOver.onRestart(() => this.restartRun());
+    this.classSelect = new ClassSelectionView();
+    this.gameOver.onRestart(() => this.returnToClassSelection());
+    for (const classId of PLAYER_CLASS_IDS) {
+      this.classSelect.onSelect(classId, () => this.selectClass(classId));
+    }
     for (const offerId of SHOP_OFFER_IDS) {
       this.shop.onOffer(offerId, () => this.buyShopOffer(offerId));
     }
@@ -106,7 +113,9 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
 
-    this.scene.bindWindow(this.state, { interactive: true });
+    this.scene.bindWindow(this.state, { interactive: false });
+    this.classSelect.show(this.state.getClassSelectionView());
+    this.setBoardInteractive(false);
     this.handleResize();
     this.updateHud();
   }
@@ -126,6 +135,7 @@ export class Game {
     this.gameOver.dispose();
     this.shop.dispose();
     this.levelUp.dispose();
+    this.classSelect.dispose();
     this.input.dispose();
     this.scene.dispose();
   }
@@ -154,6 +164,7 @@ export class Game {
     if (
       this.boardLocked ||
       this.state.runOver ||
+      !this.state.hasSelectedClass ||
       this.state.shopOpen ||
       this.state.levelUpOpen ||
       !this.state.isForwardTile(tile.row, tile.col)
@@ -423,10 +434,23 @@ export class Game {
       return;
     }
 
+    if (!this.state.hasSelectedClass) {
+      this.setBoardInteractive(false);
+      return;
+    }
+
     this.setBoardInteractive(true);
   }
 
-  private restartRun(): void {
+  private selectClass(classId: PlayerClassId): void {
+    this.state.selectClass(classId);
+    this.classSelect.hide();
+    this.scene.bindWindow(this.state, { interactive: true });
+    this.setBoardInteractive(true);
+    this.updateHud();
+  }
+
+  private returnToClassSelection(): void {
     this.animation = null;
     this.encounterFxElapsed = null;
     this.combatPlayback = null;
@@ -436,10 +460,11 @@ export class Game {
     this.scene.clearTransientFx();
     this.shop.hide();
     this.levelUp.hide();
-    this.state.reset();
-    this.scene.bindWindow(this.state, { interactive: true });
     this.gameOver.hide();
-    this.setBoardInteractive(true);
+    this.state.clearSelectedClass();
+    this.scene.bindWindow(this.state, { interactive: false });
+    this.classSelect.show(this.state.getClassSelectionView());
+    this.setBoardInteractive(false);
     this.updateHud();
   }
 

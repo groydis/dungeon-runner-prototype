@@ -6,7 +6,7 @@ This repository is a working visual skeleton, not a complete game. It is built w
 
 ## Game concept
 
-You start in the centre lane at the near end of the board. Tapping a highlighted tile steps you into that lane and advances the dungeon by exactly one row. The player stays visually near the bottom of the screen; the world scrolls toward the camera.
+You choose a class on launch, then start in the centre lane at the near end of the board. Tapping a highlighted tile steps you into that lane and advances the dungeon by exactly one row. The player stays visually near the bottom of the screen; the world scrolls toward the camera.
 
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
@@ -38,10 +38,13 @@ Included:
 - Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, level, XP, gold, attack, evade (`EVA: 1`, no `%`, hard max 20), HP text/bar, and status
+- Five player classes that set starting HP, attack, defence, and Evade
+- A **Choose Your Class** overlay on launch; board input stays locked until a class is selected
+- HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
 - A rare Travelling Merchant shop overlay
-- Death overlay and in-place Restart Run
+- Universal run caps shared by Merchant upgrades and level-up rewards
+- Death overlay; Restart Run returns to class selection without reloading the page
 - Responsive full-screen layout for phone and desktop
 
 Not included:
@@ -77,12 +80,13 @@ Query-string helpers (no on-screen debug UI):
 - `/?avoid=1` — testing override: always evade a side pass, ignoring Evade and Perception
 - `/?avoid=0` — testing override: always Surprise Attack combat on a side pass, ignoring Evade and Perception
 - `/?fatal=1` — testing override: Cave Rat **attack** is raised on top of `ENEMY_DEFINITIONS`, enough to kill the player
-- `/?seed=123` — seeded row generation plus separate drop and evade streams; Restart Run replays the same layouts, drops, and evade rolls for the same choices
+- `/?seed=123` — seeded row generation plus separate drop and evade streams; after you select the same class again, the same choices replay the same layouts, drops, and evade rolls. Choosing a class does not consume those streams.
 
 ## Controls
 
 There is no keyboard movement and no combat input.
 
+- On launch, **Choose Your Class** lists all five classes with flavour text, a compact `HP / ATK / DEF / EVA` line, and a Select button. The board, highlights, shops, and level-ups stay locked until you pick one.
 - **Tap or click** a glowing tile in the next row. You always advance exactly one row.
 - You may move at most one lane sideways per step:
   - Left lane → left or centre
@@ -90,8 +94,8 @@ There is no keyboard movement and no combat input.
   - Right lane → centre or right
 - A two-lane jump (left ↔ right) is illegal. Tiles occupied by enemies are also illegal.
 - Only legal destinations glow and can be tapped.
-- Input is locked during the step animation, trap/enemy-advance playback, combat or evade feedback, while a level-up choice is open, and while a Merchant shop is open.
-- After death, use **Restart Run**. The page does not reload.
+- Input is locked before class selection, during the step animation, trap/enemy-advance playback, combat or evade feedback, while a level-up choice is open, and while a Merchant shop is open.
+- After death, use **Restart Run**. That clears the prior run and returns to **Choose Your Class**. The page does not reload, and there is no “same class” shortcut.
 
 Selection uses pointer events and a Three.js raycaster against invisible hit planes on the highlighted tiles, so the same path works for mouse and touch.
 
@@ -113,8 +117,8 @@ src/
     shop.ts               Stat-upgrade offers, escalating prices, and shop views
     progression.ts        Cumulative XP thresholds and level progress
     levelUp.ts            Level-up choices, views, and Player applications
-    Player.ts             Position, gold, XP, and run-scoped combat stats
-    Combatant.ts          Combat stat types and player starting values
+    Player.ts             Position, gold, XP, class, and run-scoped combat stats
+    Combatant.ts          Combat stat types and combat-math fixtures
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
     rowGeneration.ts      Weighted row recipes and safety rules
@@ -122,10 +126,12 @@ src/
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
     definitions/
+      classes.ts          Authoritative class names, copy, and starting stats
       enemies.ts          Authoritative enemy names, base stats, XP, render keys
       encounterPools.ts   Distance-based enemy-type weights
   ui/
-    HudView.ts            Distance, level, XP, gold, attack, evade, HP, status
+    HudView.ts            Class, distance, level, XP, gold, attack, evade, HP, status
+    ClassSelectionView.ts Choose Your Class overlay
     GameOverView.ts       Death overlay and Restart Run
     ShopOverlayView.ts    Merchant overlay
     LevelUpOverlayView.ts Level-up overlay
@@ -133,7 +139,7 @@ src/
     SceneManager.ts       Scene, lights, recycled row meshes, hit FX
     CameraController.ts   Elevated follow camera
   styles/
-    main.css              Full-viewport HUD, shop, level-up, and game-over overlays
+    main.css              Full-viewport HUD, class-select, shop, level-up, and game-over overlays
 public/                   Static assets
 ```
 
@@ -141,11 +147,12 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the single-run aggregate. It owns grid, entities, shop session, pending level-ups, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop or level-up is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `chooseLevelUp()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
-- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
+- **GameState** is the single-run aggregate. It owns one selected-class run, grid, entities, shop session, pending level-ups, and rule flags (`runOver`, status, distance). There is no fake default class: until `selectClass()` runs, movement is rejected and the HUD has no class stats. Entity maps stay private. Invalid actions such as moving before a class is chosen, after death, while a shop or level-up is open, or into a bad lane are rejected. High-level methods: `selectClass()`, `clearSelectedClass()`, `resolveCompletedMove()`, `buyShopOffer()`, `chooseLevelUp()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
+- **Game.ts** owns overlay order, animation, and input-lock state. It shows **Choose Your Class** on launch and after Restart Run, then binds the scene to the new run. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
-- **UI views** under `src/ui` update HTML only. They render `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
+- **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views.
+- **Class definitions** in `src/game/definitions/classes.ts` are the only source of class names, flavour copy, starting combat stats, and starting Evade.
 - **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
 - **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, Perception, XP reward, render key, and drop table. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
 
@@ -158,7 +165,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, XP and level-up choices, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, XP and level-up choices, player classes and class selection, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use an injected class (`ranger` when a neutral setup is needed), RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -298,6 +305,33 @@ Status examples:
 
 The renderer plays a short trap flash, then a one-tile enemy slide, then any combat/evade FX. Board input stays locked until that sequence finishes.
 
+## Player classes
+
+Classes are starting stats and presentation only. They do not add spells, bows, crits, blocking, rage, inventory, or equipment.
+
+| ID | Class | Max HP | ATK | DEF | EVA | Playstyle |
+|---|---|---:|---:|---:|---:|---|
+| `rogue` | Rogue | 18 | 5 | 1 | 6 | Nimble survivor with the best chance to slip past threats. |
+| `ranger` | Ranger | 20 | 6 | 1 | 3 | Flexible fighter with reliable early damage. |
+| `mage` | Mage | 16 | 8 | 0 | 2 | Fragile but devastating without needing magic abilities yet. |
+| `knight` | Knight | 26 | 4 | 3 | 0 | Armoured and dependable under sustained damage. |
+| `barbarian` | Barbarian | 28 | 7 | 0 | 0 | Huge health and damage, with no defensive tricks. |
+
+`src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, Merchant prices, pending level-ups, entities, or RNG state.
+
+**Choose Your Class** appears on first launch and after Restart Run. Until a class is selected, the board has no legal highlights and `GameState` rejects movement.
+
+Universal run caps (Merchant purchases and level-up rewards share these):
+
+| Stat | Cap |
+|---|---:|
+| Max HP | 35 |
+| Attack | 15 |
+| Defence | 10 |
+| Evade | 20 |
+
+Merchant upgrades still grant +1. Level-up Vitality / Sharpened / Armoured still grant +1. Evasive still grants +5, but stops at 20. A choice that would grant +0 is disabled. Vitality still raises max HP only and does not heal current HP.
+
 ## Travelling Merchant
 
 Landing on a Merchant tile pauses the run and opens a centred shop overlay. The shop is not consumed just by opening it. Board input stays locked until **Leave**.
@@ -306,15 +340,15 @@ Each Merchant may be used once. After Leave, the Merchant is marked used and rem
 
 Opening the shop does not spend gold. Each visit offers the same four run-scoped stat upgrades. A purchase adds exactly `+1` to that stat. Each stat has its own escalating price track: only that stat’s next price increases by 1 gold. Prices persist for the run, not for a single Merchant visit.
 
-| Offer | Effect | Base | Cap | First price |
-|---|---|---:|---:|---:|
-| Vitality | +1 max HP; current HP is unchanged | 20 | 30 | 2 |
-| Sharpened | +1 attack | 5 | 12 | 3 |
-| Armoured | +1 defence | 1 | 8 | 3 |
-| Evasive | +1 Evade | 1 | 20 | 2 |
-| Leave | Close the shop and continue | — | — | 0 |
+| Offer | Effect | Cap | First price |
+|---|---|---:|---:|
+| Vitality | +1 max HP; current HP is unchanged | 35 | 2 |
+| Sharpened | +1 attack | 15 | 3 |
+| Armoured | +1 defence | 10 | 3 |
+| Evasive | +1 Evade | 20 | 2 |
+| Leave | Close the shop and continue | — | 0 |
 
-Example Attack prices: `3 → 4 → 5 → …` until attack reaches 12. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches its hard maximum of 20.
+Example Attack prices: `3 → 4 → 5 → …` until attack reaches 15. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches its hard maximum of 20. Starting values come from the selected class, not from a single default package.
 
 Rules:
 
@@ -325,7 +359,7 @@ Rules:
 - A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats can still be bought.
 - Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
 
-Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run restores an untouched fresh run: gold, stats, Merchant prices and purchase counts, merchant entities, and meshes.
+Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, Merchant prices and purchase counts, merchant entities, and meshes.
 
 ## Monster encounters
 
@@ -361,7 +395,7 @@ Starting stats:
 
 |            | HP | Attack | Defence | Evade / Perception |
 |------------|----|--------|---------|-------------------:|
-| Player     | 20 | 5      | 1       | EVA 1 (hard max 20) |
+| Player     | by class (see Player classes) | by class | by class | by class (hard max 20) |
 | Cave Rat   | 8  | 3      | 0       | Perception 0% |
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
@@ -378,7 +412,7 @@ damage = Math.max(1, attacker.attack - defender.defence)
 
 **Surprise Attack:** the player still strikes first, but the opening hit is `Math.ceil(normalDamage * 1.5)` and is marked `isSurpriseStrike`. If the monster lives, the rest of the fight is the same player-then-monster alternation. That 150% opener is the only Surprise Attack bonus for now.
 
-A Cave Rat has 8 HP and 0 defence, so a normal player hit deals 5 and a surprise opener deals 8. A front-on rat usually gets one counterattack (2 damage) before dying. A surprise opener kills it immediately.
+A Cave Rat has 8 HP and 0 defence. Damage therefore depends on the selected class’s attack (a Ranger hit deals 6; a Mage hit deals 8). A surprise opener is `Math.ceil(normalDamage * 1.5)`.
 
 The fight is resolved immediately in game logic. The renderer then plays each log entry for about 300 ms:
 
@@ -417,12 +451,14 @@ Crossing a threshold pauses the board and opens a level-up overlay. If one fight
 
 | Choice | Effect |
 |---|---|
-| Vitality | +1 max HP; current HP is unchanged |
-| Sharpened | +1 attack |
-| Armoured | +1 defence |
-| Evasive | +5 Evade, hard maximum 20. Disabled at 20 (`Evade is already at maximum (20).`). The overlay stays open so another reward can still be chosen. |
+| Vitality | +1 max HP; current HP is unchanged. Disabled at 35. |
+| Sharpened | +1 attack. Disabled at 15. |
+| Armoured | +1 defence. Disabled at 10. |
+| Evasive | +5 Evade, hard maximum 20. Disabled at 20 (`Evade is already at maximum (20).`). |
 
-After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restart Run restores level, XP, pending choices, and the four combat stats to their base values.
+A capped choice is not selectable and never grants +0. The overlay stays open so another available reward can still be chosen.
+
+After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restarting a run with the same class restores level, XP, pending choices, and the four combat stats to that class’s bases. Restart Run after death returns to class selection instead.
 
 ## Death and restart
 
@@ -434,7 +470,7 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats (including level, XP, max HP, attack, defence, and evade), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, pending level-up choices, generation / drop / evade RNGs, grid, meshes, and status without reloading the page. The game-over overlay sits above the level-up and Merchant overlays if they would otherwise be visible.
+Restart Run clears the prior run and returns to **Choose Your Class** without reloading the page. Selecting any class then starts a clean run: class base stats, level 1, 0 XP, 0 gold, reset Merchant prices, no pending level-ups, and rebuilt generation / drop / evade streams. The game-over overlay sits above the level-up and Merchant overlays if they would otherwise be visible.
 
 ## Intended next steps
 

@@ -1,10 +1,17 @@
 import {
-  PLAYER_BASE_EVADE,
+  PLAYER_ATTACK_CAP,
+  PLAYER_DEFENCE_CAP,
   PLAYER_EVADE_MAX,
+  PLAYER_MAX_HEALTH_CAP,
   START_COL,
   START_ROW,
 } from './config';
-import { type CombatStats, createCombatStats, createPlayerStats } from './Combatant';
+import { type CombatStats, createCombatStats } from './Combatant';
+import {
+  getPlayerClassDefinition,
+  type PlayerClassDefinition,
+  type PlayerClassId,
+} from './definitions/classes';
 import {
   type ExperienceGain,
   PLAYER_START_EXPERIENCE,
@@ -13,14 +20,33 @@ import {
   nextLevelExperience,
 } from './progression';
 
-/** Logical player position, gold, and run-scoped combat stats. */
+/** Logical player position, gold, class, and run-scoped combat stats. */
 export class Player {
+  private _classId: PlayerClassId;
   private _row = START_ROW;
   private _col = START_COL;
   private _gold = 0;
   private _experience = PLAYER_START_EXPERIENCE;
-  private _evade = PLAYER_BASE_EVADE;
-  private _stats: CombatStats = createPlayerStats();
+  private _evade = 0;
+  private _stats: CombatStats;
+
+  constructor(classId: PlayerClassId) {
+    this._classId = classId;
+    this._stats = createCombatStats(this.definition.startingStats);
+    this._evade = this.definition.startingEvade;
+  }
+
+  get classId(): PlayerClassId {
+    return this._classId;
+  }
+
+  get className(): string {
+    return this.definition.name;
+  }
+
+  get definition(): PlayerClassDefinition {
+    return getPlayerClassDefinition(this._classId);
+  }
 
   get row(): number {
     return this._row;
@@ -94,22 +120,16 @@ export class Player {
   }
 
   increaseAttack(amount: number): number {
-    const gained = Math.max(0, amount);
-    this._stats.attack += gained;
-    return gained;
+    return this.applyCappedStat('attack', amount, PLAYER_ATTACK_CAP);
   }
 
   increaseDefence(amount: number): number {
-    const gained = Math.max(0, amount);
-    this._stats.defence += gained;
-    return gained;
+    return this.applyCappedStat('defence', amount, PLAYER_DEFENCE_CAP);
   }
 
   /** Raises max HP only. Current HP is unchanged. */
   increaseMaxHealth(amount: number): number {
-    const gained = Math.max(0, Math.floor(amount));
-    this._stats.maxHealth += gained;
-    return gained;
+    return this.applyCappedStat('maxHealth', amount, PLAYER_MAX_HEALTH_CAP);
   }
 
   addExperience(amount: number): ExperienceGain {
@@ -137,8 +157,20 @@ export class Player {
     this._col = START_COL;
     this._gold = 0;
     this._experience = PLAYER_START_EXPERIENCE;
-    this._evade = PLAYER_BASE_EVADE;
-    this._stats = createPlayerStats();
+    this._evade = this.definition.startingEvade;
+    this._stats = createCombatStats(this.definition.startingStats);
+  }
+
+  private applyCappedStat(
+    key: 'maxHealth' | 'attack' | 'defence',
+    amount: number,
+    cap: number,
+  ): number {
+    const gained = Math.max(0, Math.floor(amount));
+    const next = Math.min(cap, this._stats[key] + gained);
+    const applied = next - this._stats[key];
+    this._stats[key] = next;
+    return applied;
   }
 }
 

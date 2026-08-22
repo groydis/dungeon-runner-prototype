@@ -17,14 +17,15 @@
         <header class="hud-top">
           <h1>Dungeon Runner</h1>
           <p id="distance">Distance: 0</p>
+          <p id="class-name">CLASS: —</p>
           <div class="hud-progress">
             <p id="level">LVL: 1</p>
             <p id="experience">XP: 0 / 3</p>
           </div>
           <div class="hud-resources">
             <p id="gold">Gold: 0</p>
-            <p id="attack">ATK: 5</p>
-            <p id="evade">EVA: 1</p>
+            <p id="attack">ATK: —</p>
+            <p id="evade">EVA: —</p>
           </div>
           <div class="health">
             <p id="health-text">HP 20 / 20</p>
@@ -167,6 +168,72 @@
             <span id="level-up-evasive-title" class="level-up-choice-title">Evasive</span>
             <span id="level-up-evasive-desc" class="level-up-choice-desc">+5 Evade (max 20)</span>
             <span id="level-up-evasive-reason" class="level-up-choice-reason"></span>
+          </button>
+        </div>
+      </div>
+      <div
+        id="class-select"
+        class="class-select"
+        role="dialog"
+        aria-labelledby="class-select-title"
+        aria-modal="true"
+      >
+        <div class="class-select-card">
+          <h2 id="class-select-title">CHOOSE YOUR CLASS</h2>
+          <button
+            type="button"
+            id="class-select-rogue"
+            class="class-option"
+            aria-label="Select Rogue"
+          >
+            <span id="class-rogue-name" class="class-option-name">Rogue</span>
+            <span id="class-rogue-desc" class="class-option-desc">Nimble survivor with the best chance to slip past threats.</span>
+            <span id="class-rogue-stats" class="class-option-stats">HP 18 · ATK 5 · DEF 1 · EVA 6</span>
+            <span class="class-option-select">Select Rogue</span>
+          </button>
+          <button
+            type="button"
+            id="class-select-ranger"
+            class="class-option"
+            aria-label="Select Ranger"
+          >
+            <span id="class-ranger-name" class="class-option-name">Ranger</span>
+            <span id="class-ranger-desc" class="class-option-desc">Flexible fighter with reliable early damage.</span>
+            <span id="class-ranger-stats" class="class-option-stats">HP 20 · ATK 6 · DEF 1 · EVA 3</span>
+            <span class="class-option-select">Select Ranger</span>
+          </button>
+          <button
+            type="button"
+            id="class-select-mage"
+            class="class-option"
+            aria-label="Select Mage"
+          >
+            <span id="class-mage-name" class="class-option-name">Mage</span>
+            <span id="class-mage-desc" class="class-option-desc">Fragile but devastating without needing magic abilities yet.</span>
+            <span id="class-mage-stats" class="class-option-stats">HP 16 · ATK 8 · DEF 0 · EVA 2</span>
+            <span class="class-option-select">Select Mage</span>
+          </button>
+          <button
+            type="button"
+            id="class-select-knight"
+            class="class-option"
+            aria-label="Select Knight"
+          >
+            <span id="class-knight-name" class="class-option-name">Knight</span>
+            <span id="class-knight-desc" class="class-option-desc">Armoured and dependable under sustained damage.</span>
+            <span id="class-knight-stats" class="class-option-stats">HP 26 · ATK 4 · DEF 3 · EVA 0</span>
+            <span class="class-option-select">Select Knight</span>
+          </button>
+          <button
+            type="button"
+            id="class-select-barbarian"
+            class="class-option"
+            aria-label="Select Barbarian"
+          >
+            <span id="class-barbarian-name" class="class-option-name">Barbarian</span>
+            <span id="class-barbarian-desc" class="class-option-desc">Huge health and damage, with no defensive tricks.</span>
+            <span id="class-barbarian-stats" class="class-option-stats">HP 28 · ATK 7 · DEF 0 · EVA 0</span>
+            <span class="class-option-select">Select Barbarian</span>
           </button>
         </div>
       </div>

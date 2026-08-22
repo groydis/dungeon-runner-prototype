@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { evadeHudText } from '../ui/HudView';
-import { createPlayerStats } from './Combatant';
 import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ROW,
-  PLAYER_BASE_EVADE,
   PLAYER_EVADE_MAX,
 } from './config';
-import { GameState } from './GameState';
+import { getPlayerClassDefinition } from './definitions/classes';
+import { GameState, type GameStateOptions } from './GameState';
 import { Merchant } from './Merchant';
 import { Player } from './Player';
 import { mulberry32 } from './random';
@@ -24,8 +23,16 @@ import {
   type ShopView,
 } from './shop';
 
+function createState(options: GameStateOptions = {}): GameState {
+  return new GameState({ playerClass: 'ranger', ...options });
+}
+
+function rangerClass() {
+  return getPlayerClassDefinition('ranger');
+}
+
 function seededState(): GameState {
-  return new GameState({
+  return createState({
     createRng: () => mulberry32(123),
     rollAvoidance: () => true,
   });
@@ -95,7 +102,7 @@ function openSeededShop(state: GameState = seededState()): GameState {
 }
 
 function baseStats(): ShopStatSnapshot {
-  return shopStatSnapshot(new Player());
+  return shopStatSnapshot(new Player('ranger'));
 }
 
 function offerOf(view: ShopView | null, id: ShopOfferId) {
@@ -108,7 +115,7 @@ function offerOf(view: ShopView | null, id: ShopOfferId) {
 
 describe('Player', () => {
   it('cannot heal above max HP', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     expect(player.heal(5)).toBe(0);
     expect(player.stats.health).toBe(player.stats.maxHealth);
 
@@ -118,7 +125,7 @@ describe('Player', () => {
   });
 
   it('never lets gold become negative', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     expect(player.trySpendGold(1)).toBe(false);
     expect(player.gold).toBe(0);
 
@@ -130,45 +137,47 @@ describe('Player', () => {
   });
 
   it('resets attack upgrades with the rest of the run', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     player.increaseAttack(1);
-    expect(player.stats.attack).toBe(6);
+    expect(player.stats.attack).toBe(rangerClass().startingStats.attack + 1);
     player.reset();
-    expect(player.stats).toEqual(createPlayerStats());
+    expect(player.stats).toEqual(rangerClass().startingStats);
     expect(player.gold).toBe(0);
+    expect(player.evade).toBe(rangerClass().startingEvade);
   });
 
   it('starts at level 1 with 0 XP and the first threshold at 3', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     expect(player.level).toBe(1);
     expect(player.experience).toBe(0);
     expect(player.nextLevelExperience).toBe(3);
   });
 
   it('raises max HP without healing current HP', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     player.takeDamage(5);
     expect(player.increaseMaxHealth(1)).toBe(1);
-    expect(player.stats.maxHealth).toBe(21);
-    expect(player.stats.health).toBe(15);
+    expect(player.stats.maxHealth).toBe(rangerClass().startingStats.maxHealth + 1);
+    expect(player.stats.health).toBe(rangerClass().startingStats.health - 5);
   });
 
   it('raises defence through a focused Player method', () => {
-    const player = new Player();
+    const player = new Player('ranger');
     expect(player.increaseDefence(1)).toBe(1);
-    expect(player.stats.defence).toBe(2);
+    expect(player.stats.defence).toBe(rangerClass().startingStats.defence + 1);
   });
 
-  it('starts at 1 evade, never exceeds 20, and restores 1 on reset', () => {
-    const player = new Player();
-    expect(player.evade).toBe(PLAYER_BASE_EVADE);
+  it('starts at the class evade, never exceeds 20, and restores that class evade on reset', () => {
+    const player = new Player('ranger');
+    const startEvade = rangerClass().startingEvade;
+    expect(player.evade).toBe(startEvade);
     expect(player.increaseEvade(5)).toBe(5);
-    expect(player.evade).toBe(6);
-    expect(player.increaseEvade(100)).toBe(PLAYER_EVADE_MAX - 6);
+    expect(player.evade).toBe(startEvade + 5);
+    expect(player.increaseEvade(100)).toBe(PLAYER_EVADE_MAX - (startEvade + 5));
     expect(player.evade).toBe(PLAYER_EVADE_MAX);
     expect(player.increaseEvade(5)).toBe(0);
     player.reset();
-    expect(player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(player.evade).toBe(startEvade);
   });
 });
 
@@ -200,7 +209,7 @@ describe('shop offers', () => {
       false,
     );
 
-    const atAttackCap = { ...full, attack: 12 };
+    const atAttackCap = { ...full, attack: SHOP_OFFER_CATALOG.sharpened.cap };
     expect(
       evaluateShopOffer(merchant, 'sharpened', 99, atAttackCap, progress).reason,
     ).toBe('capped');
@@ -226,7 +235,12 @@ describe('shop offers', () => {
     expect(shopOfferPrice('armoured', progress)).toBe(3);
     expect(shopOfferPrice('evasive', progress)).toBe(2);
 
-    const view = buildShopView(merchant, 10, { ...stats, attack: 6 }, progress);
+    const view = buildShopView(
+      merchant,
+      10,
+      { ...stats, attack: rangerClass().startingStats.attack + 1 },
+      progress,
+    );
     expect(offerOf(view, 'sharpened').cost).toBe(4);
     expect(offerOf(view, 'vitality').cost).toBe(2);
     expect(offerOf(view, 'armoured').cost).toBe(3);
@@ -255,7 +269,7 @@ describe('GameState shop flow', () => {
     state.player.addGold(3);
     expect(state.canBuyShopOffer('sharpened')).toBe(true);
     expect(state.buyShopOffer('sharpened').success).toBe(true);
-    expect(state.playerStats.attack).toBe(6);
+    expect(state.playerStats.attack).toBe(rangerClass().startingStats.attack + 1);
     expect(state.gold).toBe(0);
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
     expect(state.buyShopOffer('sharpened').reason).toBe('unaffordable');
@@ -263,8 +277,8 @@ describe('GameState shop flow', () => {
     expect(offerOf(state.getShopView(), 'vitality').cost).toBe(2);
 
     state.reset();
-    expect(state.playerStats).toEqual(createPlayerStats());
-    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.playerStats).toEqual(rangerClass().startingStats);
+    expect(state.player.evade).toBe(rangerClass().startingEvade);
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
   });
@@ -317,10 +331,10 @@ describe('GameState shop flow', () => {
     });
 
     state.player.increaseAttack(SHOP_OFFER_CATALOG.sharpened.cap - state.player.stats.attack);
-    expect(state.player.stats.attack).toBe(12);
+    expect(state.player.stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
     expect(state.buyShopOffer('sharpened').reason).toBe('capped');
-    expect(state.player.stats.attack).toBe(12);
+    expect(state.player.stats.attack).toBe(SHOP_OFFER_CATALOG.sharpened.cap);
     expect(state.gold).toBe(10);
     expect(state.canBuyShopOffer('vitality')).toBe(true);
   });
@@ -349,11 +363,11 @@ describe('GameState shop flow', () => {
   });
 
   it('never lets level-up Evasive raise Evade above 20', () => {
-    const state = new GameState({
+    const state = createState({
       createDropRng: () => () => 0,
       rollAvoidance: () => true,
     });
-    state.player.increaseEvade(15);
+    state.player.increaseEvade(13);
     expect(state.player.evade).toBe(16);
     state.player.addExperience(2);
 
@@ -388,8 +402,8 @@ describe('GameState shop flow', () => {
     expect(state.status).toBe('You leave the merchant behind.');
 
     state.reset();
-    expect(state.player.stats).toEqual(createPlayerStats());
-    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.player.stats).toEqual(rangerClass().startingStats);
+    expect(state.player.evade).toBe(rangerClass().startingEvade);
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
 

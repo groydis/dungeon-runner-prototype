@@ -14,6 +14,7 @@ export function createCombatStats(stats: CombatStats): CombatStats {
   };
 }
 
+/** Combat-math fixture. Live player bases come from class definitions. */
 export function createPlayerStats(): CombatStats {
   return createCombatStats({
     maxHealth: 20,

@@ -50,6 +50,11 @@ import {
 import { Grid } from './Grid';
 import { createMerchant, type Merchant } from './Merchant';
 import { createMonster, type Monster } from './Monster';
+import {
+  buildClassSelectionView,
+  type ClassSelectionView,
+  type PlayerClassId,
+} from './definitions/classes';
 import { Player } from './Player';
 import { type Rng } from './random';
 import {
@@ -121,6 +126,7 @@ export interface CombatFinishResult {
 }
 
 export interface HudSnapshot {
+  className: string;
   distance: number;
   gold: number;
   attack: number;
@@ -134,6 +140,7 @@ export interface HudSnapshot {
 }
 
 export interface GameStateOptions {
+  playerClass?: PlayerClassId;
   rollAvoidance?: AvoidanceRoll;
   createEnemyStats?: EnemyStatsFactory;
   createRng?: () => Rng;
@@ -143,7 +150,7 @@ export interface GameStateOptions {
 }
 
 export class GameState {
-  readonly player = new Player();
+  private _player: Player | null = null;
 
   private readonly grid = new Grid();
   private readonly monsters = new Map<string, Monster>();
@@ -181,7 +188,24 @@ export class GameState {
     this.rollAvoidance =
       options.rollAvoidance ??
       ((chance = 0) => rollAvoidance(chance, this.evadeRng));
-    this.populateInitialRows();
+    if (options.playerClass) {
+      this.beginRun(options.playerClass);
+    }
+  }
+
+  get player(): Player {
+    if (!this._player) {
+      throw new Error('No class selected');
+    }
+    return this._player;
+  }
+
+  get hasSelectedClass(): boolean {
+    return this._player !== null;
+  }
+
+  get selectedClassId(): PlayerClassId | null {
+    return this._player?.classId ?? null;
   }
 
   get distance(): number {
@@ -213,19 +237,50 @@ export class GameState {
   }
 
   getHudSnapshot(): HudSnapshot {
-    const stats = this.player.stats;
+    if (!this._player) {
+      return {
+        className: '',
+        distance: 0,
+        gold: 0,
+        attack: 0,
+        evade: 0,
+        level: 1,
+        experience: 0,
+        nextLevelExperience: 3,
+        health: 0,
+        maxHealth: 0,
+        status: this._status,
+      };
+    }
+    const stats = this._player.stats;
     return {
+      className: this._player.className,
       distance: this._distance,
-      gold: this.player.gold,
+      gold: this._player.gold,
       attack: stats.attack,
-      evade: this.player.evade,
-      level: this.player.level,
-      experience: this.player.experience,
-      nextLevelExperience: this.player.nextLevelExperience,
+      evade: this._player.evade,
+      level: this._player.level,
+      experience: this._player.experience,
+      nextLevelExperience: this._player.nextLevelExperience,
       health: stats.health,
       maxHealth: stats.maxHealth,
       status: this._status,
     };
+  }
+
+  getClassSelectionView(): ClassSelectionView {
+    return buildClassSelectionView();
+  }
+
+  selectClass(classId: PlayerClassId): void {
+    this.beginRun(classId);
+  }
+
+  /** Clear the current run and return to no-class-selected. */
+  clearSelectedClass(): void {
+    this._player = null;
+    this.clearRunWorld();
+    this.rebuildStreams();
   }
 
   getTile(row: number, col: number): Tile | undefined {
@@ -278,10 +333,13 @@ export class GameState {
   }
 
   isForwardTile(row: number, col: number): boolean {
+    if (!this._player) {
+      return false;
+    }
     return (
-      row === this.player.row + 1 &&
+      row === this._player.row + 1 &&
       this.isValidLane(col) &&
-      Math.abs(col - this.player.col) <= 1 &&
+      Math.abs(col - this._player.col) <= 1 &&
       !this.isOccupiedByMonster(row, col)
     );
   }
@@ -291,6 +349,9 @@ export class GameState {
    * Combat is not played back here; callers still apply the ordered log.
    */
   resolveCompletedMove(toCol: number): TurnResolution {
+    if (!this._player) {
+      throw new Error('Cannot move before a class is selected');
+    }
     if (this._runOver) {
       throw new Error('Cannot move after the run is over');
     }
@@ -324,10 +385,13 @@ export class GameState {
   }
 
   getShopView(): ShopView | null {
+    if (!this.activeShop || !this._player) {
+      return null;
+    }
     return buildShopView(
-      this.activeShop?.merchant ?? null,
-      this.player.gold,
-      shopStatSnapshot(this.player),
+      this.activeShop.merchant,
+      this._player.gold,
+      shopStatSnapshot(this._player),
       this.shopProgress,
     );
   }
@@ -470,7 +534,11 @@ export class GameState {
     if (level === undefined) {
       return null;
     }
-    return buildLevelUpView(level, this.player.experience, this.player.evade);
+    return buildLevelUpView(
+      level,
+      this.player.experience,
+      shopStatSnapshot(this.player),
+    );
   }
 
   chooseLevelUp(choice: LevelUpChoice): LevelUpResult {
@@ -487,7 +555,10 @@ export class GameState {
       };
     }
 
-    const eligibility = evaluateLevelUpChoice(choice, this.player.evade);
+    const eligibility = evaluateLevelUpChoice(
+      choice,
+      shopStatSnapshot(this.player),
+    );
     if (!eligibility.available) {
       return {
         success: false,
@@ -519,7 +590,21 @@ export class GameState {
   }
 
   reset(): void {
-    this.player.reset();
+    if (!this._player) {
+      this.clearSelectedClass();
+      return;
+    }
+    this.beginRun(this._player.classId);
+  }
+
+  private beginRun(classId: PlayerClassId): void {
+    this._player = new Player(classId);
+    this.clearRunWorld();
+    this.rebuildStreams();
+    this.populateInitialRows();
+  }
+
+  private clearRunWorld(): void {
     this._distance = 0;
     this._status = '';
     this._runOver = false;
@@ -531,11 +616,13 @@ export class GameState {
     this.shopProgress = createShopProgress();
     this.pendingLevelUps.length = 0;
     this.recipes.clear();
+    this.grid.clear();
+  }
+
+  private rebuildStreams(): void {
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
-    this.grid.clear();
-    this.populateInitialRows();
   }
 
   private prepareAhead(): void {
