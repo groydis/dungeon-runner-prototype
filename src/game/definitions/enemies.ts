@@ -1,6 +1,6 @@
 import { type CombatStats, createCombatStats } from '../Combatant';
 
-export type EnemyType = 'caveRat';
+export type EnemyType = 'caveRat' | 'cryptGuard' | 'boneBrute';
 
 export interface EnemyDefinition {
   type: EnemyType;
@@ -25,6 +25,28 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 0,
     },
     renderKey: 'caveRat',
+  },
+  cryptGuard: {
+    type: 'cryptGuard',
+    name: 'Crypt Guard',
+    startingStats: {
+      maxHealth: 12,
+      health: 12,
+      attack: 4,
+      defence: 1,
+    },
+    renderKey: 'cryptGuard',
+  },
+  boneBrute: {
+    type: 'boneBrute',
+    name: 'Bone Brute',
+    startingStats: {
+      maxHealth: 20,
+      health: 20,
+      attack: 6,
+      defence: 1,
+    },
+    renderKey: 'boneBrute',
   },
 };
 

@@ -58,6 +58,32 @@ describe('combat', () => {
     expect(caveRat).toEqual(ENEMY_DEFINITIONS.caveRat.startingStats);
   });
 
+  it('resolves Crypt Guard and Bone Brute with the existing damage formula', () => {
+    const guard = createEnemyStats('cryptGuard');
+    const brute = createEnemyStats('boneBrute');
+
+    expect(calculateDamage(player.attack, guard.defence)).toBe(4);
+    expect(calculateDamage(guard.attack, player.defence)).toBe(3);
+    expect(calculateDamage(player.attack, brute.defence)).toBe(4);
+    expect(calculateDamage(brute.attack, player.defence)).toBe(5);
+
+    const guardFight = resolveAutomaticCombat(player, guard, 'frontOn', {
+      id: 'guard-1',
+      name: 'Crypt Guard',
+    });
+    expect(guardFight.winner).toBe('player');
+    expect(guardFight.monsterName).toBe('Crypt Guard');
+    expect(guardFight.playerHealthAfter).toBe(14);
+
+    const bruteFight = resolveAutomaticCombat(player, brute, 'frontOn', {
+      id: 'brute-1',
+      name: 'Bone Brute',
+    });
+    expect(bruteFight.winner).toBe('monster');
+    expect(bruteFight.monsterName).toBe('Bone Brute');
+    expect(bruteFight.playerHealthAfter).toBe(0);
+  });
+
   it('lets injected fatal rat stats kill the player', () => {
     const fatalRat = enemyStatsFactoryFromSearch('?fatal=1')('caveRat');
     expect(fatalRat.attack).not.toBe(ENEMY_DEFINITIONS.caveRat.startingStats.attack);

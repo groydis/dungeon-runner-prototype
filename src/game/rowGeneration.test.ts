@@ -9,6 +9,7 @@ import {
   START_ROW,
 } from './config';
 import { mulberry32 } from './random';
+import { encounterPoolForRow } from './definitions/encounterPools';
 import {
   createRowRecipe,
   isMerchantRow,
@@ -35,7 +36,13 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
   const kinds = countKinds(recipe);
   for (const lane of recipe) {
     if (lane.kind === 'monster') {
-      expect(lane.enemyType).toBe('caveRat');
+      if (row === DEMO_MONSTER_ROW) {
+        expect(lane.enemyType).toBe('caveRat');
+      } else {
+        expect(encounterPoolForRow(row).map((entry) => entry.item)).toContain(
+          lane.enemyType,
+        );
+      }
     }
   }
   expect((kinds.monster ?? 0) <= 1).toBe(true);

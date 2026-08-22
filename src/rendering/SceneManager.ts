@@ -32,14 +32,16 @@ import {
 import { type CombatLogEntry } from '../game/combat';
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
+import { type EnemyType } from '../game/definitions/enemies';
 import { type GameState, type PickupResult } from '../game/GameState';
-import { type Tile } from '../game/Tile';
+
+const ENEMY_RENDER_KEYS: readonly EnemyType[] = ['caveRat', 'cryptGuard', 'boneBrute'];
 
 interface RowView {
   group: Group;
   tiles: Mesh[];
   hitPlanes: Mesh[];
-  monsters: Mesh[];
+  monsterVariants: Record<EnemyType, Mesh>[];
   golds: Mesh[];
   potions: Mesh[];
   merchants: Group[];
@@ -50,6 +52,7 @@ interface EncounterFxView {
   event: EncounterEvent;
   monsterMesh: Mesh;
   monsterBaseX: number;
+  monsterBaseY: number;
   playerBaseX: number;
 }
 
@@ -58,6 +61,7 @@ interface CombatHitFx {
   isSurpriseStrike: boolean;
   monsterMesh: Mesh;
   monsterBaseX: number;
+  monsterBaseY: number;
   playerBaseX: number;
 }
 
@@ -84,7 +88,9 @@ export class SceneManager {
   private readonly floorMaterialA: MeshStandardMaterial;
   private readonly floorMaterialB: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
-  private readonly monsterMaterial: MeshStandardMaterial;
+  private readonly caveRatMaterial: MeshStandardMaterial;
+  private readonly cryptGuardMaterial: MeshStandardMaterial;
+  private readonly boneBruteMaterial: MeshStandardMaterial;
   private readonly goldMaterial: MeshStandardMaterial;
   private readonly potionMaterial: MeshStandardMaterial;
   private readonly merchantStallMaterial: MeshStandardMaterial;
@@ -135,10 +141,24 @@ export class SceneManager {
       roughness: 0.62,
       metalness: 0.08,
     });
-    this.monsterMaterial = new MeshStandardMaterial({
+    this.caveRatMaterial = new MeshStandardMaterial({
       color: 0xc4372e,
       roughness: 0.45,
       metalness: 0.12,
+      transparent: true,
+      opacity: 1,
+    });
+    this.cryptGuardMaterial = new MeshStandardMaterial({
+      color: 0x6d7d8f,
+      roughness: 0.48,
+      metalness: 0.18,
+      transparent: true,
+      opacity: 1,
+    });
+    this.boneBruteMaterial = new MeshStandardMaterial({
+      color: 0xdc5a28,
+      roughness: 0.42,
+      metalness: 0.1,
       transparent: true,
       opacity: 1,
     });
@@ -222,7 +242,7 @@ export class SceneManager {
   bindWindow(state: GameState, presentation: { interactive: boolean }): void {
     for (let i = 0; i < this.rowViews.length; i += 1) {
       const row = state.player.row + i;
-      this.bindRow(this.rowViews[i], row, state.getRow(row));
+      this.bindRow(this.rowViews[i], row, state);
     }
     this.refreshHighlights(state, presentation);
     this.layoutRows(state.player.row);
@@ -237,7 +257,7 @@ export class SceneManager {
     const farRow = state.player.row + ROW_POOL_SIZE - 1;
     const view = this.rowViews.find((rowView) => rowView.assignedRow === leftBehindRow);
     if (view) {
-      this.bindRow(view, farRow, state.getRow(farRow));
+      this.bindRow(view, farRow, state);
     }
   }
 
@@ -252,7 +272,7 @@ export class SceneManager {
       }
     }
     for (const view of this.rowViews) {
-      this.applyTileChrome(view, state.getRow(view.assignedRow));
+      this.applyTileChrome(view, state);
     }
   }
 
@@ -309,20 +329,26 @@ export class SceneManager {
   beginEncounterFx(events: EncounterEvent[], playerCol: number): void {
     this.encounterFx = [];
     for (const event of events) {
-      const mesh = this.findMonsterMesh(event.monster.row, event.monster.col);
+      const mesh = this.findMonsterMesh(
+        event.monster.row,
+        event.monster.col,
+        event.monster.renderKey,
+      );
       if (!mesh) {
         continue;
       }
+      const baseY = monsterBaseY(mesh);
       mesh.visible = true;
       mesh.scale.setScalar(1);
       mesh.position.x = laneWorldX(event.monster.col);
-      mesh.position.y = 0.46;
+      mesh.position.y = baseY;
       const material = mesh.material as MeshStandardMaterial;
       material.opacity = 1;
       this.encounterFx.push({
         event,
         monsterMesh: mesh,
         monsterBaseX: laneWorldX(event.monster.col),
+        monsterBaseY: baseY,
         playerBaseX: laneWorldX(playerCol),
       });
     }
@@ -334,7 +360,7 @@ export class SceneManager {
       const material = fx.monsterMesh.material as MeshStandardMaterial;
       if (fx.event.kind === 'evade') {
         fx.monsterMesh.scale.setScalar(Math.max(0.02, 1 - t));
-        fx.monsterMesh.position.y = 0.46 + t * 0.32;
+        fx.monsterMesh.position.y = fx.monsterBaseY + t * 0.32;
         material.opacity = 1 - t;
         continue;
       }
@@ -371,6 +397,7 @@ export class SceneManager {
       isSurpriseStrike: entry.isSurpriseStrike,
       monsterMesh: mesh,
       monsterBaseX: laneWorldX(monsterCol),
+      monsterBaseY: monsterBaseY(mesh),
       playerBaseX: laneWorldX(playerCol),
     };
   }
@@ -419,7 +446,7 @@ export class SceneManager {
     if (fx) {
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
-      fx.monsterMesh.position.y = 0.46;
+      fx.monsterMesh.position.y = fx.monsterBaseY;
       const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
       monsterMaterial.emissive.setHex(0x000000);
       monsterMaterial.emissiveIntensity = 0;
@@ -454,7 +481,7 @@ export class SceneManager {
       fx.monsterMesh.visible = false;
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
-      fx.monsterMesh.position.y = 0.46;
+      fx.monsterMesh.position.y = fx.monsterBaseY;
       (fx.monsterMesh.material as MeshStandardMaterial).opacity = 1;
       this.playerMesh.position.x = fx.playerBaseX;
     }
@@ -485,7 +512,9 @@ export class SceneManager {
   private buildRowPool(): void {
     const tileGeo = new BoxGeometry(TILE_SIZE, 0.14, TILE_SIZE);
     const hitGeo = new PlaneGeometry(TILE_PITCH * 0.96, TILE_PITCH * 0.96);
-    const monsterGeo = new SphereGeometry(0.28, 10, 8);
+    const caveRatGeo = new SphereGeometry(0.28, 10, 8);
+    const cryptGuardGeo = new CapsuleGeometry(0.16, 0.52, 4, 8);
+    const boneBruteGeo = new BoxGeometry(0.5, 0.62, 0.5);
     const goldGeo = new CylinderGeometry(0.16, 0.16, 0.05, 14);
     const potionGeo = new CapsuleGeometry(0.09, 0.16, 3, 8);
     const stallGeo = new BoxGeometry(0.38, 0.16, 0.26);
@@ -497,7 +526,7 @@ export class SceneManager {
       const group = new Group();
       const tiles: Mesh[] = [];
       const hitPlanes: Mesh[] = [];
-      const monsters: Mesh[] = [];
+      const monsterVariants: Record<EnemyType, Mesh>[] = [];
       const golds: Mesh[] = [];
       const potions: Mesh[] = [];
       const merchants: Group[] = [];
@@ -510,9 +539,12 @@ export class SceneManager {
         hit.rotation.x = -Math.PI / 2;
         hit.position.set(laneWorldX(col), 0.12, 0);
 
-        const monster = new Mesh(monsterGeo, this.monsterMaterial.clone());
-        monster.position.set(laneWorldX(col), 0.46, 0);
-        monster.visible = false;
+        const variants = this.createEnemyPlaceholders(
+          col,
+          caveRatGeo,
+          cryptGuardGeo,
+          boneBruteGeo,
+        );
 
         const gold = new Mesh(goldGeo, this.goldMaterial.clone());
         gold.position.set(laneWorldX(col), 0.38, 0);
@@ -531,10 +563,10 @@ export class SceneManager {
           lanternGeo,
         );
 
-        group.add(tile, hit, monster, gold, potion, merchant);
+        group.add(tile, hit, ...Object.values(variants), gold, potion, merchant);
         tiles.push(tile);
         hitPlanes.push(hit);
-        monsters.push(monster);
+        monsterVariants.push(variants);
         golds.push(gold);
         potions.push(potion);
         merchants.push(merchant);
@@ -545,7 +577,7 @@ export class SceneManager {
         group,
         tiles,
         hitPlanes,
-        monsters,
+        monsterVariants,
         golds,
         potions,
         merchants,
@@ -554,21 +586,22 @@ export class SceneManager {
     }
   }
 
-  private bindRow(view: RowView, row: number, tiles: Tile[] | undefined): void {
+  private bindRow(view: RowView, row: number, state: GameState): void {
     this.merchantLeaveFx = this.merchantLeaveFx.filter(
       (fx) => !view.merchants.includes(fx.group),
     );
     view.assignedRow = row;
-    this.applyTileChrome(view, tiles);
+    this.applyTileChrome(view, state);
   }
 
-  private applyTileChrome(view: RowView, tiles: Tile[] | undefined): void {
+  private applyTileChrome(view: RowView, state: GameState): void {
+    const tiles = state.getRow(view.assignedRow);
     for (let col = 0; col < LANE_COUNT; col += 1) {
       const highlighted =
         view.assignedRow === this.highlightRow && this.highlightCols.has(col);
       const mesh = view.tiles[col];
       const hit = view.hitPlanes[col];
-      const monster = view.monsters[col];
+      const variants = view.monsterVariants[col];
       const gold = view.golds[col];
       const potion = view.potions[col];
       const merchant = view.merchants[col];
@@ -585,10 +618,16 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      const playingMonsterFx =
-        this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
-        this.combatHit?.monsterMesh === monster;
-      monster.visible = playingMonsterFx || tile?.content.type === 'monster';
+      const renderKey = state.getMonsterAt(view.assignedRow, col)?.renderKey;
+      for (const key of ENEMY_RENDER_KEYS) {
+        const monster = variants[key];
+        const playingMonsterFx =
+          this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
+          this.combatHit?.monsterMesh === monster;
+        monster.visible =
+          playingMonsterFx ||
+          (tile?.content.type === 'monster' && key === renderKey);
+      }
 
       const collectingGold = this.collectFx.some((fx) => fx.mesh === gold);
       const collectingPotion = this.collectFx.some((fx) => fx.mesh === potion);
@@ -671,9 +710,44 @@ export class SceneManager {
     this.collectFx = remaining;
   }
 
-  private findMonsterMesh(row: number, col: number): Mesh | undefined {
+  private findMonsterMesh(
+    row: number,
+    col: number,
+    renderKey?: string,
+  ): Mesh | undefined {
     const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
-    return view?.monsters[col];
+    const variants = view?.monsterVariants[col];
+    if (!variants) {
+      return undefined;
+    }
+    if (renderKey && isEnemyRenderKey(renderKey)) {
+      return variants[renderKey];
+    }
+    return ENEMY_RENDER_KEYS.map((key) => variants[key]).find((mesh) => mesh.visible);
+  }
+
+  private createEnemyPlaceholders(
+    col: number,
+    caveRatGeo: SphereGeometry,
+    cryptGuardGeo: CapsuleGeometry,
+    boneBruteGeo: BoxGeometry,
+  ): Record<EnemyType, Mesh> {
+    const caveRat = new Mesh(caveRatGeo, this.caveRatMaterial.clone());
+    caveRat.position.set(laneWorldX(col), 0.46, 0);
+    caveRat.userData.baseY = 0.46;
+    caveRat.visible = false;
+
+    const cryptGuard = new Mesh(cryptGuardGeo, this.cryptGuardMaterial.clone());
+    cryptGuard.position.set(laneWorldX(col), 0.58, 0);
+    cryptGuard.userData.baseY = 0.58;
+    cryptGuard.visible = false;
+
+    const boneBrute = new Mesh(boneBruteGeo, this.boneBruteMaterial.clone());
+    boneBrute.position.set(laneWorldX(col), 0.52, 0);
+    boneBrute.userData.baseY = 0.52;
+    boneBrute.visible = false;
+
+    return { caveRat, cryptGuard, boneBrute };
   }
 
   private findGoldMesh(row: number, col: number): Mesh | undefined {
@@ -833,4 +907,12 @@ export class SceneManager {
     group.position.set(0, 0.62, 0);
     return { group, body };
   }
+}
+
+function monsterBaseY(mesh: Mesh): number {
+  return typeof mesh.userData.baseY === 'number' ? mesh.userData.baseY : 0.46;
+}
+
+function isEnemyRenderKey(key: string): key is EnemyType {
+  return (ENEMY_RENDER_KEYS as readonly string[]).includes(key);
 }

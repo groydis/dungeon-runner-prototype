@@ -12,7 +12,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 
 - Floor tiles are simple dark stone boxes.
 - The player is a green capsule.
-- Rows can contain empty lanes, Cave Rats, gold, or health potions.
+- Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, or health potions.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
 - Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
@@ -31,6 +31,7 @@ Included:
 - Smooth lane-change, hop, and board-scroll animation
 - Row recycling: the row that leaves the screen is reused as the new far row
 - A demo Cave Rat after a 3-row safe opening, then weighted procedural rows
+- Distance-scaled enemy pools (Cave Rat, Crypt Guard, Bone Brute)
 - Gold and potion pickups with run-scoped gold and healing
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
@@ -41,7 +42,7 @@ Included:
 
 Not included:
 
-- Equipment, levelling, crits, extra enemy types, or an inventory screen
+- Equipment, levelling, crits, unique enemy abilities, or an inventory screen
 - Traps, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - GLB characters or environment art
@@ -72,7 +73,7 @@ Query-string helpers (no on-screen debug UI):
 - `/?avoid=1` — always evade a side pass
 - `/?avoid=0` — always Surprise Attack combat on a side pass
 - `/?fatal=1` — testing override: Cave Rat **attack** is raised on top of `ENEMY_DEFINITIONS`, enough to kill the player
-- `/?seed=123` — seeded row generation only, including Merchant lane placement; Restart Run replays the same content sequence
+- `/?seed=123` — seeded row generation, including Merchant lanes and enemy-type picks; Restart Run replays the same content sequence
 
 ## Controls
 
@@ -113,6 +114,7 @@ src/
     config.ts             Shared grid and timing constants
     definitions/
       enemies.ts          Authoritative enemy names, base stats, render keys
+      encounterPools.ts   Distance-based enemy-type weights
   ui/
     HudView.ts            Distance, gold, attack, HP, status
     GameOverView.ts       Death overlay and Restart Run
@@ -135,7 +137,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
 - **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
-- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, and render key. Row recipes include `enemyType`. `?fatal=1` is a test override layered on that definition, not a second stats table.
+- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, and render key. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -146,7 +148,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, player gold/healing, Merchant purchases, enemy-definition spawning, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -199,12 +201,17 @@ Safety guarantees:
 - Merchant rows never appear in `0..4`.
 - From row `5` onward, each row is rolled from early prototype weights unless a Merchant is due:
   - 45% all empty
-  - 25% one Cave Rat
+  - 25% one monster
   - 15% one gold
   - 10% one potion
-  - 5% one Cave Rat + one loot item (gold or potion, 50/50)
+  - 5% one monster + one loot item (gold or potion, 50/50)
+- The monster on a monster or monster-plus-loot row is then chosen from the distance pool:
+  - Rows `5–19`: 100% Cave Rat
+  - Rows `20–39`: 75% Cave Rat, 25% Crypt Guard
+  - Rows `40+`: 50% Cave Rat, 35% Crypt Guard, 15% Bone Brute
+- All three enemies use the same encounter and combat rules. Only stats and placeholder look differ.
 - Every generated row has at least one empty lane. There is never a three-wide monster wall.
-- At most one Cave Rat and at most one collectible per row.
+- At most one monster and at most one collectible per row.
 - Two entities never share a tile.
 
 Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14`):
@@ -213,7 +220,7 @@ Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14
 - Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
 - No monster, gold, potion, or other content on that row
 
-`?seed=<number>` seeds **row generation only** (Mulberry32), including which lane the Merchant occupies. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence and Merchant lanes.
+`?seed=<number>` seeds **row generation only** (Mulberry32), including Merchant lanes and enemy-type rolls. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence, Merchant lanes, and enemy types.
 
 Gold and potions:
 
@@ -276,12 +283,14 @@ type EncounterEvent =
 
 Starting stats:
 
-|        | HP | Attack | Defence |
-|--------|----|--------|---------|
-| Player | 20 | 5      | 1       |
-| Cave Rat | 8 | 3      | 0       |
+|            | HP | Attack | Defence |
+|------------|----|--------|---------|
+| Player     | 20 | 5      | 1       |
+| Cave Rat   | 8  | 3      | 0       |
+| Crypt Guard | 12 | 4      | 1       |
+| Bone Brute | 20 | 6      | 1       |
 
-Each Cave Rat is spawned from `ENEMY_DEFINITIONS.caveRat` and gets a fresh stats clone. Damage is:
+Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. Placeholder meshes differ by `renderKey` (`caveRat` small red sphere, `cryptGuard` tall blue-grey capsule, `boneBrute` larger orange block). Unique abilities and GLB models are still future work. Damage is:
 
 ```text
 damage = Math.max(1, attacker.attack - defender.defence)
@@ -304,9 +313,9 @@ The fight is resolved immediately in game logic. The renderer then plays each lo
 
 Outcomes:
 
-- Player wins: `You defeated the Cave Rat.` Movement unlocks.
-- Player dies: `You were killed by the Cave Rat.` Input locks and the overlay appears.
-- Evade: `You slip past the Cave Rat.` No combat, no HP change.
+- Player wins: `You defeated the [enemy name].` Movement unlocks.
+- Player dies: `You were killed by the [enemy name].` Input locks and the overlay appears.
+- Evade: `You slip past the [enemy name].` No combat, no HP change.
 
 ## Death and restart
 
@@ -322,7 +331,7 @@ Restart Run resets player stats (including attack), gold, position, distance, mo
 
 ## Intended next steps
 
-- Equipment, levelling, crits, and more enemy types
+- Equipment, levelling, crits, and unique enemy abilities
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
 - Smarter avoidance than a flat 50/50
 - More shop stock, defence upgrades, or meta progression; more loot kinds
