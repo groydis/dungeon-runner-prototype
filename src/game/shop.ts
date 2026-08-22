@@ -1,3 +1,4 @@
+import { PLAYER_EVADE_MAX } from './config';
 import { type Merchant } from './Merchant';
 import { type CombatStats } from './Combatant';
 
@@ -50,7 +51,7 @@ export const SHOP_OFFER_CATALOG: Record<ShopOfferId, ShopOfferCatalogEntry> = {
     title: 'Evasive',
     description: '+1 Evade',
     firstPrice: 2,
-    cap: 20,
+    cap: PLAYER_EVADE_MAX,
     stat: 'evade',
   },
 };

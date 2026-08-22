@@ -26,5 +26,11 @@ describe('level and XP HUD text', () => {
       'Armoured',
       'Evasive',
     ]);
+    expect(view.choices.find((choice) => choice.id === 'evasive')?.description).toBe(
+      '+5 Evade (max 20)',
+    );
+    expect(view.choices.find((choice) => choice.id === 'evasive')?.description).not.toContain(
+      '%',
+    );
   });
 });

@@ -22,9 +22,9 @@ export const SAFE_ROWS_AFTER_START = 3;
 export const GOLD_AMOUNT = 1;
 export const POTION_HEAL = 4;
 
-/** Run-scoped player Evade. Side-pass chance is evade − perception, clamped here. */
+/** Run-scoped player Evade. Hard maximum for Merchant and level-up upgrades. */
 export const PLAYER_BASE_EVADE = 1;
-export const EVADE_CHANCE_MAX = 85;
+export const PLAYER_EVADE_MAX = 20;
 
 /** First shop at this row, then every N rows: 14, 28, 42, … */
 export const SHOP_ROW_INTERVAL = 14;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EVADE_CHANCE_MAX, PLAYER_BASE_EVADE } from './config';
+import { PLAYER_BASE_EVADE } from './config';
 import { ENEMY_DEFINITIONS } from './definitions/enemies';
 import {
   avoidanceRollerFromSearch,
@@ -66,10 +66,8 @@ describe('evade chance', () => {
   it('clamps the final chance to 0 and 85', () => {
     expect(evadeChance(0, 10)).toBe(0);
     expect(evadeChance(4, 10)).toBe(0);
-    expect(evadeChance(90, 0)).toBe(EVADE_CHANCE_MAX);
-    expect(evadeChance(EVADE_CHANCE_MAX, ENEMY_DEFINITIONS.caveRat.perception)).toBe(
-      EVADE_CHANCE_MAX,
-    );
+    expect(evadeChance(90, 0)).toBe(85);
+    expect(evadeChance(85, ENEMY_DEFINITIONS.caveRat.perception)).toBe(85);
   });
 
   it('rolls against the computed percent, not a flat 50/50', () => {

@@ -1,4 +1,4 @@
-import { EVADE_CHANCE_MAX, PLAYER_BASE_EVADE } from './config';
+import { PLAYER_BASE_EVADE } from './config';
 import { type Monster } from './Monster';
 import { type Player } from './Player';
 import { type Rng } from './random';
@@ -24,10 +24,8 @@ export function evadeChance(
   playerEvade: number,
   enemyPerception: number,
 ): number {
-  return Math.min(
-    EVADE_CHANCE_MAX,
-    Math.max(0, playerEvade - enemyPerception),
-  );
+  // Safety clamp on the computed chance only. Player Evade itself never exceeds 20.
+  return Math.min(85, Math.max(0, playerEvade - enemyPerception));
 }
 
 /** `chance` is a percent. `random()` is [0, 1). */

@@ -1,6 +1,6 @@
 import {
-  EVADE_CHANCE_MAX,
   PLAYER_BASE_EVADE,
+  PLAYER_EVADE_MAX,
   START_COL,
   START_ROW,
 } from './config';
@@ -126,7 +126,7 @@ export class Player {
 
   increaseEvade(amount: number): number {
     const gained = Math.max(0, amount);
-    const next = Math.min(EVADE_CHANCE_MAX, this._evade + gained);
+    const next = Math.min(PLAYER_EVADE_MAX, this._evade + gained);
     const applied = next - this._evade;
     this._evade = next;
     return applied;

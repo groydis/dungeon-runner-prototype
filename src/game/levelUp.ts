@@ -1,4 +1,4 @@
-import { EVADE_CHANCE_MAX } from './config';
+import { PLAYER_EVADE_MAX } from './config';
 import { type Player } from './Player';
 import { nextLevelExperience } from './progression';
 
@@ -59,7 +59,7 @@ export const LEVEL_UP_CATALOG: Record<
   },
   evasive: {
     title: 'Evasive',
-    description: `+${LEVEL_UP_EVASIVE_EVADE}% Evade (max ${EVADE_CHANCE_MAX}%)`,
+    description: `+${LEVEL_UP_EVASIVE_EVADE} Evade (max ${PLAYER_EVADE_MAX})`,
   },
 };
 

@@ -38,7 +38,7 @@ Included:
 - Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, level, XP, gold, attack, evade (`EVA: 1`, no `%`), HP text/bar, and status
+- HUD with distance, level, XP, gold, attack, evade (`EVA: 1`, no `%`, hard max 20), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
 - A rare Travelling Merchant shop overlay
 - Death overlay and in-place Restart Run
@@ -314,14 +314,14 @@ Opening the shop does not spend gold. Each visit offers the same four run-scoped
 | Evasive | +1 Evade | 1 | 20 | 2 |
 | Leave | Close the shop and continue | — | — | 0 |
 
-Example Attack prices: `3 → 4 → 5 → …` until attack reaches 12. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches 20 from Merchant purchases.
+Example Attack prices: `3 → 4 → 5 → …` until attack reaches 12. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches its hard maximum of 20.
 
 Rules:
 
 - Purchase buttons disable when the player cannot afford the offer or that stat is already at its Merchant cap.
 - Gold never becomes negative. Unaffordable and capped offers cannot be purchased.
 - Vitality never heals current HP.
-- The Merchant Evade cap is 20. Level-up Evasive can still raise Evade above 20, up to the global internal cap of 85.
+- EVA has a hard maximum of 20. Merchant Evasive and level-up Evasive both stop there.
 - A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats can still be bought.
 - Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
 
@@ -361,7 +361,7 @@ Starting stats:
 
 |            | HP | Attack | Defence | Evade / Perception |
 |------------|----|--------|---------|-------------------:|
-| Player     | 20 | 5      | 1       | EVA 1 |
+| Player     | 20 | 5      | 1       | EVA 1 (hard max 20) |
 | Cave Rat   | 8  | 3      | 0       | Perception 0% |
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
@@ -420,7 +420,7 @@ Crossing a threshold pauses the board and opens a level-up overlay. If one fight
 | Vitality | +1 max HP; current HP is unchanged |
 | Sharpened | +1 attack |
 | Armoured | +1 defence |
-| Evasive | +5% Evade, still capped at 85% |
+| Evasive | +5 Evade, hard maximum 20 |
 
 After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restart Run restores level, XP, pending choices, and the four combat stats to their base values.
 

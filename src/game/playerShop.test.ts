@@ -4,8 +4,8 @@ import { createPlayerStats } from './Combatant';
 import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ROW,
-  EVADE_CHANCE_MAX,
   PLAYER_BASE_EVADE,
+  PLAYER_EVADE_MAX,
 } from './config';
 import { GameState } from './GameState';
 import { Merchant } from './Merchant';
@@ -159,13 +159,14 @@ describe('Player', () => {
     expect(player.stats.defence).toBe(2);
   });
 
-  it('starts at 1 evade, clamps increases to 85, and restores 1 on reset', () => {
+  it('starts at 1 evade, never exceeds 20, and restores 1 on reset', () => {
     const player = new Player();
     expect(player.evade).toBe(PLAYER_BASE_EVADE);
     expect(player.increaseEvade(5)).toBe(5);
     expect(player.evade).toBe(6);
-    expect(player.increaseEvade(100)).toBe(EVADE_CHANCE_MAX - 6);
-    expect(player.evade).toBe(EVADE_CHANCE_MAX);
+    expect(player.increaseEvade(100)).toBe(PLAYER_EVADE_MAX - 6);
+    expect(player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(player.increaseEvade(5)).toBe(0);
     player.reset();
     expect(player.evade).toBe(PLAYER_BASE_EVADE);
   });
@@ -335,13 +336,25 @@ describe('GameState shop flow', () => {
     expect(state.gold).toBe(10);
   });
 
-  it('lets level-up Evasive raise Evade above the Merchant cap of 20, up to 85', () => {
+  it('never lets Merchant Evade purchases exceed 20', () => {
+    const state = openSeededShop();
+    state.player.addGold(300);
+    while (state.canBuyShopOffer('evasive')) {
+      expect(state.buyShopOffer('evasive').success).toBe(true);
+      expect(state.player.evade).toBeLessThanOrEqual(PLAYER_EVADE_MAX);
+    }
+    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(state.buyShopOffer('evasive').reason).toBe('capped');
+    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
+  });
+
+  it('never lets level-up Evasive raise Evade above 20', () => {
     const state = new GameState({
       createDropRng: () => () => 0,
       rollAvoidance: () => true,
     });
-    state.player.increaseEvade(19);
-    expect(state.player.evade).toBe(20);
+    state.player.increaseEvade(15);
+    expect(state.player.evade).toBe(16);
     state.player.addExperience(2);
 
     walkTo(state, DEMO_MONSTER_ROW - 2, 1);
@@ -356,14 +369,11 @@ describe('GameState shop flow', () => {
     }
     state.finishCombat(result, combat.monster);
 
-    expect(state.levelUpOpen).toBe(true);
     expect(state.chooseLevelUp('evasive')).toMatchObject({
       success: true,
-      evadeGained: 5,
+      evadeGained: 4,
     });
-    expect(state.player.evade).toBe(25);
-    expect(state.player.increaseEvade(100)).toBe(EVADE_CHANCE_MAX - 25);
-    expect(state.player.evade).toBe(EVADE_CHANCE_MAX);
+    expect(state.player.evade).toBe(PLAYER_EVADE_MAX);
   });
 
   it('leaves a Merchant and restores prices, stats, and availability on Restart Run', () => {

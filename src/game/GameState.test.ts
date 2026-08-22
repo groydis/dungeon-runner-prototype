@@ -4,8 +4,8 @@ import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ID,
   DEMO_MONSTER_ROW,
-  EVADE_CHANCE_MAX,
   PLAYER_BASE_EVADE,
+  PLAYER_EVADE_MAX,
 } from './config';
 import {
   ENEMY_DEFINITIONS,
@@ -1012,19 +1012,33 @@ describe('XP and level-up', () => {
     });
     expect(evasive.player.evade).toBe(6);
 
-    const capped = new GameState({
+    const partial = new GameState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
-    capped.player.increaseEvade(80);
-    expect(capped.player.evade).toBe(81);
-    capped.player.addExperience(2);
-    fightDemoRatPending(capped);
-    expect(capped.chooseLevelUp('evasive')).toMatchObject({
+    partial.player.increaseEvade(15);
+    expect(partial.player.evade).toBe(16);
+    partial.player.addExperience(2);
+    fightDemoRatPending(partial);
+    expect(partial.chooseLevelUp('evasive')).toMatchObject({
       success: true,
       evadeGained: 4,
     });
-    expect(capped.player.evade).toBe(EVADE_CHANCE_MAX);
+    expect(partial.player.evade).toBe(PLAYER_EVADE_MAX);
+
+    const atCap = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    atCap.player.increaseEvade(19);
+    expect(atCap.player.evade).toBe(PLAYER_EVADE_MAX);
+    atCap.player.addExperience(2);
+    fightDemoRatPending(atCap);
+    expect(atCap.chooseLevelUp('evasive')).toMatchObject({
+      success: true,
+      evadeGained: 0,
+    });
+    expect(atCap.player.evade).toBe(PLAYER_EVADE_MAX);
   });
 
   it('queues one choice at a time when a combat crosses several thresholds', () => {
