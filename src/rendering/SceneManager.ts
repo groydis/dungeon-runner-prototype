@@ -23,6 +23,8 @@ import {
   WebGLRenderer,
   type AnimationAction,
   type Camera,
+  type Object3D,
+  type SkinnedMesh,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
@@ -45,8 +47,15 @@ import {
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type PlayerRenderKey } from '../game/definitions/classes';
-import { type EnemyType } from '../game/definitions/enemies';
 import { type EnemyDropResult } from '../game/definitions/enemies';
+import {
+  ENEMY_RENDER_KEYS,
+  enemyModelUrl,
+  fitEnemyModel,
+  isEnemyRenderKey,
+  loadEnemyTemplate,
+  type EnemyRenderKey,
+} from './enemyAssets';
 import {
   fitPlayerModel,
   loadPlayerClips,
@@ -54,14 +63,40 @@ import {
   playerModelUrl,
   type PlayerClipMap,
 } from './playerAssets';
+import {
+  PLAYER_WEAPON_MOUNT_NAME,
+  loadPlayerEquipmentTemplate,
+  playerEquipmentLoadout,
+  playerEquipmentMountNames,
+  playerEquipmentUrl,
+  type PlayerEquipmentVisual,
+} from './playerEquipment';
+import {
+  loadRigMediumClips,
+  type RigMediumClipMap,
+} from './rigMediumAnimations';
 
-const ENEMY_RENDER_KEYS: readonly EnemyType[] = ['caveRat', 'cryptGuard', 'boneBrute'];
+interface EnemySlot {
+  key: EnemyRenderKey;
+  col: number;
+  group: Group;
+  placeholder: Mesh;
+  model: Group | null;
+  mixer: AnimationMixer | null;
+  clips: RigMediumClipMap;
+  materials: MeshStandardMaterial[];
+  loopAction: AnimationAction | null;
+  oneShotAction: AnimationAction | null;
+  loadToken: number;
+  occupantId: string | null;
+  dying: boolean;
+}
 
 interface RowView {
   group: Group;
   tiles: Mesh[];
   hitPlanes: Mesh[];
-  monsterVariants: Record<EnemyType, Mesh>[];
+  enemySlots: Record<EnemyRenderKey, EnemySlot>[];
   golds: Mesh[];
   potions: Mesh[];
   traps: Group[];
@@ -71,7 +106,7 @@ interface RowView {
 
 interface EncounterFxView {
   event: EncounterEvent;
-  monsterMesh: Mesh;
+  monsterMesh: Group;
   monsterBaseX: number;
   monsterBaseY: number;
   playerBaseX: number;
@@ -80,7 +115,7 @@ interface EncounterFxView {
 interface CombatHitFx {
   attacker: CombatLogEntry['attacker'];
   isSurpriseStrike: boolean;
-  monsterMesh: Mesh;
+  monsterMesh: Group;
   monsterBaseX: number;
   monsterBaseY: number;
   playerBaseX: number;
@@ -105,7 +140,7 @@ interface TrapConsumeFx {
 }
 
 interface EnemyAdvanceFx {
-  mesh: Mesh;
+  mesh: Group;
   startX: number;
   startZ: number;
   endX: number;
@@ -133,6 +168,7 @@ export class SceneManager {
   private playerOneShotAction: AnimationAction | null = null;
   private playerModelMaterials: MeshStandardMaterial[] = [];
   private playerRenderKey: PlayerRenderKey | null = null;
+  private playerWeaponMount: Group | null = null;
   private playerLoadToken = 0;
   private playerMoving = false;
   private playerDead = false;
@@ -350,6 +386,24 @@ export class SceneManager {
     this.playPlayerOneShot(this.playerClips.death, 'death');
   }
 
+  playEnemyHit(target: { id: string; row: number; col: number; renderKey: string }): void {
+    const slot = this.findEnemySlot(target.row, target.col, target.renderKey, target.id);
+    if (!slot || slot.dying) {
+      return;
+    }
+    this.playEnemyOneShot(slot, slot.clips.hit, 'hit');
+  }
+
+  playEnemyDeath(target: { id: string; row: number; col: number; renderKey: string }): void {
+    const slot = this.findEnemySlot(target.row, target.col, target.renderKey, target.id);
+    if (!slot) {
+      return;
+    }
+    slot.dying = true;
+    slot.group.visible = true;
+    this.playEnemyOneShot(slot, slot.clips.death, 'death');
+  }
+
   /** Initial bind of the recycled row pool to the current logical window. */
   bindWindow(
     snapshot: BoardSnapshot,
@@ -422,6 +476,7 @@ export class SceneManager {
     const dt = Math.min(0.05, Math.max(0, elapsedSec - this.clock));
     this.clock = elapsedSec;
     this.playerMixer?.update(dt);
+    this.updateEnemyMixers(dt);
     const pulse = 0.22 + 0.18 * Math.sin(elapsedSec * 3.4);
     this.highlightMaterial.emissiveIntensity = pulse;
     this.updateCollectibleIdle(elapsedSec);
@@ -572,6 +627,10 @@ export class SceneManager {
       endZ: 0,
       baseY: monsterBaseY(mesh),
     };
+    const slot = this.findSlotByGroup(mesh);
+    if (slot && !slot.dying) {
+      this.playEnemyLocomotion(slot, true, false);
+    }
   }
 
   updateEnemyAdvanceFx(t: number): void {
@@ -593,6 +652,10 @@ export class SceneManager {
       fx.mesh.position.z = fx.endZ;
       fx.mesh.position.y = fx.baseY;
       fx.mesh.scale.setScalar(1);
+      const slot = this.findSlotByGroup(fx.mesh);
+      if (slot && !slot.dying) {
+        this.playEnemyLocomotion(slot, false, false);
+      }
     }
     this.enemyAdvanceFx = null;
   }
@@ -614,8 +677,7 @@ export class SceneManager {
       mesh.scale.setScalar(1);
       mesh.position.x = laneWorldX(event.monster.col);
       mesh.position.y = baseY;
-      const material = mesh.material as MeshStandardMaterial;
-      material.opacity = 1;
+      this.setEnemyOpacity(mesh, 1);
       this.encounterFx.push({
         event,
         monsterMesh: mesh,
@@ -629,11 +691,10 @@ export class SceneManager {
   updateEncounterFx(t: number): void {
     const swing = Math.sin(t * Math.PI);
     for (const fx of this.encounterFx) {
-      const material = fx.monsterMesh.material as MeshStandardMaterial;
       if (fx.event.kind === 'evade') {
         fx.monsterMesh.scale.setScalar(Math.max(0.02, 1 - t));
         fx.monsterMesh.position.y = fx.monsterBaseY + t * 0.32;
-        material.opacity = 1 - t;
+        this.setEnemyOpacity(fx.monsterMesh, 1 - t);
         continue;
       }
       if (fx.event.approach === 'surprise') {
@@ -642,13 +703,13 @@ export class SceneManager {
         this.playerMesh.scale.setScalar(1 + swing * 0.12);
         fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.18;
         fx.monsterMesh.scale.setScalar(1 - swing * 0.18);
-        material.opacity = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;
+        this.setEnemyOpacity(fx.monsterMesh, t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1);
         continue;
       }
       const pulse = 1 + swing * 0.32;
       fx.monsterMesh.scale.setScalar(pulse);
       this.playerMesh.scale.setScalar(pulse);
-      material.opacity = t > 0.65 ? 1 - (t - 0.65) / 0.35 : 1;
+      this.setEnemyOpacity(fx.monsterMesh, t > 0.65 ? 1 - (t - 0.65) / 0.35 : 1);
     }
   }
 
@@ -683,7 +744,7 @@ export class SceneManager {
     const swing = Math.sin(t * Math.PI);
     const towardMonster = fx.monsterBaseX - fx.playerBaseX;
     const playerMaterials = this.playerFlashMaterials();
-    const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
+    const monsterMaterials = this.enemyFlashMaterials(fx.monsterMesh);
 
     if (fx.attacker === 'player') {
       const reach = fx.isSurpriseStrike ? 0.72 : 0.42;
@@ -691,8 +752,11 @@ export class SceneManager {
       this.playerMesh.scale.setScalar(1 + swing * (fx.isSurpriseStrike ? 0.22 : 0.1));
       fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.16;
       fx.monsterMesh.scale.setScalar(1 - swing * 0.14);
-      monsterMaterial.emissive.setHex(0xfff1c8);
-      monsterMaterial.emissiveIntensity = swing * (fx.isSurpriseStrike ? 1.1 : 0.7);
+      this.flashPlayerMaterials(
+        monsterMaterials,
+        0xfff1c8,
+        swing * (fx.isSurpriseStrike ? 1.1 : 0.7),
+      );
       this.flashPlayerMaterials(
         playerMaterials,
         fx.isSurpriseStrike ? 0xffe27a : 0x3ecf8e,
@@ -707,8 +771,7 @@ export class SceneManager {
     this.playerMesh.position.x = fx.playerBaseX + towardPlayer * swing * 0.18;
     this.playerMesh.scale.setScalar(1 - swing * 0.08);
     this.flashPlayerMaterials(playerMaterials, 0xff5a4a, swing * 0.85);
-    monsterMaterial.emissive.setHex(0xc4372e);
-    monsterMaterial.emissiveIntensity = swing * 0.35;
+    this.flashPlayerMaterials(monsterMaterials, 0xc4372e, swing * 0.35);
   }
 
   endCombatHit(): void {
@@ -719,9 +782,7 @@ export class SceneManager {
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
       fx.monsterMesh.position.y = fx.monsterBaseY;
-      const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
-      monsterMaterial.emissive.setHex(0x000000);
-      monsterMaterial.emissiveIntensity = 0;
+      this.flashPlayerMaterials(this.enemyFlashMaterials(fx.monsterMesh), 0x000000, 0);
       this.playerMesh.position.x = fx.playerBaseX;
     }
     this.combatHit = null;
@@ -758,7 +819,7 @@ export class SceneManager {
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
       fx.monsterMesh.position.y = fx.monsterBaseY;
-      (fx.monsterMesh.material as MeshStandardMaterial).opacity = 1;
+      this.setEnemyOpacity(fx.monsterMesh, 1);
       this.playerMesh.position.x = fx.playerBaseX;
     }
     this.playerMesh.scale.setScalar(1);
@@ -772,6 +833,9 @@ export class SceneManager {
   dispose(): void {
     this.playerLoadToken += 1;
     this.removePlayerModel();
+    for (const view of this.rowViews) {
+      this.releaseRowEnemySlots(view);
+    }
     this.renderer.dispose();
   }
 
@@ -807,7 +871,7 @@ export class SceneManager {
       const group = new Group();
       const tiles: Mesh[] = [];
       const hitPlanes: Mesh[] = [];
-      const monsterVariants: Record<EnemyType, Mesh>[] = [];
+      const enemySlots: Record<EnemyRenderKey, EnemySlot>[] = [];
       const golds: Mesh[] = [];
       const potions: Mesh[] = [];
       const traps: Group[] = [];
@@ -821,7 +885,7 @@ export class SceneManager {
         hit.rotation.x = -Math.PI / 2;
         hit.position.set(laneWorldX(col), 0.12, 0);
 
-        const variants = this.createEnemyPlaceholders(
+        const variants = this.createEnemySlots(
           col,
           caveRatGeo,
           cryptGuardGeo,
@@ -851,10 +915,10 @@ export class SceneManager {
           trapMarkGeo,
         );
 
-        group.add(tile, hit, ...Object.values(variants), gold, potion, trap, merchant);
+        group.add(tile, hit, ...Object.values(variants).map((slot) => slot.group), gold, potion, trap, merchant);
         tiles.push(tile);
         hitPlanes.push(hit);
-        monsterVariants.push(variants);
+        enemySlots.push(variants);
         golds.push(gold);
         potions.push(potion);
         traps.push(trap);
@@ -866,7 +930,7 @@ export class SceneManager {
         group,
         tiles,
         hitPlanes,
-        monsterVariants,
+        enemySlots,
         golds,
         potions,
         traps,
@@ -893,6 +957,7 @@ export class SceneManager {
     ) {
       this.endDropSpawnFx();
     }
+    this.releaseRowEnemySlots(view);
     view.assignedRow = row;
     this.applyTileChrome(view, snapshot);
   }
@@ -903,7 +968,7 @@ export class SceneManager {
         view.assignedRow === this.highlightRow && this.highlightCols.has(col);
       const mesh = view.tiles[col];
       const hit = view.hitPlanes[col];
-      const variants = view.monsterVariants[col];
+      const variants = view.enemySlots[col];
       const gold = view.golds[col];
       const potion = view.potions[col];
       const trap = view.traps[col];
@@ -921,19 +986,28 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      const renderKey = tile?.monster?.renderKey;
+      const occupant =
+        tile?.content.type === 'monster' && tile.monster ? tile.monster : undefined;
       for (const key of ENEMY_RENDER_KEYS) {
-        const monster = variants[key];
-        const playingMonsterFx =
-          this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
-          this.combatHit?.monsterMesh === monster ||
-          this.enemyAdvanceFx?.mesh === monster;
-        monster.visible =
-          playingMonsterFx ||
-          (tile?.content.type === 'monster' && key === renderKey);
-        if (this.enemyAdvanceFx?.mesh === monster) {
+        const slot = variants[key];
+        const playingMonsterFx = this.isEnemyGroupInFx(slot.group);
+        if (this.enemyAdvanceFx?.mesh === slot.group) {
+          slot.group.visible = true;
+          if (occupant && occupant.renderKey === key) {
+            this.requestEnemyModel(slot, occupant.id, key);
+          }
           continue;
         }
+        if (occupant && occupant.renderKey === key) {
+          slot.group.visible = true;
+          this.requestEnemyModel(slot, occupant.id, key);
+          continue;
+        }
+        if (playingMonsterFx || (slot.dying && slot.mixer)) {
+          slot.group.visible = true;
+          continue;
+        }
+        this.releaseEnemySlot(slot);
       }
 
       const collectingGold = this.collectFx.some((fx) => fx.mesh === gold);
@@ -1039,40 +1113,114 @@ export class SceneManager {
     row: number,
     col: number,
     renderKey?: string,
-  ): Mesh | undefined {
+  ): Group | undefined {
+    return this.findEnemySlot(row, col, renderKey)?.group;
+  }
+
+  private findEnemySlot(
+    row: number,
+    col: number,
+    renderKey?: string,
+    occupantId?: string,
+  ): EnemySlot | undefined {
+    if (occupantId) {
+      const byId = this.findEnemySlotById(occupantId);
+      if (byId) {
+        return byId;
+      }
+    }
     const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
-    const variants = view?.monsterVariants[col];
+    const variants = view?.enemySlots[col];
     if (!variants) {
       return undefined;
     }
     if (renderKey && isEnemyRenderKey(renderKey)) {
       return variants[renderKey];
     }
-    return ENEMY_RENDER_KEYS.map((key) => variants[key]).find((mesh) => mesh.visible);
+    return ENEMY_RENDER_KEYS.map((key) => variants[key]).find(
+      (slot) => slot.group.visible,
+    );
   }
 
-  private createEnemyPlaceholders(
+  private findEnemySlotById(id: string): EnemySlot | undefined {
+    for (const view of this.rowViews) {
+      for (const variants of view.enemySlots) {
+        for (const key of ENEMY_RENDER_KEYS) {
+          if (variants[key].occupantId === id) {
+            return variants[key];
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private findSlotByGroup(group: Group): EnemySlot | undefined {
+    for (const view of this.rowViews) {
+      for (const variants of view.enemySlots) {
+        for (const key of ENEMY_RENDER_KEYS) {
+          if (variants[key].group === group) {
+            return variants[key];
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private createEnemySlots(
     col: number,
     caveRatGeo: SphereGeometry,
     cryptGuardGeo: CapsuleGeometry,
     boneBruteGeo: BoxGeometry,
-  ): Record<EnemyType, Mesh> {
-    const caveRat = new Mesh(caveRatGeo, this.caveRatMaterial.clone());
-    caveRat.position.set(laneWorldX(col), 0.46, 0);
-    caveRat.userData.baseY = 0.46;
-    caveRat.visible = false;
+  ): Record<EnemyRenderKey, EnemySlot> {
+    return {
+      caveRat: this.createEnemySlot('caveRat', col, caveRatGeo, this.caveRatMaterial, 0.46),
+      cryptGuard: this.createEnemySlot(
+        'cryptGuard',
+        col,
+        cryptGuardGeo,
+        this.cryptGuardMaterial,
+        0.58,
+      ),
+      boneBrute: this.createEnemySlot(
+        'boneBrute',
+        col,
+        boneBruteGeo,
+        this.boneBruteMaterial,
+        0.52,
+      ),
+    };
+  }
 
-    const cryptGuard = new Mesh(cryptGuardGeo, this.cryptGuardMaterial.clone());
-    cryptGuard.position.set(laneWorldX(col), 0.58, 0);
-    cryptGuard.userData.baseY = 0.58;
-    cryptGuard.visible = false;
-
-    const boneBrute = new Mesh(boneBruteGeo, this.boneBruteMaterial.clone());
-    boneBrute.position.set(laneWorldX(col), 0.52, 0);
-    boneBrute.userData.baseY = 0.52;
-    boneBrute.visible = false;
-
-    return { caveRat, cryptGuard, boneBrute };
+  private createEnemySlot(
+    key: EnemyRenderKey,
+    col: number,
+    geometry: SphereGeometry | CapsuleGeometry | BoxGeometry,
+    material: MeshStandardMaterial,
+    baseY: number,
+  ): EnemySlot {
+    const group = new Group();
+    group.position.set(laneWorldX(col), baseY, 0);
+    group.userData.baseY = baseY;
+    group.visible = false;
+    const placeholder = new Mesh(geometry, material.clone());
+    group.add(placeholder);
+    return {
+      key,
+      col,
+      group,
+      placeholder,
+      model: null,
+      mixer: null,
+      clips: {},
+      materials: [placeholder.material as MeshStandardMaterial],
+      loopAction: null,
+      oneShotAction: null,
+      loadToken: 0,
+      occupantId: null,
+      dying: false,
+    };
   }
 
   private createTrapPlaceholder(
@@ -1325,6 +1473,10 @@ export class SceneManager {
     key: PlayerRenderKey,
     token: number,
   ): Promise<void> {
+    const loadout = playerEquipmentLoadout(key);
+    const equipmentPromise = loadout
+      ? loadPlayerEquipmentTemplate(loadout.assetKey)
+      : null;
     try {
       const [template, clips] = await Promise.all([
         loadPlayerTemplate(key),
@@ -1336,6 +1488,15 @@ export class SceneManager {
       const model = cloneSkinned(template) as Group;
       fitPlayerModel(model);
       this.attachPlayerModel(model, clips);
+      if (loadout && equipmentPromise) {
+        await this.installPlayerEquipment(
+          model,
+          loadout,
+          equipmentPromise,
+          key,
+          token,
+        );
+      }
     } catch (error) {
       if (token !== this.playerLoadToken) {
         return;
@@ -1346,6 +1507,65 @@ export class SceneManager {
       );
       this.playerBody.visible = true;
     }
+  }
+
+  private async installPlayerEquipment(
+    model: Group,
+    loadout: PlayerEquipmentVisual,
+    templatePromise: Promise<Group>,
+    key: PlayerRenderKey,
+    token: number,
+  ): Promise<void> {
+    try {
+      const weaponTemplate = await templatePromise;
+      if (
+        token !== this.playerLoadToken ||
+        this.playerRenderKey !== key ||
+        this.playerModel !== model
+      ) {
+        return;
+      }
+      this.attachPlayerEquipment(model, weaponTemplate, loadout);
+    } catch (error) {
+      if (token !== this.playerLoadToken) {
+        return;
+      }
+      console.error(
+        `Failed to load player equipment '${loadout.assetKey}' from ${playerEquipmentUrl(loadout.assetKey)}`,
+        error,
+      );
+    }
+  }
+
+  private attachPlayerEquipment(
+    model: Group,
+    template: Group,
+    loadout: PlayerEquipmentVisual,
+  ): void {
+    this.removePlayerEquipment();
+    const slot = findEquipmentMount(model, loadout.mount);
+    if (!slot) {
+      console.error(
+        `Failed to attach player equipment '${loadout.assetKey}': missing mount '${loadout.mount}'`,
+      );
+      return;
+    }
+    const mount = new Group();
+    mount.name = PLAYER_WEAPON_MOUNT_NAME;
+    mount.position.set(...loadout.position);
+    mount.rotation.set(...loadout.rotation);
+    mount.scale.setScalar(loadout.scale);
+    mount.add(template.clone());
+    slot.add(mount);
+    this.playerWeaponMount = mount;
+  }
+
+  private removePlayerEquipment(): void {
+    if (!this.playerWeaponMount) {
+      return;
+    }
+    this.playerWeaponMount.removeFromParent();
+    this.playerWeaponMount = null;
   }
 
   private attachPlayerModel(model: Group, clips: PlayerClipMap): void {
@@ -1360,6 +1580,7 @@ export class SceneManager {
   }
 
   private removePlayerModel(): void {
+    this.removePlayerEquipment();
     this.playerMixer?.stopAllAction();
     this.playerMixer = null;
     this.playerLoopAction = null;
@@ -1442,6 +1663,208 @@ export class SceneManager {
     }
   }
 
+  private updateEnemyMixers(dt: number): void {
+    for (const view of this.rowViews) {
+      for (const variants of view.enemySlots) {
+        for (const key of ENEMY_RENDER_KEYS) {
+          variants[key].mixer?.update(dt);
+        }
+      }
+    }
+  }
+
+  private requestEnemyModel(
+    slot: EnemySlot,
+    occupantId: string,
+    key: EnemyRenderKey,
+  ): void {
+    if (slot.occupantId === occupantId && (slot.model || slot.loadToken > 0)) {
+      return;
+    }
+    this.detachEnemyModel(slot);
+    slot.dying = false;
+    slot.occupantId = occupantId;
+    slot.loadToken += 1;
+    const token = slot.loadToken;
+    void this.installEnemyModel(slot, key, occupantId, token);
+  }
+
+  private async installEnemyModel(
+    slot: EnemySlot,
+    key: EnemyRenderKey,
+    occupantId: string,
+    token: number,
+  ): Promise<void> {
+    try {
+      const [template, clips] = await Promise.all([
+        loadEnemyTemplate(key),
+        loadRigMediumClips(),
+      ]);
+      if (
+        token !== slot.loadToken ||
+        slot.occupantId !== occupantId ||
+        slot.key !== key
+      ) {
+        return;
+      }
+      const model = cloneSkinned(template) as Group;
+      fitEnemyModel(model, key);
+      this.attachEnemyModel(slot, model, clips);
+    } catch (error) {
+      if (token !== slot.loadToken) {
+        return;
+      }
+      console.error(
+        `Failed to load enemy model '${key}' from ${enemyModelUrl(key)}`,
+        error,
+      );
+      slot.placeholder.visible = true;
+    }
+  }
+
+  private attachEnemyModel(
+    slot: EnemySlot,
+    model: Group,
+    clips: RigMediumClipMap,
+  ): void {
+    this.detachEnemyModel(slot);
+    slot.model = model;
+    slot.clips = clips;
+    slot.materials = collectStandardMaterials(model);
+    slot.group.add(model);
+    slot.placeholder.visible = false;
+    slot.mixer = new AnimationMixer(model);
+    if (slot.dying) {
+      this.playEnemyOneShot(slot, clips.death, 'death');
+      return;
+    }
+    this.playEnemyLocomotion(slot, false, true);
+  }
+
+  private detachEnemyModel(slot: EnemySlot): void {
+    slot.mixer?.stopAllAction();
+    slot.mixer = null;
+    slot.loopAction = null;
+    slot.oneShotAction = null;
+    slot.clips = {};
+    slot.materials = [slot.placeholder.material as MeshStandardMaterial];
+    if (slot.model) {
+      slot.group.remove(slot.model);
+      slot.model = null;
+    }
+    slot.placeholder.visible = true;
+  }
+
+  private releaseEnemySlot(slot: EnemySlot): void {
+    slot.loadToken += 1;
+    slot.occupantId = null;
+    slot.dying = false;
+    this.detachEnemyModel(slot);
+    slot.group.visible = false;
+    slot.group.position.set(laneWorldX(slot.col), monsterBaseY(slot.group), 0);
+    slot.group.scale.setScalar(1);
+    this.setEnemyOpacity(slot.group, 1);
+    this.flashPlayerMaterials(this.enemyFlashMaterials(slot.group), 0x000000, 0);
+  }
+
+  private releaseRowEnemySlots(view: RowView): void {
+    for (const variants of view.enemySlots) {
+      for (const key of ENEMY_RENDER_KEYS) {
+        this.releaseEnemySlot(variants[key]);
+      }
+    }
+  }
+
+  private playEnemyLocomotion(
+    slot: EnemySlot,
+    walking: boolean,
+    immediate: boolean,
+  ): void {
+    if (!slot.mixer || slot.dying) {
+      return;
+    }
+    const clip = walking
+      ? (slot.clips.walk ?? slot.clips.idle)
+      : (slot.clips.idle ?? slot.clips.walk);
+    if (!clip) {
+      return;
+    }
+    const next = slot.mixer.clipAction(clip);
+    next.setLoop(LoopRepeat, Infinity);
+    next.clampWhenFinished = false;
+    if (slot.loopAction === next && next.isRunning()) {
+      return;
+    }
+    const fade = immediate ? 0 : 0.16;
+    slot.loopAction?.fadeOut(fade);
+    next.reset().fadeIn(fade).play();
+    slot.loopAction = next;
+  }
+
+  private playEnemyOneShot(
+    slot: EnemySlot,
+    clip: RigMediumClipMap[keyof RigMediumClipMap],
+    kind: 'hit' | 'death',
+  ): void {
+    const mixer = slot.mixer;
+    if (!mixer || !clip) {
+      if (kind === 'death') {
+        slot.dying = true;
+      }
+      return;
+    }
+    slot.loopAction?.fadeOut(0.08);
+    const action = mixer.clipAction(clip);
+    action.setLoop(LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.reset().fadeIn(0.06).play();
+    slot.oneShotAction = action;
+    const token = slot.loadToken;
+    const occupantId = slot.occupantId;
+    const onFinished = (event: { action: AnimationAction }): void => {
+      if (event.action !== action) {
+        return;
+      }
+      mixer.removeEventListener('finished', onFinished);
+      if (token !== slot.loadToken || slot.occupantId !== occupantId) {
+        return;
+      }
+      slot.oneShotAction = null;
+      if (kind === 'death') {
+        this.releaseEnemySlot(slot);
+        return;
+      }
+      this.playEnemyLocomotion(slot, false, false);
+    };
+    mixer.addEventListener('finished', onFinished);
+  }
+
+  private isEnemyGroupInFx(group: Group): boolean {
+    return (
+      this.encounterFx.some((fx) => fx.monsterMesh === group) ||
+      this.combatHit?.monsterMesh === group ||
+      this.enemyAdvanceFx?.mesh === group
+    );
+  }
+
+  private enemyFlashMaterials(group: Group): MeshStandardMaterial[] {
+    const slot = this.findSlotByGroup(group);
+    if (slot?.model && slot.materials.length > 0) {
+      return slot.materials;
+    }
+    if (slot) {
+      return [slot.placeholder.material as MeshStandardMaterial];
+    }
+    return [];
+  }
+
+  private setEnemyOpacity(group: Group, opacity: number): void {
+    for (const material of this.enemyFlashMaterials(group)) {
+      material.transparent = true;
+      material.opacity = opacity;
+    }
+  }
+
   private createPlayer(): { group: Group; body: Mesh } {
     const group = new Group();
 
@@ -1472,6 +1895,31 @@ export class SceneManager {
   }
 }
 
+function findEquipmentMount(
+  root: Object3D,
+  mount: PlayerEquipmentVisual['mount'],
+): Object3D | undefined {
+  for (const name of playerEquipmentMountNames(mount)) {
+    const node = root.getObjectByName(name);
+    if (node) {
+      return node;
+    }
+  }
+  let found: Object3D | undefined;
+  const names = playerEquipmentMountNames(mount);
+  root.traverse((child) => {
+    if (found) {
+      return;
+    }
+    const skinned = child as SkinnedMesh;
+    if (!skinned.isSkinnedMesh || !skinned.skeleton) {
+      return;
+    }
+    found = skinned.skeleton.bones.find((bone) => names.includes(bone.name));
+  });
+  return found;
+}
+
 function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
   const materials: MeshStandardMaterial[] = [];
   root.traverse((child) => {
@@ -1489,10 +1937,7 @@ function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
   return materials;
 }
 
-function monsterBaseY(mesh: Mesh): number {
-  return typeof mesh.userData.baseY === 'number' ? mesh.userData.baseY : 0.46;
+function monsterBaseY(object: Group): number {
+  return typeof object.userData.baseY === 'number' ? object.userData.baseY : 0.46;
 }
 
-function isEnemyRenderKey(key: string): key is EnemyType {
-  return (ENEMY_RENDER_KEYS as readonly string[]).includes(key);
-}

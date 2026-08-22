@@ -375,6 +375,10 @@ export class Game {
       } else {
         this.scene.playPlayerHit();
       }
+    } else if (entry.targetHealthAfter <= 0) {
+      this.scene.playEnemyDeath(playback.target);
+    } else {
+      this.scene.playEnemyHit(playback.target);
     }
     this.scene.beginCombatHit(
       entry,

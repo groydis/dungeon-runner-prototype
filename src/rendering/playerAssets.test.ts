@@ -7,6 +7,10 @@ import {
   isPlayerRenderKey,
   playerModelUrl,
 } from './playerAssets';
+import {
+  RIG_MEDIUM_ANIMATION_URLS,
+  RIG_MEDIUM_CLIP_NAMES,
+} from './rigMediumAnimations';
 
 describe('player asset mapping', () => {
   it('covers every player render key with a KayKit character GLB', () => {
@@ -30,6 +34,8 @@ describe('player asset mapping', () => {
   });
 
   it('points shared Rig_Medium clips at the existing animation GLBs', () => {
+    expect(PLAYER_ANIMATION_URLS).toBe(RIG_MEDIUM_ANIMATION_URLS);
+    expect(PLAYER_CLIP_NAMES).toBe(RIG_MEDIUM_CLIP_NAMES);
     expect(PLAYER_ANIMATION_URLS).toEqual({
       general: '/models/players/kaykit/animations/Rig_Medium_General.glb',
       movement: '/models/players/kaykit/animations/Rig_Medium_MovementBasic.glb',

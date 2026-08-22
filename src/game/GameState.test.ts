@@ -1471,6 +1471,7 @@ describe('board snapshots and no-class APIs', () => {
     const snapshot = state.getBoardSnapshot();
 
     expect(tileAt(snapshot, 5, 0)?.monster).toMatchObject({
+      id: 'rat-5',
       type: 'caveRat',
       renderKey: 'caveRat',
     });
