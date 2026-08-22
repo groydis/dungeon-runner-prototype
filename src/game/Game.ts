@@ -1,8 +1,10 @@
 import {
   COMBAT_HIT_SEC,
   ENCOUNTER_FX_SEC,
+  ENEMY_ADVANCE_FX_SEC,
   MOVE_DURATION_SEC,
   TILE_PITCH,
+  TRAP_FX_SEC,
   laneWorldX,
 } from './config';
 import { type CombatResult } from './combat';
@@ -11,7 +13,7 @@ import {
   avoidanceRollerFromSearch,
 } from './encounters';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
-import { GameState } from './GameState';
+import { GameState, type TrapResolution } from './GameState';
 import { rngFactoryFromSearch } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type Monster } from './Monster';
@@ -36,6 +38,12 @@ interface CombatPlayback {
   elapsed: number;
 }
 
+interface TrapPlayback {
+  resolution: TrapResolution;
+  phase: 'flash' | 'advance';
+  elapsed: number;
+}
+
 export class Game {
   private readonly state = new GameState({
     rollAvoidance: avoidanceRollerFromSearch(window.location.search),
@@ -55,6 +63,7 @@ export class Game {
   private encounterFxElapsed: number | null = null;
   private pendingEvents: EncounterEvent[] = [];
   private combatPlayback: CombatPlayback | null = null;
+  private trapPlayback: TrapPlayback | null = null;
   private lastTimeMs = 0;
   private running = false;
 
@@ -112,6 +121,7 @@ export class Game {
     this.lastTimeMs = nowMs;
 
     this.updateMove(dt);
+    this.updateTrapPlayback(dt);
     this.updateEncounterFx(dt);
     this.updateCombatPlayback(dt);
     this.camera.update(dt);
@@ -181,6 +191,63 @@ export class Game {
     this.pendingEvents = resolution.encounters;
     this.setBoardInteractive(false);
     this.updateHud();
+
+    if (resolution.trap) {
+      this.trapPlayback = {
+        resolution: resolution.trap,
+        phase: 'flash',
+        elapsed: 0,
+      };
+      this.scene.beginTrapTriggerFx(this.state.player.row, this.state.player.col);
+      if (resolution.trap.enemyMove) {
+        this.scene.beginEnemyAdvanceFx(resolution.trap.enemyMove);
+        this.scene.updateEnemyAdvanceFx(0);
+      }
+      return;
+    }
+
+    this.playNextPendingEvent();
+  }
+
+  private updateTrapPlayback(dt: number): void {
+    if (!this.trapPlayback) {
+      return;
+    }
+
+    this.trapPlayback.elapsed += dt;
+    const duration =
+      this.trapPlayback.phase === 'flash' ? TRAP_FX_SEC : ENEMY_ADVANCE_FX_SEC;
+    const t = Math.min(1, this.trapPlayback.elapsed / duration);
+
+    if (this.trapPlayback.phase === 'flash') {
+      this.scene.updateTrapTriggerFx(t);
+    } else {
+      this.scene.updateEnemyAdvanceFx(t);
+    }
+
+    if (t < 1) {
+      return;
+    }
+
+    if (this.trapPlayback.phase === 'flash') {
+      this.scene.endTrapTriggerFx();
+      const move = this.trapPlayback.resolution.enemyMove;
+      if (move) {
+        if (move.consumed === 'gold' || move.consumed === 'potion') {
+          this.scene.beginItemConsumeFx(move.consumed, move.to.row, move.to.col);
+        }
+        if (move.consumed === 'trap') {
+          this.scene.beginTrapConsumeFx(move.to.row, move.to.col);
+        }
+        this.trapPlayback.phase = 'advance';
+        this.trapPlayback.elapsed = 0;
+        return;
+      }
+    } else {
+      this.scene.endEnemyAdvanceFx();
+    }
+
+    this.trapPlayback = null;
     this.playNextPendingEvent();
   }
 
@@ -305,6 +372,7 @@ export class Game {
     this.animation = null;
     this.encounterFxElapsed = null;
     this.combatPlayback = null;
+    this.trapPlayback = null;
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();
@@ -339,7 +407,8 @@ export class Game {
     return (
       this.animation !== null ||
       this.combatPlayback !== null ||
-      this.encounterFxElapsed !== null
+      this.encounterFxElapsed !== null ||
+      this.trapPlayback !== null
     );
   }
 

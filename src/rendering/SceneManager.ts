@@ -13,6 +13,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  RingGeometry,
   SRGBColorSpace,
   Scene,
   SphereGeometry,
@@ -33,7 +34,11 @@ import { type CombatLogEntry } from '../game/combat';
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type EnemyType } from '../game/definitions/enemies';
-import { type GameState, type PickupResult } from '../game/GameState';
+import {
+  type EnemyMoveResult,
+  type GameState,
+  type PickupResult,
+} from '../game/GameState';
 
 const ENEMY_RENDER_KEYS: readonly EnemyType[] = ['caveRat', 'cryptGuard', 'boneBrute'];
 
@@ -44,6 +49,7 @@ interface RowView {
   monsterVariants: Record<EnemyType, Mesh>[];
   golds: Mesh[];
   potions: Mesh[];
+  traps: Group[];
   merchants: Group[];
   assignedRow: number;
 }
@@ -78,6 +84,20 @@ interface MerchantLeaveFx {
   baseY: number;
 }
 
+interface TrapConsumeFx {
+  group: Group;
+  startedAt: number;
+}
+
+interface EnemyAdvanceFx {
+  mesh: Mesh;
+  startX: number;
+  startZ: number;
+  endX: number;
+  endZ: number;
+  baseY: number;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
@@ -97,6 +117,8 @@ export class SceneManager {
   private readonly merchantPillarMaterial: MeshStandardMaterial;
   private readonly merchantHoodMaterial: MeshStandardMaterial;
   private readonly merchantLanternMaterial: MeshStandardMaterial;
+  private readonly trapPlateMaterial: MeshStandardMaterial;
+  private readonly trapRuneMaterial: MeshStandardMaterial;
   private readonly hitMaterial: MeshBasicMaterial;
 
   private scrollZ = 0;
@@ -106,6 +128,9 @@ export class SceneManager {
   private combatHit: CombatHitFx | null = null;
   private collectFx: CollectFx[] = [];
   private merchantLeaveFx: MerchantLeaveFx[] = [];
+  private trapTrigger: Group | null = null;
+  private trapConsumeFx: TrapConsumeFx[] = [];
+  private enemyAdvanceFx: EnemyAdvanceFx | null = null;
   private clock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -212,6 +237,24 @@ export class SceneManager {
       transparent: true,
       opacity: 1,
     });
+    this.trapPlateMaterial = new MeshStandardMaterial({
+      color: 0x8a2a12,
+      emissive: 0xff4a1a,
+      emissiveIntensity: 0.45,
+      roughness: 0.48,
+      metalness: 0.22,
+      transparent: true,
+      opacity: 1,
+    });
+    this.trapRuneMaterial = new MeshStandardMaterial({
+      color: 0xff7a2a,
+      emissive: 0xff8a30,
+      emissiveIntensity: 0.85,
+      roughness: 0.28,
+      metalness: 0.18,
+      transparent: true,
+      opacity: 1,
+    });
     this.hitMaterial = new MeshBasicMaterial({
       transparent: true,
       opacity: 0,
@@ -304,6 +347,8 @@ export class SceneManager {
     this.highlightMaterial.emissiveIntensity = pulse;
     this.updateCollectibleIdle(elapsedSec);
     this.updateCollectFx(elapsedSec);
+    this.updateTrapIdle(elapsedSec);
+    this.updateTrapConsumeFx(elapsedSec);
     this.updateMerchantIdle(elapsedSec);
     this.updateMerchantLeaveFx(elapsedSec);
   }
@@ -323,6 +368,105 @@ export class SceneManager {
       startedAt: this.clock,
       baseY: pickup.kind === 'gold' ? 0.38 : 0.42,
     });
+  }
+
+  beginItemConsumeFx(kind: CollectibleKind, row: number, col: number): void {
+    this.beginCollectFx({
+      kind,
+      id: '',
+      row,
+      col,
+      goldGained: 0,
+      healthRestored: 0,
+      alreadyFull: false,
+    });
+  }
+
+  beginTrapTriggerFx(row: number, col: number): void {
+    const group = this.findTrapGroup(row, col);
+    if (!group) {
+      this.trapTrigger = null;
+      return;
+    }
+    group.visible = true;
+    this.trapTrigger = group;
+  }
+
+  updateTrapTriggerFx(t: number): void {
+    const group = this.trapTrigger;
+    if (!group) {
+      return;
+    }
+    const flash = 1 + Math.sin(t * Math.PI) * 0.55;
+    group.scale.setScalar(flash);
+    this.setTrapOpacity(group, 1 - t * 0.85);
+    this.setTrapEmissive(group, 0.7 + (1 - t) * 1.4);
+  }
+
+  endTrapTriggerFx(): void {
+    if (this.trapTrigger) {
+      this.resetTrapGroup(this.trapTrigger, this.trapColFromGroup(this.trapTrigger));
+      this.trapTrigger.visible = false;
+    }
+    this.trapTrigger = null;
+  }
+
+  beginTrapConsumeFx(row: number, col: number): void {
+    const group = this.findTrapGroup(row, col);
+    if (!group) {
+      return;
+    }
+    group.visible = true;
+    this.trapConsumeFx = this.trapConsumeFx.filter((fx) => fx.group !== group);
+    this.trapConsumeFx.push({
+      group,
+      startedAt: this.clock,
+    });
+  }
+
+  beginEnemyAdvanceFx(move: EnemyMoveResult): void {
+    const mesh = this.findMonsterMesh(move.to.row, move.to.col);
+    if (!mesh) {
+      this.enemyAdvanceFx = null;
+      return;
+    }
+    const startX = laneWorldX(move.from.col);
+    const endX = laneWorldX(move.to.col);
+    const startZ = (move.from.row - move.to.row) * -TILE_PITCH;
+    mesh.visible = true;
+    mesh.position.x = startX;
+    mesh.position.z = startZ;
+    this.enemyAdvanceFx = {
+      mesh,
+      startX,
+      startZ,
+      endX,
+      endZ: 0,
+      baseY: monsterBaseY(mesh),
+    };
+  }
+
+  updateEnemyAdvanceFx(t: number): void {
+    const fx = this.enemyAdvanceFx;
+    if (!fx) {
+      return;
+    }
+    const eased = 1 - (1 - t) ** 3;
+    fx.mesh.position.x = fx.startX + (fx.endX - fx.startX) * eased;
+    fx.mesh.position.z = fx.startZ + (fx.endZ - fx.startZ) * eased;
+    fx.mesh.position.y = fx.baseY + Math.sin(t * Math.PI) * 0.14;
+    fx.mesh.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.08);
+  }
+
+  endEnemyAdvanceFx(): void {
+    const fx = this.enemyAdvanceFx;
+    if (fx) {
+      fx.mesh.position.x = fx.endX;
+      fx.mesh.position.z = fx.endZ;
+      fx.mesh.position.y = fx.baseY;
+      fx.mesh.scale.setScalar(1);
+    }
+    this.enemyAdvanceFx = null;
   }
 
   /** Visual-only: show the resolved monster again so the outcome can play. */
@@ -472,7 +616,10 @@ export class SceneManager {
   clearTransientFx(): void {
     this.endEncounterFx();
     this.endCombatHit();
+    this.endTrapTriggerFx();
+    this.endEnemyAdvanceFx();
     this.collectFx = [];
+    this.resetTrapConsumeFx();
     this.resetMerchantLeaveFx();
   }
 
@@ -521,6 +668,9 @@ export class SceneManager {
     const pillarGeo = new CylinderGeometry(0.07, 0.09, 0.7, 8);
     const hoodGeo = new CylinderGeometry(0.02, 0.16, 0.14, 8);
     const lanternGeo = new SphereGeometry(0.11, 10, 8);
+    const trapPlateGeo = new CircleGeometry(0.34, 14);
+    const trapRuneGeo = new RingGeometry(0.12, 0.22, 14);
+    const trapMarkGeo = new BoxGeometry(0.05, 0.02, 0.12);
 
     for (let i = 0; i < ROW_POOL_SIZE; i += 1) {
       const group = new Group();
@@ -529,6 +679,7 @@ export class SceneManager {
       const monsterVariants: Record<EnemyType, Mesh>[] = [];
       const golds: Mesh[] = [];
       const potions: Mesh[] = [];
+      const traps: Group[] = [];
       const merchants: Group[] = [];
 
       for (let col = 0; col < LANE_COUNT; col += 1) {
@@ -562,13 +713,20 @@ export class SceneManager {
           hoodGeo,
           lanternGeo,
         );
+        const trap = this.createTrapPlaceholder(
+          col,
+          trapPlateGeo,
+          trapRuneGeo,
+          trapMarkGeo,
+        );
 
-        group.add(tile, hit, ...Object.values(variants), gold, potion, merchant);
+        group.add(tile, hit, ...Object.values(variants), gold, potion, trap, merchant);
         tiles.push(tile);
         hitPlanes.push(hit);
         monsterVariants.push(variants);
         golds.push(gold);
         potions.push(potion);
+        traps.push(trap);
         merchants.push(merchant);
       }
 
@@ -580,6 +738,7 @@ export class SceneManager {
         monsterVariants,
         golds,
         potions,
+        traps,
         merchants,
         assignedRow: i,
       });
@@ -590,6 +749,12 @@ export class SceneManager {
     this.merchantLeaveFx = this.merchantLeaveFx.filter(
       (fx) => !view.merchants.includes(fx.group),
     );
+    this.trapConsumeFx = this.trapConsumeFx.filter(
+      (fx) => !view.traps.includes(fx.group),
+    );
+    if (this.trapTrigger && view.traps.includes(this.trapTrigger)) {
+      this.endTrapTriggerFx();
+    }
     view.assignedRow = row;
     this.applyTileChrome(view, state);
   }
@@ -604,6 +769,7 @@ export class SceneManager {
       const variants = view.monsterVariants[col];
       const gold = view.golds[col];
       const potion = view.potions[col];
+      const trap = view.traps[col];
       const merchant = view.merchants[col];
       const tile = tiles?.[col];
 
@@ -623,10 +789,14 @@ export class SceneManager {
         const monster = variants[key];
         const playingMonsterFx =
           this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
-          this.combatHit?.monsterMesh === monster;
+          this.combatHit?.monsterMesh === monster ||
+          this.enemyAdvanceFx?.mesh === monster;
         monster.visible =
           playingMonsterFx ||
           (tile?.content.type === 'monster' && key === renderKey);
+        if (this.enemyAdvanceFx?.mesh === monster) {
+          continue;
+        }
       }
 
       const collectingGold = this.collectFx.some((fx) => fx.mesh === gold);
@@ -639,6 +809,14 @@ export class SceneManager {
       }
       gold.visible = collectingGold || tile?.content.type === 'gold';
       potion.visible = collectingPotion || tile?.content.type === 'potion';
+
+      const playingTrap =
+        this.trapTrigger === trap ||
+        this.trapConsumeFx.some((fx) => fx.group === trap);
+      if (!playingTrap) {
+        this.resetTrapGroup(trap, col);
+      }
+      trap.visible = playingTrap || tile?.content.type === 'trap';
 
       const leavingMerchant = this.isMerchantLeaving(merchant);
       if (!leavingMerchant) {
@@ -748,6 +926,123 @@ export class SceneManager {
     boneBrute.visible = false;
 
     return { caveRat, cryptGuard, boneBrute };
+  }
+
+  private createTrapPlaceholder(
+    col: number,
+    plateGeo: CircleGeometry,
+    runeGeo: RingGeometry,
+    markGeo: BoxGeometry,
+  ): Group {
+    const group = new Group();
+    group.position.set(laneWorldX(col), 0, 0);
+
+    const plate = new Mesh(plateGeo, this.trapPlateMaterial.clone());
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.y = 0.085;
+    plate.userData.role = 'plate';
+
+    const rune = new Mesh(runeGeo, this.trapRuneMaterial.clone());
+    rune.rotation.x = -Math.PI / 2;
+    rune.position.y = 0.095;
+    rune.userData.role = 'rune';
+
+    const markA = new Mesh(markGeo, this.trapRuneMaterial.clone());
+    markA.position.set(0, 0.1, 0);
+    const markB = new Mesh(markGeo, this.trapRuneMaterial.clone());
+    markB.rotation.y = Math.PI / 2;
+    markB.position.set(0, 0.1, 0);
+
+    group.add(plate, rune, markA, markB);
+    group.visible = false;
+    return group;
+  }
+
+  private findTrapGroup(row: number, col: number): Group | undefined {
+    const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
+    return view?.traps[col];
+  }
+
+  private resetTrapGroup(group: Group, col: number): void {
+    group.position.set(laneWorldX(col), 0, 0);
+    group.scale.setScalar(1);
+    this.setTrapOpacity(group, 1);
+    this.setTrapEmissive(group, 0.85);
+  }
+
+  private setTrapOpacity(group: Group, opacity: number): void {
+    for (const child of group.children) {
+      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
+      if (material) {
+        material.opacity = opacity;
+      }
+    }
+  }
+
+  private setTrapEmissive(group: Group, intensity: number): void {
+    for (const child of group.children) {
+      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
+      if (material) {
+        material.emissiveIntensity = intensity;
+      }
+    }
+  }
+
+  private trapColFromGroup(group: Group): number {
+    for (const view of this.rowViews) {
+      const col = view.traps.indexOf(group);
+      if (col >= 0) {
+        return col;
+      }
+    }
+    return 1;
+  }
+
+  private updateTrapIdle(elapsedSec: number): void {
+    for (const view of this.rowViews) {
+      if (!view.group.visible) {
+        continue;
+      }
+      for (let col = 0; col < LANE_COUNT; col += 1) {
+        const trap = view.traps[col];
+        if (
+          !trap.visible ||
+          this.trapTrigger === trap ||
+          this.trapConsumeFx.some((fx) => fx.group === trap)
+        ) {
+          continue;
+        }
+        const phase = elapsedSec * 3.1 + view.assignedRow + col;
+        const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(phase));
+        this.setTrapEmissive(trap, pulse);
+        trap.position.y = Math.sin(phase * 0.7) * 0.012;
+      }
+    }
+  }
+
+  private updateTrapConsumeFx(elapsedSec: number): void {
+    const remaining: TrapConsumeFx[] = [];
+    for (const fx of this.trapConsumeFx) {
+      const t = Math.min(1, (elapsedSec - fx.startedAt) / COLLECT_FX_SEC);
+      fx.group.scale.setScalar(Math.max(0.02, 1 - t));
+      this.setTrapOpacity(fx.group, 1 - t);
+      this.setTrapEmissive(fx.group, 0.85 + (1 - t) * 1.1);
+      if (t < 1) {
+        remaining.push(fx);
+        continue;
+      }
+      fx.group.visible = false;
+      this.resetTrapGroup(fx.group, this.trapColFromGroup(fx.group));
+    }
+    this.trapConsumeFx = remaining;
+  }
+
+  private resetTrapConsumeFx(): void {
+    for (const fx of this.trapConsumeFx) {
+      fx.group.visible = false;
+      this.resetTrapGroup(fx.group, this.trapColFromGroup(fx.group));
+    }
+    this.trapConsumeFx = [];
   }
 
   private findGoldMesh(row: number, col: number): Mesh | undefined {

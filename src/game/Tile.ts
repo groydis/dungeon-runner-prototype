@@ -14,6 +14,11 @@ export interface TileContent {
   id?: string;
 }
 
+export interface GridPosition {
+  row: number;
+  col: number;
+}
+
 export interface Tile {
   /** World row index. Increases as the dungeon extends forward. */
   row: number;

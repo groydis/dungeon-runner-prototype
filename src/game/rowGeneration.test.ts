@@ -7,10 +7,13 @@ import {
   SAFE_ROWS_AFTER_START,
   SHOP_ROW_INTERVAL,
   START_ROW,
+  TRAP_START_ROW,
 } from './config';
 import { mulberry32 } from './random';
 import { encounterPoolForRow } from './definitions/encounterPools';
 import {
+  EARLY_ROW_PATTERN_WEIGHTS,
+  ROW_PATTERN_WEIGHTS,
   createRowRecipe,
   isMerchantRow,
   type LaneRecipe,
@@ -48,12 +51,18 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
   expect((kinds.monster ?? 0) <= 1).toBe(true);
   expect((kinds.gold ?? 0) + (kinds.potion ?? 0) <= 1).toBe(true);
   expect((kinds.shop ?? 0) <= 1).toBe(true);
+  expect((kinds.trap ?? 0) <= 1).toBe(true);
+
+  if (row < TRAP_START_ROW) {
+    expect(kinds.trap ?? 0).toBe(0);
+  }
 
   if (isMerchantRow(row)) {
     expect(kinds.shop).toBe(1);
     expect(kinds.empty).toBe(2);
     expect(kinds.monster ?? 0).toBe(0);
     expect((kinds.gold ?? 0) + (kinds.potion ?? 0)).toBe(0);
+    expect(kinds.trap ?? 0).toBe(0);
   }
 }
 
@@ -100,5 +109,66 @@ describe('row generation', () => {
     for (let row = 0; row < 80; row += 1) {
       assertRowSafety(row, createRowRecipe(row, rng));
     }
+  });
+
+  it('places no traps in rows 0–7 and never on Merchant rows', () => {
+    const rng = mulberry32(99);
+    for (let row = 0; row < TRAP_START_ROW; row += 1) {
+      expect(createRowRecipe(row, rng).some((lane) => lane.kind === 'trap')).toBe(
+        false,
+      );
+    }
+    for (const row of [14, 28, 42, 56]) {
+      const recipe = createRowRecipe(row, rng);
+      expect(recipe.some((lane) => lane.kind === 'shop')).toBe(true);
+      expect(recipe.some((lane) => lane.kind === 'trap')).toBe(false);
+    }
+  });
+
+  it('keeps trap-only and monster-plus-trap recipes inside safety rules', () => {
+    const seen = { alarm: false, monsterAndAlarm: false };
+    for (let seed = 1; seed < 200 && (!seen.alarm || !seen.monsterAndAlarm); seed += 1) {
+      const rng = mulberry32(seed);
+      for (let row = TRAP_START_ROW; row < 80; row += 1) {
+        const recipe = createRowRecipe(row, rng);
+        if (isMerchantRow(row)) {
+          continue;
+        }
+        const kinds = countKinds(recipe);
+        if (kinds.trap === 1 && !kinds.monster) {
+          expect(kinds.empty).toBe(2);
+          seen.alarm = true;
+        }
+        if (kinds.trap === 1 && kinds.monster === 1) {
+          expect(kinds.empty).toBe(1);
+          expect((kinds.gold ?? 0) + (kinds.potion ?? 0)).toBe(0);
+          seen.monsterAndAlarm = true;
+        }
+        assertRowSafety(row, recipe);
+      }
+    }
+    expect(seen.alarm).toBe(true);
+    expect(seen.monsterAndAlarm).toBe(true);
+  });
+
+  it('repeats trap lanes and enemy types for a fixed seed', () => {
+    const generate = (seed: number) => {
+      const rng = mulberry32(seed);
+      return Array.from({ length: 60 }, (_, row) => createRowRecipe(row, rng));
+    };
+
+    const first = generate(321);
+    expect(generate(321)).toEqual(first);
+    expect(first.slice(TRAP_START_ROW).some((row) => row.some((lane) => lane.kind === 'trap'))).toBe(
+      true,
+    );
+    expect(generate(654)).not.toEqual(first);
+  });
+
+  it('keeps named generation tables summing to 100', () => {
+    const sum = (weights: readonly { weight: number }[]) =>
+      weights.reduce((total, entry) => total + entry.weight, 0);
+    expect(sum(EARLY_ROW_PATTERN_WEIGHTS)).toBe(100);
+    expect(sum(ROW_PATTERN_WEIGHTS)).toBe(100);
   });
 });

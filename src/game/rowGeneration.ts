@@ -6,14 +6,16 @@ import {
   SAFE_ROWS_AFTER_START,
   SHOP_ROW_INTERVAL,
   START_ROW,
+  TRAP_START_ROW,
 } from './config';
 import { collectibleId, type CollectibleKind } from './Collectible';
 import { pickEnemyTypeForRow } from './definitions/encounterPools';
 import { type EnemyType } from './definitions/enemies';
 import { merchantId } from './Merchant';
 import { pickWeighted, randomInt, type Rng } from './random';
+import { type TrapKind, trapId } from './Trap';
 
-export type LaneKind = 'empty' | 'monster' | 'gold' | 'potion' | 'shop';
+export type LaneKind = 'empty' | 'monster' | 'gold' | 'potion' | 'shop' | 'trap';
 
 export interface EmptyLaneRecipe {
   kind: 'empty';
@@ -35,25 +37,49 @@ export interface ShopLaneRecipe {
   entityId: string;
 }
 
+export interface TrapLaneRecipe {
+  kind: 'trap';
+  entityId: string;
+  trapKind: TrapKind;
+}
+
 export type LaneRecipe =
   | EmptyLaneRecipe
   | MonsterLaneRecipe
   | CollectibleLaneRecipe
-  | ShopLaneRecipe;
+  | ShopLaneRecipe
+  | TrapLaneRecipe;
+
+export type RowRecipeFactory = (row: number, rng: Rng) => LaneRecipe[];
 
 /**
- * Early prototype weights. Must sum to 100.
- * empty 45 / rat 25 / gold 15 / potion 10 / rat+loot 5
+ * Rows 5–7 (after the demo rat, before traps). Must sum to 100.
+ * empty 45 / monster 25 / gold 15 / potion 10 / monster+loot 5
  */
-export const ROW_PATTERN_WEIGHTS = [
+export const EARLY_ROW_PATTERN_WEIGHTS = [
   { item: 'empty', weight: 45 },
-  { item: 'rat', weight: 25 },
+  { item: 'monster', weight: 25 },
   { item: 'gold', weight: 15 },
   { item: 'potion', weight: 10 },
-  { item: 'ratAndLoot', weight: 5 },
+  { item: 'monsterAndLoot', weight: 5 },
 ] as const;
 
-export type RowPattern = (typeof ROW_PATTERN_WEIGHTS)[number]['item'];
+/**
+ * Rows 8+ that are not Merchant rows. Must sum to 100.
+ */
+export const ROW_PATTERN_WEIGHTS = [
+  { item: 'empty', weight: 35 },
+  { item: 'monster', weight: 25 },
+  { item: 'gold', weight: 15 },
+  { item: 'potion', weight: 10 },
+  { item: 'monsterAndLoot', weight: 5 },
+  { item: 'alarm', weight: 5 },
+  { item: 'monsterAndAlarm', weight: 5 },
+] as const;
+
+export type RowPattern =
+  | (typeof EARLY_ROW_PATTERN_WEIGHTS)[number]['item']
+  | (typeof ROW_PATTERN_WEIGHTS)[number]['item'];
 
 const LAST_SAFE_ROW = START_ROW + SAFE_ROWS_AFTER_START;
 
@@ -78,22 +104,32 @@ export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
     return empty;
   }
 
-  return recipeFromPattern(row, pickWeighted(ROW_PATTERN_WEIGHTS, rng), rng);
+  const weights =
+    row < TRAP_START_ROW ? EARLY_ROW_PATTERN_WEIGHTS : ROW_PATTERN_WEIGHTS;
+  return recipeFromPattern(row, pickWeighted(weights, rng), rng);
 }
 
 export function isMerchantRow(row: number): boolean {
   return row >= SHOP_ROW_INTERVAL && row % SHOP_ROW_INTERVAL === 0;
 }
 
-function emptyRow(): LaneRecipe[] {
+export function emptyRow(): LaneRecipe[] {
   return Array.from({ length: LANE_COUNT }, () => ({ kind: 'empty' as const }));
 }
 
-function monsterLane(entityId: string, enemyType: EnemyType): MonsterLaneRecipe {
+export function monsterLane(entityId: string, enemyType: EnemyType): MonsterLaneRecipe {
   return {
     kind: 'monster',
     entityId,
     enemyType,
+  };
+}
+
+export function alarmLane(row: number, col: number): TrapLaneRecipe {
+  return {
+    kind: 'trap',
+    entityId: trapId(row, col),
+    trapKind: 'alarm',
   };
 }
 
@@ -104,7 +140,7 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
     return lanes;
   }
 
-  if (pattern === 'rat') {
+  if (pattern === 'monster') {
     place(
       lanes,
       randomInt(rng, LANE_COUNT),
@@ -122,11 +158,20 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
     return lanes;
   }
 
-  const first = randomInt(rng, LANE_COUNT);
-  let second = randomInt(rng, LANE_COUNT - 1);
-  if (second >= first) {
-    second += 1;
+  if (pattern === 'alarm') {
+    const col = randomInt(rng, LANE_COUNT);
+    place(lanes, col, alarmLane(row, col));
+    return lanes;
   }
+
+  const [first, second] = pickTwoDistinctCols(rng);
+
+  if (pattern === 'monsterAndAlarm') {
+    place(lanes, first, monsterLane(`monster-${row}`, pickEnemyTypeForRow(row, rng)));
+    place(lanes, second, alarmLane(row, second));
+    return lanes;
+  }
+
   const lootKind: CollectibleKind = rng() < 0.5 ? 'gold' : 'potion';
   place(lanes, first, monsterLane(`monster-${row}`, pickEnemyTypeForRow(row, rng)));
   place(lanes, second, {
@@ -134,6 +179,15 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
     entityId: collectibleId(lootKind, row, second),
   });
   return lanes;
+}
+
+function pickTwoDistinctCols(rng: Rng): [number, number] {
+  const first = randomInt(rng, LANE_COUNT);
+  let second = randomInt(rng, LANE_COUNT - 1);
+  if (second >= first) {
+    second += 1;
+  }
+  return [first, second];
 }
 
 function place(lanes: LaneRecipe[], col: number, recipe: LaneRecipe): void {

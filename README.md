@@ -12,13 +12,14 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 
 - Floor tiles are simple dark stone boxes.
 - The player is a green capsule.
-- Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, or health potions.
+- Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, health potions, or Alarm Traps.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
 - Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
 - Combat is automatic and plays in place. There is no battle screen.
 - Gold can be spent at a rare Travelling Merchant for run-only upgrades.
-- The loop is: choose a lane, fight or evade, collect gold or potions, spend gold at a Merchant, survive.
+- An Alarm Trap does not deal damage. It pulls the closest visible enemy one legal tile closer.
+- The loop is: choose a lane, fight or evade, collect gold or potions, trip alarms, spend gold at a Merchant, survive.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -33,6 +34,7 @@ Included:
 - A demo Cave Rat after a 3-row safe opening, then weighted procedural rows
 - Distance-scaled enemy pools (Cave Rat, Crypt Guard, Bone Brute)
 - Gold and potion pickups with run-scoped gold and healing
+- Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
 - HUD with distance, gold, attack, HP text/bar, and status
@@ -43,7 +45,7 @@ Included:
 Not included:
 
 - Equipment, levelling, crits, unique enemy abilities, or an inventory screen
-- Traps, doors, random shop stock, or meta progression
+- Damaging traps, extra trap kinds, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - GLB characters or environment art
 - Sound, saves, accounts, or networking
@@ -86,7 +88,7 @@ There is no keyboard movement and no combat input.
   - Right lane → centre or right
 - A two-lane jump (left ↔ right) is illegal. Tiles occupied by enemies are also illegal.
 - Only legal destinations glow and can be tapped.
-- Input is locked during the step animation, while combat or evade feedback plays, and while a Merchant shop is open.
+- Input is locked during the step animation, trap/enemy-advance playback, combat or evade feedback, and while a Merchant shop is open.
 - After death, use **Restart Run**. The page does not reload.
 
 Selection uses pointer events and a Three.js raycaster against invisible hit planes on the highlighted tiles, so the same path works for mouse and touch.
@@ -103,6 +105,8 @@ src/
     Tile.ts               Cell coordinates + content type
     Monster.ts            Run-specific enemy instance
     Collectible.ts        Gold and potion entities
+    Trap.ts               Alarm Trap entity and consume state
+    alarm.ts              Closest-enemy pick and one-tile advance
     Merchant.ts           Shop entity, used/purchased state
     shop.ts               Offers, eligibility, gold spend, and shop views
     Player.ts             Position, gold, and run-scoped combat stats
@@ -134,8 +138,8 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
 - **GameState** is the single-run aggregate. It owns grid, entities, shop session, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
 - **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`.
-- **Domain objects** (`Player`, `Monster`, `Collectible`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, and Merchant purchases.
-- **Pure rule modules** (`combat.ts`, `encounters.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
+- **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, trap consume, and Merchant purchases.
+- **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
 - **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
 - **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, and render key. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
@@ -149,7 +153,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -159,7 +163,7 @@ Each board cell is a logical `Tile`:
 
 - `row` — world row index. `0` is the starting row; values increase as the dungeon extends forward.
 - `col` — lane index: `0` left, `1` centre, `2` right.
-- `content.type` — `empty` | `monster` | `gold` | `potion` | `shop` | plus unused future types.
+- `content.type` — `empty` | `monster` | `gold` | `potion` | `shop` | `trap` | plus unused future types.
 
 `Grid` stores rows in a map and creates them on demand through a factory. After each step it prunes rows more than a couple of indexes behind the player so a long run does not grow forever.
 
@@ -187,9 +191,10 @@ World layout (rendering only):
 1. Commit the move and generate/prune rows
 2. Resolve a landed gold or potion pickup
 3. Open a Merchant if the landed tile is a shop
-4. Collect eligible cardinal-plus encounters (combat is not played back here)
+4. Trigger a landed Alarm Trap, if present, and resolve one enemy advance
+5. Collect eligible cardinal-plus encounters (combat is not played back here)
 
-A tile never holds loot, a shop, and a monster together. Shop rows are otherwise empty, so a Merchant and a fight cannot share a step. If both a pickup and an encounter happen in one step (loot in one lane, rat beside it), the pickup is applied first; an encounter then overwrites the status line.
+A tile never holds loot, a shop, a trap, and a monster together. Shop rows are otherwise empty, so a Merchant opening never also pulls an enemy. If a pickup or Alarm Trap and an encounter happen in one step, the earlier status is applied first; an encounter then overwrites the status line.
 
 ## Procedural row content
 
@@ -200,28 +205,36 @@ Safety guarantees:
 - Rows `0..3` are empty. The first three moves are therefore safe.
 - Row `4` always has the demo Cave Rat in the centre lane so front-on and side-pass combat stay easy to test.
 - Merchant rows never appear in `0..4`.
-- From row `5` onward, each row is rolled from early prototype weights unless a Merchant is due:
+- Rows `5–7` use the early weights (still no traps) unless a Merchant is due:
   - 45% all empty
   - 25% one monster
   - 15% one gold
   - 10% one potion
   - 5% one monster + one loot item (gold or potion, 50/50)
-- The monster on a monster or monster-plus-loot row is then chosen from the distance pool:
+- From row `8` onward, non-Merchant rows use:
+  - 35% all empty
+  - 25% one monster
+  - 15% one gold
+  - 10% one potion
+  - 5% one monster + one loot item
+  - 5% one Alarm Trap
+  - 5% one monster + one Alarm Trap
+- The monster on a monster, monster-plus-loot, or monster-plus-trap row is then chosen from the distance pool:
   - Rows `5–19`: 100% Cave Rat
   - Rows `20–39`: 75% Cave Rat, 25% Crypt Guard
   - Rows `40+`: 50% Cave Rat, 35% Crypt Guard, 15% Bone Brute
 - All three enemies use the same encounter and combat rules. Only stats and placeholder look differ.
 - Every generated row has at least one empty lane. There is never a three-wide monster wall.
-- At most one monster and at most one collectible per row.
+- At most one monster, at most one collectible, and at most one trap per row.
 - Two entities never share a tile.
 
 Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14`):
 
 - First shop at row `14`, then every 14 rows: `28`, `42`, `56`, …
 - Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
-- No monster, gold, potion, or other content on that row
+- No monster, gold, potion, trap, or other content on that row
 
-`?seed=<number>` seeds **row generation only** (Mulberry32), including Merchant lanes and enemy-type rolls. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence, Merchant lanes, and enemy types.
+`?seed=<number>` seeds **row generation only** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence, Merchant lanes, trap placement, and enemy types.
 
 Gold and potions:
 
@@ -230,6 +243,30 @@ Gold and potions:
   - Heal: `You drink a potion and restore [N] HP.`
   - Full: `You find a potion, but are already at full health.`
 - Pickup meshes pop/fade in place and do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
+
+## Alarm Trap
+
+Alarm Traps appear from row `8`. They deal no damage in this version.
+
+Landing on one:
+
+1. Consumes the trap.
+2. Selects the closest unresolved living enemy in the logical visible window (current player row through the last pooled row, `ROW_POOL_SIZE`).
+3. That enemy attempts exactly one cardinal step that reduces Manhattan distance to the player.
+4. Vertical toward the player is tried first; a horizontal step toward the player’s lane is the fallback.
+5. The enemy may enter gold, potion, or Alarm Trap tiles and immediately crush them. It gains no gold, healing, buff, or extra alarm pull.
+6. Merchant/shop tiles are impassable. An enemy cannot enter, consume, or destroy a Merchant.
+7. The enemy may step onto the player’s tile. It cannot leave the three lanes, move diagonally, or step onto another enemy.
+8. After the optional advance, the existing cardinal-plus encounter rules run immediately.
+
+Closest-enemy ties are deterministic: lower Manhattan, then lower row distance, then lower column distance, then stable enemy id. If no eligible enemy is visible, the trap still disappears: `You trigger an Alarm Trap… but nothing answers.`
+
+Status examples:
+
+- `Alarm Trap! The Crypt Guard closes in.`
+- `Alarm Trap! The Bone Brute closes in and crushes a potion.`
+
+The renderer plays a short trap flash, then a one-tile enemy slide, then any combat/evade FX. Board input stays locked until that sequence finishes.
 
 ## Travelling Merchant
 
@@ -328,7 +365,7 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, merchants, open shop state, generation RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
+Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
 
 ## Intended next steps
 
@@ -336,7 +373,7 @@ Restart Run resets player stats (including attack), gold, position, distance, mo
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
 - Smarter avoidance than a flat 50/50
 - More shop stock, defence upgrades, or meta progression; more loot kinds
-- Traps, doors, and authored biomes
+- Damaging traps, more trap kinds, doors, and authored biomes
 - GLB models
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 

@@ -30,7 +30,7 @@ function safestCol(state: GameState): number {
     }
     const here = state.getTile(nextRow, col)?.content.type;
     const ahead = state.getTile(nextRow + 1, col)?.content.type;
-    if (here !== 'monster' && ahead !== 'monster') {
+    if (here !== 'monster' && here !== 'trap' && ahead !== 'monster') {
       return col;
     }
   }

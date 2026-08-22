@@ -12,6 +12,14 @@ import {
 import { type EncounterEvent } from './encounters';
 import { GameState, type TurnResolution } from './GameState';
 import { mulberry32 } from './random';
+import {
+  alarmLane,
+  emptyRow,
+  monsterLane,
+  type LaneRecipe,
+  type RowRecipeFactory,
+} from './rowGeneration';
+import { collectibleId } from './Collectible';
 
 function seededState(): GameState {
   return new GameState({
@@ -37,7 +45,7 @@ function safestCol(state: GameState): number {
     }
     const here = state.getTile(nextRow, col)?.content.type;
     const ahead = state.getTile(nextRow + 1, col)?.content.type;
-    if (here !== 'monster' && ahead !== 'monster') {
+    if (here !== 'monster' && here !== 'trap' && ahead !== 'monster') {
       return col;
     }
   }
@@ -243,6 +251,7 @@ describe('turn resolution order', () => {
     expect(resolution).toEqual({
       pickup: null,
       shop: null,
+      trap: null,
       encounters: [],
     });
     expect(state.player.row).toBe(1);
@@ -294,5 +303,296 @@ describe('turn resolution order', () => {
     }
 
     expect(found).toBe(true);
+  });
+});
+
+function scriptedRecipes(scripts: Record<number, LaneRecipe[]>): RowRecipeFactory {
+  return (row) => scripts[row] ?? emptyRow();
+}
+
+function trapState(
+  scripts: Record<number, LaneRecipe[]>,
+  rollAvoidance: () => boolean = () => true,
+): GameState {
+  return new GameState({
+    createRowRecipe: scriptedRecipes(scripts),
+    rollAvoidance,
+  });
+}
+
+describe('alarm trap triggering', () => {
+  it('consumes a landed Alarm Trap once and reports no answer', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const trap = state.getTrapAt(8, 1);
+    expect(trap?.kind).toBe('alarm');
+    expect(trap?.triggered).toBe(false);
+
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.kind).toBe('alarm');
+    expect(resolution.trap?.enemyMove).toBeUndefined();
+    expect(resolution.trap?.message).toBe(
+      'You trigger an Alarm Trap… but nothing answers.',
+    );
+    expect(state.getTrapAt(8, 1)).toBeUndefined();
+    expect(state.getTile(8, 1)?.content.type).toBe('empty');
+    expect(trap?.triggered).toBe(true);
+    expect(state.status).toMatch(/nothing answers/);
+
+    expect(state.resolveCompletedMove(1).trap).toBeNull();
+  });
+
+  it('selects the closest visible unresolved enemy deterministically', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('near-guard', 'cryptGuard'), emptyRow()[2]],
+      14: [emptyRow()[0], monsterLane('far-brute', 'boneBrute'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.enemyId).toBe('near-guard');
+    expect(resolution.trap?.enemyMove?.from).toEqual({ row: 11, col: 1 });
+    expect(resolution.trap?.enemyMove?.to).toEqual({ row: 10, col: 1 });
+    expect(state.getMonsterAt(10, 1)?.id).toBe('near-guard');
+    expect(state.getMonsterAt(11, 1)).toBeUndefined();
+    expect(state.getMonsterAt(14, 1)?.id).toBe('far-brute');
+  });
+});
+
+describe('alarm enemy movement', () => {
+  it('advances one cardinal tile and reduces Manhattan distance', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      12: [monsterLane('rat-12', 'caveRat'), emptyRow()[1], emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const resolution = state.resolveCompletedMove(1);
+    const move = resolution.trap?.enemyMove;
+    expect(move).toEqual({
+      enemyId: 'rat-12',
+      from: { row: 12, col: 0 },
+      to: { row: 11, col: 0 },
+    });
+    expect(
+      Math.abs(move!.to.row - 8) + Math.abs(move!.to.col - 1),
+    ).toBeLessThan(Math.abs(12 - 8) + Math.abs(0 - 1));
+  });
+
+  it('uses the vertical-toward-player step when that tile is open', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      11: [monsterLane('guard-11', 'cryptGuard'), emptyRow()[1], emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    expect(state.resolveCompletedMove(1).trap?.enemyMove?.to).toEqual({
+      row: 10,
+      col: 0,
+    });
+  });
+
+  it('uses a horizontal fallback when the vertical tile is a Merchant', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        { kind: 'shop', entityId: 'shop-block' },
+        emptyRow()[1],
+        emptyRow()[2],
+      ],
+      11: [monsterLane('side-rat', 'caveRat'), emptyRow()[1], emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const move = state.resolveCompletedMove(1).trap?.enemyMove;
+    expect(move?.from).toEqual({ row: 11, col: 0 });
+    expect(move?.to).toEqual({ row: 11, col: 1 });
+    expect(state.getTile(10, 0)?.content.type).toBe('shop');
+  });
+
+  it('does not move onto another enemy or a Merchant, and stays put if blocked', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        emptyRow()[0],
+        { kind: 'shop', entityId: 'shop-block' },
+        emptyRow()[2],
+      ],
+      11: [emptyRow()[0], monsterLane('blocked-rat', 'caveRat'), emptyRow()[2]],
+      13: [emptyRow()[0], monsterLane('far-rat', 'caveRat'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove).toBeUndefined();
+    expect(resolution.trap?.message).toMatch(/cannot close in/);
+    expect(state.getMonsterAt(11, 1)?.id).toBe('blocked-rat');
+    expect(state.getMonsterAt(13, 1)?.id).toBe('far-rat');
+    expect(state.getTile(10, 1)?.content.type).toBe('shop');
+  });
+});
+
+describe('alarm item consumption', () => {
+  it('crushes gold without awarding it', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        emptyRow()[0],
+        { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
+        emptyRow()[2],
+      ],
+      11: [emptyRow()[0], monsterLane('gold-eater', 'caveRat'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    expect(state.getCollectibleAt(10, 1)?.kind).toBe('gold');
+
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.consumed).toBe('gold');
+    expect(resolution.trap?.message).toMatch(/crushes the gold/);
+    expect(state.gold).toBe(0);
+    expect(state.getCollectibleAt(10, 1)).toBeUndefined();
+    expect(state.getMonsterAt(10, 1)?.id).toBe('gold-eater');
+    expect(state.getTile(10, 1)?.content.type).toBe('monster');
+  });
+
+  it('crushes a potion without healing the enemy or the player', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        emptyRow()[0],
+        { kind: 'potion', entityId: collectibleId('potion', 10, 1) },
+        emptyRow()[2],
+      ],
+      11: [emptyRow()[0], monsterLane('potion-eater', 'boneBrute'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const health = state.player.stats.health;
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.consumed).toBe('potion');
+    expect(resolution.trap?.message).toMatch(/crushes a potion/);
+    expect(state.player.stats.health).toBe(health);
+    expect(state.getMonsterAt(10, 1)?.stats.health).toBe(20);
+    expect(state.getCollectibleAt(10, 1)).toBeUndefined();
+  });
+
+  it('destroys a destination Alarm Trap without chaining another pull', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [emptyRow()[0], alarmLane(10, 1), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('trap-eater', 'cryptGuard'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const crushed = state.getTrapAt(10, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.consumed).toBe('trap');
+    expect(resolution.trap?.enemyMove?.enemyId).toBe('trap-eater');
+    expect(crushed?.triggered).toBe(true);
+    expect(state.getTrapAt(10, 1)).toBeUndefined();
+    expect(state.getMonsterAt(9, 1)).toBeUndefined();
+    expect(state.getMonsterAt(10, 1)?.id).toBe('trap-eater');
+  });
+
+  it('leaves a Merchant intact and does not enter the shop tile', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        emptyRow()[0],
+        { kind: 'shop', entityId: 'merchant-safe' },
+        emptyRow()[2],
+      ],
+      11: [emptyRow()[0], monsterLane('shop-shy', 'caveRat'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove).toBeUndefined();
+    expect(state.getTile(10, 1)?.content.type).toBe('shop');
+    expect(state.getMonsterAt(11, 1)?.id).toBe('shop-shy');
+    expect(state.shopOpen).toBe(false);
+  });
+});
+
+describe('alarm encounters', () => {
+  it('includes a trap-moved enemy in the same turn when it enters range', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [emptyRow()[0], monsterLane('closer', 'caveRat'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.to).toEqual({ row: 9, col: 1 });
+    expect(resolution.encounters).toHaveLength(1);
+    expect(resolution.encounters[0]).toMatchObject({
+      kind: 'combat',
+      approach: 'frontOn',
+    });
+    expect(state.status).toMatch(/blocks your path/);
+  });
+
+  it('keeps evade and Surprise Attack rules after an alarm pull', () => {
+    const layout = {
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      9: [emptyRow()[0], emptyRow()[1], monsterLane('side-rat', 'caveRat')],
+    };
+    const evadeState = trapState(layout, () => true);
+    walkTo(evadeState, 7, 1);
+    const evade = evadeState.resolveCompletedMove(1);
+    expect(evade.trap?.enemyMove?.to).toEqual({ row: 8, col: 2 });
+    expect(evade.encounters).toEqual([
+      expect.objectContaining({ kind: 'evade' }),
+    ]);
+
+    const surpriseState = trapState(layout, () => false);
+    walkTo(surpriseState, 7, 1);
+    const surprise = surpriseState.resolveCompletedMove(1);
+    expect(surprise.encounters).toEqual([
+      expect.objectContaining({ kind: 'combat', approach: 'surprise' }),
+    ]);
+  });
+});
+
+describe('alarm reset and pruning', () => {
+  it('does not resurrect a triggered trap after the row is pruned', () => {
+    const recipes: RowRecipeFactory = scriptedRecipes({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+    });
+    const state = new GameState({ createRowRecipe: recipes });
+    walkTo(state, 7, 1);
+    state.resolveCompletedMove(1);
+    expect(state.getTile(8, 1)?.content.type).toBe('empty');
+
+    walkTo(state, 12, 1);
+    expect(state.getTile(8, 1)).toBeUndefined();
+    expect(state.getTrapAt(8, 1)).toBeUndefined();
+  });
+
+  it('does not resurrect gold crushed by an enemy', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      10: [
+        emptyRow()[0],
+        { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
+        emptyRow()[2],
+      ],
+      11: [emptyRow()[0], monsterLane('gold-eater', 'caveRat'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+    state.resolveCompletedMove(1);
+    expect(state.getTile(10, 1)?.content.type).toBe('monster');
+    walkTo(state, 14, 1);
+    expect(state.getTile(10, 1)).toBeUndefined();
+    expect(state.getCollectibleAt(10, 1)).toBeUndefined();
+  });
+
+  it('restores untriggered traps after Restart Run with the same scripted layout', () => {
+    const recipes = scriptedRecipes({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+    });
+    const state = new GameState({ createRowRecipe: recipes });
+    walkTo(state, 7, 1);
+    state.resolveCompletedMove(1);
+    expect(state.getTrapAt(8, 1)).toBeUndefined();
+
+    state.reset();
+    expect(state.getTrapAt(8, 1)?.triggered).toBe(false);
+    expect(state.getTile(8, 1)?.content.type).toBe('trap');
   });
 });

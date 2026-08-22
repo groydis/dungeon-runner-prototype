@@ -10,8 +10,8 @@ export class Monster {
   readonly id: string;
   readonly type: EnemyType;
   readonly definition: EnemyDefinition;
-  readonly row: number;
-  readonly col: number;
+  private _row: number;
+  private _col: number;
   private _encounterResolved = false;
   private readonly _stats: CombatStats;
 
@@ -25,9 +25,17 @@ export class Monster {
     this.id = id;
     this.type = type;
     this.definition = getEnemyDefinition(type);
-    this.row = row;
-    this.col = col;
+    this._row = row;
+    this._col = col;
     this._stats = createCombatStats(stats ?? this.definition.startingStats);
+  }
+
+  get row(): number {
+    return this._row;
+  }
+
+  get col(): number {
+    return this._col;
   }
 
   get name(): string {
@@ -68,6 +76,11 @@ export class Monster {
 
   resolveEncounter(): void {
     this._encounterResolved = true;
+  }
+
+  moveTo(row: number, col: number): void {
+    this._row = row;
+    this._col = col;
   }
 }
 
