@@ -108,7 +108,7 @@ describe('enemy definitions', () => {
       rollAvoidance: () => true,
     });
 
-    walkTo(state, DEMO_MONSTER_ROW - 1, 0);
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
     const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
     const combat = resolution.encounters.find((event) => event.kind === 'combat');
     expect(combat).toBeDefined();
@@ -139,7 +139,7 @@ describe('turn action validity', () => {
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       rollAvoidance: () => true,
     });
-    walkTo(state, DEMO_MONSTER_ROW - 1, 0);
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
     const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
     playEncounters(state, resolution.encounters);
 
@@ -157,6 +157,26 @@ describe('turn action validity', () => {
     expect(state.shopOpen).toBe(true);
     expect(() => state.resolveCompletedMove(1)).toThrow(/shop is open/);
     expect(state.player.row).toBe(14);
+  });
+
+  it('rejects landing on a tile occupied by an enemy', () => {
+    const state = new GameState();
+    walkTo(state, DEMO_MONSTER_ROW - 1, 0);
+
+    expect(state.isForwardTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBe(false);
+    const before = {
+      row: state.player.row,
+      col: state.player.col,
+      distance: state.distance,
+    };
+
+    expect(() => state.resolveCompletedMove(DEMO_MONSTER_COL)).toThrow(
+      /occupied enemy tile/,
+    );
+    expect(state.player.row).toBe(before.row);
+    expect(state.player.col).toBe(before.col);
+    expect(state.distance).toBe(before.distance);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeDefined();
   });
 
   it('rejects invalid lanes', () => {

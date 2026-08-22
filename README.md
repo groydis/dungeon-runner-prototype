@@ -84,7 +84,8 @@ There is no keyboard movement and no combat input.
   - Left lane → left or centre
   - Centre lane → left, centre, or right
   - Right lane → centre or right
-- A two-lane jump (left ↔ right) is illegal. Only legal destinations glow and can be tapped.
+- A two-lane jump (left ↔ right) is illegal. Tiles occupied by enemies are also illegal.
+- Only legal destinations glow and can be tapped.
 - Input is locked during the step animation, while combat or evade feedback plays, and while a Merchant shop is open.
 - After death, use **Restart Run**. The page does not reload.
 
@@ -162,7 +163,7 @@ Each board cell is a logical `Tile`:
 
 `Grid` stores rows in a map and creates them on demand through a factory. After each step it prunes rows more than a couple of indexes behind the player so a long run does not grow forever.
 
-A destination is legal only when it is the next row and at most one lane away: `row === player.row + 1 && Math.abs(col - player.col) <= 1`. That rule lives in `GameState.isForwardTile()`. Rendering highlights and raycast picks only those tiles.
+A destination is legal only when it is the next row, at most one lane away, and not occupied by an enemy. That rule lives in `GameState.isForwardTile()`. Rendering highlights and raycast picks only those tiles. You fight or slip past monsters from adjacent cardinal tiles; you cannot step onto their square.
 
 World layout (rendering only):
 

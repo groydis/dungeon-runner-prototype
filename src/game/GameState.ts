@@ -169,11 +169,21 @@ export class GameState {
     return col >= 0 && col < LANE_COUNT;
   }
 
+  private isOccupiedByMonster(row: number, col: number): boolean {
+    const tile = this.grid.getTile(row, col);
+    if (!tile || tile.content.type !== 'monster' || !tile.content.id) {
+      return false;
+    }
+    const monster = this.monsters.get(tile.content.id);
+    return Boolean(monster && !monster.encounterResolved);
+  }
+
   isForwardTile(row: number, col: number): boolean {
     return (
       row === this.player.row + 1 &&
       this.isValidLane(col) &&
-      Math.abs(col - this.player.col) <= 1
+      Math.abs(col - this.player.col) <= 1 &&
+      !this.isOccupiedByMonster(row, col)
     );
   }
 
@@ -193,6 +203,9 @@ export class GameState {
     }
     if (Math.abs(toCol - this.player.col) > 1) {
       throw new Error(`Cannot jump two lanes from ${this.player.col} to ${toCol}`);
+    }
+    if (this.isOccupiedByMonster(this.player.row + 1, toCol)) {
+      throw new Error('Cannot move onto an occupied enemy tile');
     }
 
     this.commitMove(toCol);
