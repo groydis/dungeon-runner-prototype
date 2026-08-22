@@ -7,6 +7,7 @@ import {
 import {
   ENEMY_DEFINITIONS,
   createEnemyStats,
+  enemyDropCollectibleId,
   enemyStatsFactoryFromSearch,
 } from './definitions/enemies';
 import { type EncounterEvent } from './encounters';
@@ -596,3 +597,201 @@ describe('alarm reset and pruning', () => {
     expect(state.getTile(8, 1)?.content.type).toBe('trap');
   });
 });
+
+function alwaysDrop(value: number): () => () => number {
+  return () => () => value;
+}
+
+function fightDemoRat(state: GameState): TurnResolution {
+  walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+  const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
+  playEncounters(state, resolution.encounters);
+  return resolution;
+}
+
+function rowContent(state: GameState, fromRow: number, toRow: number): string[][] {
+  const rows: string[][] = [];
+  for (let row = fromRow; row <= toRow; row += 1) {
+    rows.push(
+      [0, 1, 2].map((col) => state.getTile(row, col)?.content.type ?? 'missing'),
+    );
+  }
+  return rows;
+}
+
+describe('enemy drops', () => {
+  it('places gold on a defeated enemy tile and collects it by landing', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    fightDemoRat(state);
+
+    expect(state.runOver).toBe(false);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    const drop = state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
+    expect(drop?.kind).toBe('gold');
+    expect(drop?.id).toBe(enemyDropCollectibleId('gold', DEMO_MONSTER_ID));
+    expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content).toEqual({
+      type: 'gold',
+      id: drop?.id,
+    });
+    expect(state.status).toBe('You defeated the Cave Rat. It drops 1 gold.');
+    expect(state.gold).toBe(0);
+
+    const pickup = state.resolveCompletedMove(DEMO_MONSTER_COL);
+    expect(pickup.pickup?.kind).toBe('gold');
+    expect(state.gold).toBe(1);
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+  });
+
+  it('places a potion drop that heals through normal landing rules', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.9),
+      rollAvoidance: () => true,
+    });
+    fightDemoRat(state);
+    state.player.takeDamage(6);
+    const beforeHeal = state.player.stats.health;
+
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
+      'potion',
+    );
+    expect(state.status).toBe('You defeated the Cave Rat. It drops a potion.');
+
+    const pickup = state.resolveCompletedMove(DEMO_MONSTER_COL);
+    expect(pickup.pickup?.kind).toBe('potion');
+    expect(pickup.pickup?.healthRestored).toBe(4);
+    expect(state.player.stats.health).toBe(beforeHeal + 4);
+  });
+
+  it('leaves the tile empty when the drop roll is none', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    fightDemoRat(state);
+    expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content.type).toBe(
+      'empty',
+    );
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    expect(state.status).toBe('You defeated the Cave Rat.');
+  });
+
+  it('does not create a drop on evade', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, DEMO_MONSTER_ROW - 1, 0);
+    const resolution = state.resolveCompletedMove(0);
+    playEncounters(state, resolution.encounters);
+
+    expect(resolution.encounters[0]?.kind).toBe('evade');
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content.type).toBe(
+      'empty',
+    );
+    expect(state.gold).toBe(0);
+  });
+
+  it('does not create a drop when the player dies', () => {
+    const state = new GameState({
+      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+    const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
+    playEncounters(state, resolution.encounters);
+
+    expect(state.runOver).toBe(true);
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeDefined();
+  });
+
+  it('clears spawned drops on reset and does not resurrect them after pruning', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    fightDemoRat(state);
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
+      'gold',
+    );
+
+    walkTo(state, 12, 1);
+    expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+
+    state.reset();
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
+      DEMO_MONSTER_ID,
+    );
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+  });
+
+  it('keeps row generation unchanged when a separate drop stream rolls', () => {
+    const goldState = new GameState({
+      createRng: () => mulberry32(77),
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    const noneState = new GameState({
+      createRng: () => mulberry32(77),
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+
+    expect(rowContent(goldState, 5, 12)).toEqual(rowContent(noneState, 5, 12));
+    fightDemoRat(goldState);
+    fightDemoRat(noneState);
+    expect(rowContent(goldState, 5, 12)).toEqual(rowContent(noneState, 5, 12));
+
+    walkTo(goldState, 20, 1);
+    walkTo(noneState, 20, 1);
+    expect(rowContent(goldState, 16, 20)).toEqual(rowContent(noneState, 16, 20));
+  });
+
+  it('replays the same drop sequence after Restart Run with a fixed drop stream', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    fightDemoRat(state);
+    const firstId = state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id;
+    expect(firstId).toBe(enemyDropCollectibleId('gold', DEMO_MONSTER_ID));
+
+    state.reset();
+    fightDemoRat(state);
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
+      firstId,
+    );
+  });
+
+  it('can drop after an Alarm Trap pulls an enemy into a fight', () => {
+    const state = new GameState({
+      createRowRecipe: scriptedRecipes({
+        8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+        10: [emptyRow()[0], monsterLane('closer', 'caveRat'), emptyRow()[2]],
+      }),
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, 7, 1);
+    const resolution = state.resolveCompletedMove(1);
+    expect(resolution.trap?.enemyMove?.to).toEqual({ row: 9, col: 1 });
+    expect(resolution.encounters[0]).toMatchObject({
+      kind: 'combat',
+      approach: 'frontOn',
+    });
+    playEncounters(state, resolution.encounters);
+
+    expect(state.getCollectibleAt(9, 1)?.kind).toBe('gold');
+    expect(state.getCollectibleAt(9, 1)?.id).toBe(
+      enemyDropCollectibleId('gold', 'closer'),
+    );
+    expect(state.getTile(10, 1)?.content.type).toBe('empty');
+  });
+});
+

@@ -1,5 +1,6 @@
 import {
   COMBAT_HIT_SEC,
+  DROP_SPAWN_FX_SEC,
   ENCOUNTER_FX_SEC,
   ENEMY_ADVANCE_FX_SEC,
   MOVE_DURATION_SEC,
@@ -14,7 +15,7 @@ import {
 } from './encounters';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
 import { GameState, type TrapResolution } from './GameState';
-import { rngFactoryFromSearch } from './random';
+import { dropRngFactoryFromSearch, rngFactoryFromSearch } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type Monster } from './Monster';
 import { type ShopOfferId } from './shop';
@@ -49,6 +50,7 @@ export class Game {
     rollAvoidance: avoidanceRollerFromSearch(window.location.search),
     createEnemyStats: enemyStatsFactoryFromSearch(window.location.search),
     createRng: rngFactoryFromSearch(window.location.search),
+    createDropRng: dropRngFactoryFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
   private readonly scene: SceneManager;
@@ -64,6 +66,7 @@ export class Game {
   private pendingEvents: EncounterEvent[] = [];
   private combatPlayback: CombatPlayback | null = null;
   private trapPlayback: TrapPlayback | null = null;
+  private dropSpawnElapsed: number | null = null;
   private lastTimeMs = 0;
   private running = false;
 
@@ -124,6 +127,7 @@ export class Game {
     this.updateTrapPlayback(dt);
     this.updateEncounterFx(dt);
     this.updateCombatPlayback(dt);
+    this.updateDropSpawn(dt);
     this.camera.update(dt);
     this.scene.update(nowMs / 1000);
     this.scene.render(this.camera.camera);
@@ -312,11 +316,7 @@ export class Game {
     this.combatPlayback.elapsed = 0;
 
     if (this.combatPlayback.entryIndex >= this.combatPlayback.result.log.length) {
-      this.state.finishCombat(this.combatPlayback.result, this.combatPlayback.monster);
-      this.combatPlayback = null;
-      this.setBoardInteractive(false);
-      this.updateHud();
-      this.playNextPendingEvent();
+      this.concludeCombat(this.combatPlayback.result, this.combatPlayback.monster);
       return;
     }
 
@@ -331,11 +331,7 @@ export class Game {
 
     const entry = playback.result.log[playback.entryIndex];
     if (!entry) {
-      this.state.finishCombat(playback.result, playback.monster);
-      this.combatPlayback = null;
-      this.setBoardInteractive(false);
-      this.updateHud();
-      this.playNextPendingEvent();
+      this.concludeCombat(playback.result, playback.monster);
       return;
     }
 
@@ -347,6 +343,39 @@ export class Game {
       playback.monster.row,
       playback.monster.col,
     );
+  }
+
+  private concludeCombat(result: CombatResult, monster: Monster): void {
+    const finish = this.state.finishCombat(result, monster);
+    this.combatPlayback = null;
+    this.setBoardInteractive(false);
+    this.updateHud();
+
+    if (finish.drop) {
+      this.scene.beginDropSpawnFx(finish.drop);
+      this.dropSpawnElapsed = 0;
+      return;
+    }
+
+    this.playNextPendingEvent();
+  }
+
+  private updateDropSpawn(dt: number): void {
+    if (this.dropSpawnElapsed === null) {
+      return;
+    }
+
+    this.dropSpawnElapsed += dt;
+    const t = Math.min(1, this.dropSpawnElapsed / DROP_SPAWN_FX_SEC);
+    this.scene.updateDropSpawnFx(t);
+
+    if (t < 1) {
+      return;
+    }
+
+    this.scene.endDropSpawnFx();
+    this.dropSpawnElapsed = null;
+    this.playNextPendingEvent();
   }
 
   private finishEncounterSequence(): void {
@@ -373,6 +402,7 @@ export class Game {
     this.encounterFxElapsed = null;
     this.combatPlayback = null;
     this.trapPlayback = null;
+    this.dropSpawnElapsed = null;
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();
@@ -408,7 +438,8 @@ export class Game {
       this.animation !== null ||
       this.combatPlayback !== null ||
       this.encounterFxElapsed !== null ||
-      this.trapPlayback !== null
+      this.trapPlayback !== null ||
+      this.dropSpawnElapsed !== null
     );
   }
 

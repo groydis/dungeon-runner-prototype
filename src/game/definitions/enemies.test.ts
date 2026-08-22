@@ -13,12 +13,14 @@ describe('enemy definitions', () => {
       name: 'Crypt Guard',
       startingStats: { maxHealth: 12, health: 12, attack: 4, defence: 1 },
       renderKey: 'cryptGuard',
+      dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
     expect(ENEMY_DEFINITIONS.boneBrute).toEqual({
       type: 'boneBrute',
       name: 'Bone Brute',
       startingStats: { maxHealth: 20, health: 20, attack: 6, defence: 1 },
       renderKey: 'boneBrute',
+      dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
   });
 

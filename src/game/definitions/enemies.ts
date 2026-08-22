@@ -1,12 +1,37 @@
 import { type CombatStats, createCombatStats } from '../Combatant';
+import { pickWeighted, type Rng } from '../random';
 
 export type EnemyType = 'caveRat' | 'cryptGuard' | 'boneBrute';
+
+export type EnemyDropKind = 'none' | 'gold' | 'potion';
+
+export interface EnemyDropTableEntry {
+  item: EnemyDropKind;
+  weight: number;
+}
+
+/** Shared first-version table. Swap per enemy later without changing GameState. */
+export const DEFAULT_ENEMY_DROP_TABLE: readonly EnemyDropTableEntry[] = [
+  { item: 'none', weight: 60 },
+  { item: 'gold', weight: 25 },
+  { item: 'potion', weight: 15 },
+];
+
+export interface EnemyDropResult {
+  enemyId: string;
+  enemyType: EnemyType;
+  kind: Exclude<EnemyDropKind, 'none'>;
+  collectibleId: string;
+  row: number;
+  col: number;
+}
 
 export interface EnemyDefinition {
   type: EnemyType;
   name: string;
   startingStats: CombatStats;
   renderKey: string;
+  dropTable: readonly EnemyDropTableEntry[];
 }
 
 export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
@@ -25,6 +50,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 0,
     },
     renderKey: 'caveRat',
+    dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
   cryptGuard: {
     type: 'cryptGuard',
@@ -36,6 +62,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 1,
     },
     renderKey: 'cryptGuard',
+    dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
   boneBrute: {
     type: 'boneBrute',
@@ -47,11 +74,26 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 1,
     },
     renderKey: 'boneBrute',
+    dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
 };
 
 export function getEnemyDefinition(type: EnemyType): EnemyDefinition {
   return ENEMY_DEFINITIONS[type];
+}
+
+export function rollEnemyDrop(
+  table: readonly EnemyDropTableEntry[],
+  rng: Rng,
+): EnemyDropKind {
+  return pickWeighted(table, rng);
+}
+
+export function enemyDropCollectibleId(
+  kind: Exclude<EnemyDropKind, 'none'>,
+  enemyId: string,
+): string {
+  return `drop-${kind}-${enemyId}`;
 }
 
 /** Default spawn stats: a clone of the definition, with no overrides. */

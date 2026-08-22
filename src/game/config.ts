@@ -12,6 +12,7 @@ export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
 export const COMBAT_HIT_SEC = 0.3;
 export const COLLECT_FX_SEC = 0.38;
+export const DROP_SPAWN_FX_SEC = 0.32;
 export const TRAP_FX_SEC = 0.34;
 export const ENEMY_ADVANCE_FX_SEC = 0.32;
 

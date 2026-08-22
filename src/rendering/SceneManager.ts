@@ -34,6 +34,7 @@ import { type CombatLogEntry } from '../game/combat';
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type EnemyType } from '../game/definitions/enemies';
+import { type EnemyDropResult } from '../game/definitions/enemies';
 import {
   type EnemyMoveResult,
   type GameState,
@@ -98,6 +99,12 @@ interface EnemyAdvanceFx {
   baseY: number;
 }
 
+interface DropSpawnFx {
+  kind: CollectibleKind;
+  mesh: Mesh;
+  baseY: number;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
@@ -131,6 +138,7 @@ export class SceneManager {
   private trapTrigger: Group | null = null;
   private trapConsumeFx: TrapConsumeFx[] = [];
   private enemyAdvanceFx: EnemyAdvanceFx | null = null;
+  private dropSpawnFx: DropSpawnFx | null = null;
   private clock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -368,6 +376,55 @@ export class SceneManager {
       startedAt: this.clock,
       baseY: pickup.kind === 'gold' ? 0.38 : 0.42,
     });
+  }
+
+  beginDropSpawnFx(drop: EnemyDropResult): void {
+    const mesh =
+      drop.kind === 'gold'
+        ? this.findGoldMesh(drop.row, drop.col)
+        : this.findPotionMesh(drop.row, drop.col);
+    if (!mesh) {
+      this.dropSpawnFx = null;
+      return;
+    }
+    const baseY = drop.kind === 'gold' ? 0.38 : 0.42;
+    mesh.visible = true;
+    mesh.scale.setScalar(0.15);
+    mesh.position.y = baseY + 0.28;
+    const material = mesh.material as MeshStandardMaterial;
+    material.opacity = 0.2;
+    material.emissiveIntensity = 1.2;
+    this.dropSpawnFx = {
+      kind: drop.kind,
+      mesh,
+      baseY,
+    };
+  }
+
+  updateDropSpawnFx(t: number): void {
+    const fx = this.dropSpawnFx;
+    if (!fx) {
+      return;
+    }
+    const bounce = 1 - (1 - t) ** 3;
+    fx.mesh.visible = true;
+    fx.mesh.scale.setScalar(0.15 + bounce * 0.95);
+    fx.mesh.position.y = fx.baseY + (1 - bounce) * 0.28;
+    const material = fx.mesh.material as MeshStandardMaterial;
+    material.opacity = 0.2 + bounce * 0.8;
+    material.emissiveIntensity = 1.2 - bounce * 0.6;
+  }
+
+  endDropSpawnFx(): void {
+    const fx = this.dropSpawnFx;
+    if (fx) {
+      const material = fx.mesh.material as MeshStandardMaterial;
+      material.opacity = 1;
+      material.emissiveIntensity = fx.kind === 'gold' ? 0.55 : 0.4;
+      fx.mesh.scale.setScalar(1);
+      fx.mesh.position.y = fx.baseY;
+    }
+    this.dropSpawnFx = null;
   }
 
   beginItemConsumeFx(kind: CollectibleKind, row: number, col: number): void {
@@ -618,6 +675,7 @@ export class SceneManager {
     this.endCombatHit();
     this.endTrapTriggerFx();
     this.endEnemyAdvanceFx();
+    this.endDropSpawnFx();
     this.collectFx = [];
     this.resetTrapConsumeFx();
     this.resetMerchantLeaveFx();
@@ -755,6 +813,13 @@ export class SceneManager {
     if (this.trapTrigger && view.traps.includes(this.trapTrigger)) {
       this.endTrapTriggerFx();
     }
+    if (
+      this.dropSpawnFx &&
+      (view.golds.includes(this.dropSpawnFx.mesh) ||
+        view.potions.includes(this.dropSpawnFx.mesh))
+    ) {
+      this.endDropSpawnFx();
+    }
     view.assignedRow = row;
     this.applyTileChrome(view, state);
   }
@@ -801,14 +866,16 @@ export class SceneManager {
 
       const collectingGold = this.collectFx.some((fx) => fx.mesh === gold);
       const collectingPotion = this.collectFx.some((fx) => fx.mesh === potion);
-      if (!collectingGold) {
+      const spawningGold = this.dropSpawnFx?.mesh === gold;
+      const spawningPotion = this.dropSpawnFx?.mesh === potion;
+      if (!collectingGold && !spawningGold) {
         this.resetCollectibleMesh(gold, col, 0.38, Math.PI / 2);
       }
-      if (!collectingPotion) {
+      if (!collectingPotion && !spawningPotion) {
         this.resetCollectibleMesh(potion, col, 0.42, 0);
       }
-      gold.visible = collectingGold || tile?.content.type === 'gold';
-      potion.visible = collectingPotion || tile?.content.type === 'potion';
+      gold.visible = collectingGold || spawningGold || tile?.content.type === 'gold';
+      potion.visible = collectingPotion || spawningPotion || tile?.content.type === 'potion';
 
       const playingTrap =
         this.trapTrigger === trap ||
@@ -848,11 +915,19 @@ export class SceneManager {
         const gold = view.golds[col];
         const potion = view.potions[col];
         const phase = elapsedSec * 3 + view.assignedRow + col;
-        if (gold.visible && !this.collectFx.some((fx) => fx.mesh === gold)) {
+        if (
+          gold.visible &&
+          !this.collectFx.some((fx) => fx.mesh === gold) &&
+          this.dropSpawnFx?.mesh !== gold
+        ) {
           gold.position.y = 0.38 + Math.sin(phase) * 0.05;
           gold.rotation.y = elapsedSec * 2.2;
         }
-        if (potion.visible && !this.collectFx.some((fx) => fx.mesh === potion)) {
+        if (
+          potion.visible &&
+          !this.collectFx.some((fx) => fx.mesh === potion) &&
+          this.dropSpawnFx?.mesh !== potion
+        ) {
           potion.position.y = 0.42 + Math.sin(phase + 0.8) * 0.05;
           potion.rotation.y = elapsedSec * 1.4;
         }

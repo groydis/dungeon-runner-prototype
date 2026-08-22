@@ -75,7 +75,7 @@ Query-string helpers (no on-screen debug UI):
 - `/?avoid=1` — always evade a side pass
 - `/?avoid=0` — always Surprise Attack combat on a side pass
 - `/?fatal=1` — testing override: Cave Rat **attack** is raised on top of `ENEMY_DEFINITIONS`, enough to kill the player
-- `/?seed=123` — seeded row generation, including Merchant lanes and enemy-type picks; Restart Run replays the same content sequence
+- `/?seed=123` — seeded row generation and a separate drop stream; Restart Run replays the same layouts and, for the same fights, the same drops
 
 ## Controls
 
@@ -137,7 +137,7 @@ public/                   Static assets
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
 - **GameState** is the single-run aggregate. It owns grid, entities, shop session, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
-- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`.
+- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop result for spawn playback only.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
@@ -153,7 +153,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -223,7 +223,7 @@ Safety guarantees:
   - Rows `5–19`: 100% Cave Rat
   - Rows `20–39`: 75% Cave Rat, 25% Crypt Guard
   - Rows `40+`: 50% Cave Rat, 35% Crypt Guard, 15% Bone Brute
-- All three enemies use the same encounter and combat rules. Only stats and placeholder look differ.
+- All three enemies use the same encounter and combat rules and the same first-version drop table. Only stats and placeholder look differ.
 - Every generated row has at least one empty lane. There is never a three-wide monster wall.
 - At most one monster, at most one collectible, and at most one trap per row.
 - Two entities never share a tile.
@@ -234,7 +234,7 @@ Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14
 - Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
 - No monster, gold, potion, trap, or other content on that row
 
-`?seed=<number>` seeds **row generation only** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence, Merchant lanes, trap placement, and enemy types.
+`?seed=<number>` seeds **row generation** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Enemy drops use a **separate** Mulberry32 stream derived from the same seed with a fixed XOR salt (`DROP_RNG_SEED_SALT`), so fighting and drop rolls cannot change later layouts. Combat and avoidance still use their own rolls. Without `?seed`, generation and drops both use `Math.random`. Restart Run rebuilds both RNGs from the same seed, so `?seed=123` replays the same rows, Merchant lanes, trap placement, enemy types, and — for the same fights — the same drops.
 
 Gold and potions:
 
@@ -243,6 +243,31 @@ Gold and potions:
   - Heal: `You drink a potion and restore [N] HP.`
   - Full: `You find a potion, but are already at full health.`
 - Pickup meshes pop/fade in place and do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
+- Defeated enemies can drop gold or a potion onto their cleared tile. The drop is a normal collectible and is **not** granted automatically. You only receive it by landing on that tile later.
+
+## Enemy drops
+
+All three current enemies share this drop table (defined on `EnemyDefinition`, not in GameState or rendering):
+
+| Result | Weight |
+|---|---:|
+| No drop | 60% |
+| Gold | 25% |
+| Potion | 15% |
+
+A drop is rolled only after a player combat victory, once the monster is removed. Evade, death, Alarm Trap movement, and other removals never roll.
+
+The item stays on the defeated enemy’s tile:
+
+- Front-on kills leave loot on the tile directly ahead, so the next step can collect it.
+- A Surprise Attack in an adjacent lane may leave loot behind as the board advances. That is intentional: front-on fights cost more health but can clear a path to loot.
+
+Status keeps the existing victory line and appends a short drop note when something appears:
+
+- `You defeated the Cave Rat. It drops 1 gold.`
+- `You defeated the Crypt Guard. It drops a potion.`
+
+The renderer plays a short pop/landing glow on the pooled gold or potion mesh. Board input stays locked until that spawn effect finishes. Later pickups still use the existing collect fade.
 
 ## Alarm Trap
 
@@ -351,7 +376,7 @@ The fight is resolved immediately in game logic. The renderer then plays each lo
 
 Outcomes:
 
-- Player wins: `You defeated the [enemy name].` Movement unlocks.
+- Player wins: `You defeated the [enemy name].` If a drop rolled, a short extra sentence is appended. Movement unlocks after any drop-spawn playback.
 - Player dies: `You were killed by the [enemy name].` Input locks and the overlay appears.
 - Evade: `You slip past the [enemy name].` No combat, no HP change.
 
@@ -365,7 +390,7 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
+Restart Run resets player stats (including attack), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation RNG, drop RNG, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
 
 ## Intended next steps
 

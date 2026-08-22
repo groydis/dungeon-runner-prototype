@@ -25,6 +25,9 @@ import {
 } from './Collectible';
 import {
   createEnemyStats,
+  enemyDropCollectibleId,
+  rollEnemyDrop,
+  type EnemyDropResult,
   type EnemyStatsFactory,
 } from './definitions/enemies';
 import {
@@ -99,6 +102,10 @@ export interface TurnResolution {
   encounters: EncounterEvent[];
 }
 
+export interface CombatFinishResult {
+  drop: EnemyDropResult | null;
+}
+
 export interface HudSnapshot {
   distance: number;
   gold: number;
@@ -112,6 +119,7 @@ export interface GameStateOptions {
   rollAvoidance?: AvoidanceRoll;
   createEnemyStats?: EnemyStatsFactory;
   createRng?: () => Rng;
+  createDropRng?: () => Rng;
   createRowRecipe?: RowRecipeFactory;
 }
 
@@ -133,15 +141,19 @@ export class GameState {
   private readonly rollAvoidance: AvoidanceRoll;
   private readonly createEnemyStats: EnemyStatsFactory;
   private readonly createRng: () => Rng;
+  private readonly createDropRng: () => Rng;
   private readonly createRowRecipe: RowRecipeFactory;
   private rng: Rng;
+  private dropRng: Rng;
 
   constructor(options: GameStateOptions = {}) {
     this.rollAvoidance = options.rollAvoidance ?? (() => rollAvoidance());
     this.createEnemyStats = options.createEnemyStats ?? createEnemyStats;
     this.createRng = options.createRng ?? (() => Math.random);
+    this.createDropRng = options.createDropRng ?? (() => Math.random);
     this.createRowRecipe = options.createRowRecipe ?? createRowRecipe;
     this.rng = this.createRng();
+    this.dropRng = this.createDropRng();
     this.populateInitialRows();
   }
 
@@ -371,18 +383,27 @@ export class GameState {
     monster.applyHealth(entry.targetHealthAfter);
   }
 
-  finishCombat(result: CombatResult, monster: Monster): void {
+  finishCombat(result: CombatResult, monster: Monster): CombatFinishResult {
     this.player.applyHealth(result.playerHealthAfter);
 
     if (result.winner === 'player') {
-      this._status = combatVictoryText(result.monsterName);
       this.removeMonster(monster);
-      return;
+      const drop =
+        monster.defeated ? this.trySpawnDefeatDrop(monster) : null;
+      this._status = combatVictoryText(result.monsterName);
+      if (drop) {
+        this._status +=
+          drop.kind === 'gold'
+            ? ` It drops ${GOLD_AMOUNT} gold.`
+            : ' It drops a potion.';
+      }
+      return { drop };
     }
 
     this.player.applyHealth(0);
     this._runOver = true;
     this._status = combatDefeatText(result.monsterName);
+    return { drop: null };
   }
 
   reset(): void {
@@ -397,6 +418,7 @@ export class GameState {
     this.activeShop = null;
     this.recipes.clear();
     this.rng = this.createRng();
+    this.dropRng = this.createDropRng();
     this.grid.clear();
     this.populateInitialRows();
   }
@@ -615,6 +637,40 @@ export class GameState {
     if (tile?.content.id === monster.id) {
       this.clearTileContent(tile);
     }
+  }
+
+  private trySpawnDefeatDrop(monster: Monster): EnemyDropResult | null {
+    const kind = rollEnemyDrop(monster.definition.dropTable, this.dropRng);
+    if (kind === 'none') {
+      return null;
+    }
+
+    const collectibleId = enemyDropCollectibleId(kind, monster.id);
+    const collectible = createCollectible(
+      collectibleId,
+      kind,
+      monster.row,
+      monster.col,
+    );
+    this.collectibles.set(collectibleId, collectible);
+
+    const tile = this.grid.getTile(monster.row, monster.col);
+    if (tile) {
+      tile.content = { type: kind, id: collectibleId };
+      this.writeLaneRecipe(monster.row, monster.col, {
+        kind,
+        entityId: collectibleId,
+      });
+    }
+
+    return {
+      enemyId: monster.id,
+      enemyType: monster.type,
+      kind,
+      collectibleId,
+      row: monster.row,
+      col: monster.col,
+    };
   }
 
   private isValidEnemyDestination(

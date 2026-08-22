@@ -39,6 +39,21 @@ export function rngFactoryFromSearch(search: string): () => Rng {
   return () => mulberry32(seed);
 }
 
+/**
+ * XOR salt so enemy-drop rolls never share the row-generation Mulberry32
+ * stream. `?seed=123` still drives both, but drop rolls cannot change
+ * later recipes, Merchant lanes, or enemy types.
+ */
+export const DROP_RNG_SEED_SALT = 0x9e3779b9;
+
+export function dropRngFactoryFromSearch(search: string): () => Rng {
+  const seed = seedFromSearch(search);
+  if (seed === undefined) {
+    return () => Math.random;
+  }
+  return () => mulberry32((seed ^ DROP_RNG_SEED_SALT) >>> 0);
+}
+
 export function randomInt(rng: Rng, maxExclusive: number): number {
   if (maxExclusive <= 0) {
     return 0;
