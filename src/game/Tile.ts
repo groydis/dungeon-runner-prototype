@@ -1,6 +1,8 @@
 export type TileContentType =
   | 'empty'
   | 'monster'
+  | 'gold'
+  | 'potion'
   | 'loot'
   | 'trap'
   | 'door'

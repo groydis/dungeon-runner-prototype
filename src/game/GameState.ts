@@ -1,9 +1,7 @@
 import {
-  DEMO_MONSTER_COL,
-  DEMO_MONSTER_ID,
-  DEMO_MONSTER_NAME,
-  DEMO_MONSTER_ROW,
+  GOLD_AMOUNT,
   LANE_COUNT,
+  POTION_HEAL,
   ROW_POOL_SIZE,
   START_ROW,
 } from './config';
@@ -12,6 +10,11 @@ import {
   type CombatLogEntry,
 } from './combat';
 import { type CombatStats, createCaveRatStats } from './Combatant';
+import {
+  createCollectible,
+  type Collectible,
+  type CollectibleKind,
+} from './Collectible';
 import {
   type AvoidanceRoll,
   type EncounterEvent,
@@ -24,6 +27,8 @@ import {
 import { Grid } from './Grid';
 import { createMonster, type Monster } from './Monster';
 import { Player } from './Player';
+import { type Rng } from './random';
+import { createRowRecipe, type LaneRecipe } from './rowGeneration';
 import { createEmptyTile, createTile, type Tile } from './Tile';
 
 export interface MoveResult {
@@ -34,15 +39,27 @@ export interface MoveResult {
   destination: Tile;
 }
 
+export interface PickupResult {
+  kind: CollectibleKind;
+  id: string;
+  row: number;
+  col: number;
+  goldGained: number;
+  healthRestored: number;
+  alreadyFull: boolean;
+}
+
 export interface GameStateOptions {
   rollAvoidance?: AvoidanceRoll;
   createCaveRatStats?: () => CombatStats;
+  createRng?: () => Rng;
 }
 
 export class GameState {
   readonly player = new Player();
   readonly grid = new Grid();
   readonly monsters = new Map<string, Monster>();
+  readonly collectibles = new Map<string, Collectible>();
 
   distance = 0;
   status = '';
@@ -51,15 +68,24 @@ export class GameState {
 
   private readonly rollAvoidance: AvoidanceRoll;
   private readonly createCaveRatStats: () => CombatStats;
+  private readonly createRng: () => Rng;
+  private rng: Rng;
+  private readonly recipes = new Map<number, LaneRecipe[]>();
 
   constructor(options: GameStateOptions = {}) {
     this.rollAvoidance = options.rollAvoidance ?? (() => rollAvoidance());
     this.createCaveRatStats = options.createCaveRatStats ?? createCaveRatStats;
+    this.createRng = options.createRng ?? (() => Math.random);
+    this.rng = this.createRng();
     this.populateInitialRows();
   }
 
   get playerStats(): CombatStats {
     return this.player.stats;
+  }
+
+  get gold(): number {
+    return this.player.gold;
   }
 
   isValidLane(col: number): boolean {
@@ -79,10 +105,12 @@ export class GameState {
       this.player.row + ROW_POOL_SIZE + 2,
       (row, col) => this.createTile(row, col),
     );
-    this.grid.pruneBelow(this.player.row - 2);
+    const minRow = this.player.row - 2;
+    this.grid.pruneBelow(minRow);
+    this.pruneEntitiesBelow(minRow);
   }
 
-  /** Commits a one-row advance. Encounters are resolved separately after this. */
+  /** Commits a one-row advance. Pickups and encounters resolve after this. */
   commitMove(toCol: number): MoveResult {
     if (this.runOver) {
       throw new Error('Cannot move after the run is over');
@@ -116,8 +144,62 @@ export class GameState {
   }
 
   /**
-   * After the player has advanced, find monsters in the cardinal plus.
-   * Evade/combat application happens after this so combat can play back a log.
+   * Landed-tile pickups run first, then cardinal-plus encounters.
+   * A tile never holds both loot and a monster.
+   */
+  resolveLandedPickup(): PickupResult | null {
+    const tile = this.grid.getTile(this.player.row, this.player.col);
+    if (!tile || (tile.content.type !== 'gold' && tile.content.type !== 'potion')) {
+      return null;
+    }
+
+    const collectible = tile.content.id
+      ? this.collectibles.get(tile.content.id)
+      : undefined;
+    if (!collectible || collectible.collected) {
+      tile.content = { type: 'empty' };
+      return null;
+    }
+
+    collectible.collected = true;
+    tile.content = { type: 'empty' };
+
+    if (collectible.kind === 'gold') {
+      this.player.gold += GOLD_AMOUNT;
+      this.status = `You found ${GOLD_AMOUNT} gold.`;
+      return {
+        kind: 'gold',
+        id: collectible.id,
+        row: collectible.row,
+        col: collectible.col,
+        goldGained: GOLD_AMOUNT,
+        healthRestored: 0,
+        alreadyFull: false,
+      };
+    }
+
+    const missing = this.player.stats.maxHealth - this.player.stats.health;
+    const restored = Math.min(POTION_HEAL, Math.max(0, missing));
+    this.player.stats.health += restored;
+    this.status =
+      restored > 0
+        ? `You drink a potion and restore ${restored} HP.`
+        : 'You find a potion, but are already at full health.';
+
+    return {
+      kind: 'potion',
+      id: collectible.id,
+      row: collectible.row,
+      col: collectible.col,
+      goldGained: 0,
+      healthRestored: restored,
+      alreadyFull: restored === 0,
+    };
+  }
+
+  /**
+   * After the player has advanced and any pickup is done, find monsters
+   * in the cardinal plus. Leaves pickup status untouched when nothing engages.
    */
   resolveMonsterEncountersAfterMove(): EncounterEvent[] {
     if (this.runOver) {
@@ -129,7 +211,9 @@ export class GameState {
       this.monsters.values(),
       this.rollAvoidance,
     );
-    this.status = events.length > 0 ? events.map(encounterStartText).join(' ') : '';
+    if (events.length > 0) {
+      this.status = events.map(encounterStartText).join(' ');
+    }
     return events;
   }
 
@@ -167,6 +251,9 @@ export class GameState {
     this.isAnimating = false;
     this.runOver = false;
     this.monsters.clear();
+    this.collectibles.clear();
+    this.recipes.clear();
+    this.rng = this.createRng();
     this.grid.clear();
     this.populateInitialRows();
   }
@@ -179,6 +266,24 @@ export class GameState {
     }
   }
 
+  private pruneEntitiesBelow(minRow: number): void {
+    for (const [id, monster] of this.monsters) {
+      if (monster.row < minRow) {
+        this.monsters.delete(id);
+      }
+    }
+    for (const [id, item] of this.collectibles) {
+      if (item.row < minRow) {
+        this.collectibles.delete(id);
+      }
+    }
+    for (const row of this.recipes.keys()) {
+      if (row < minRow) {
+        this.recipes.delete(row);
+      }
+    }
+  }
+
   private populateInitialRows(): void {
     this.grid.ensureRange(
       START_ROW,
@@ -187,18 +292,45 @@ export class GameState {
     );
   }
 
-  private createTile(row: number, col: number): Tile {
-    if (row === DEMO_MONSTER_ROW && col === DEMO_MONSTER_COL) {
-      const monster = createMonster(
-        DEMO_MONSTER_ID,
-        DEMO_MONSTER_NAME,
-        row,
-        col,
-        this.createCaveRatStats(),
-      );
-      this.monsters.set(monster.id, monster);
-      return createTile(row, col, { type: 'monster', id: monster.id });
+  private recipeFor(row: number): LaneRecipe[] {
+    const existing = this.recipes.get(row);
+    if (existing) {
+      return existing;
     }
+    const recipe = createRowRecipe(row, this.rng);
+    this.recipes.set(row, recipe);
+    return recipe;
+  }
+
+  private createTile(row: number, col: number): Tile {
+    const lane = this.recipeFor(row)[col] ?? { kind: 'empty' };
+
+    if (lane.kind === 'monster' && lane.entityId) {
+      if (!this.monsters.has(lane.entityId)) {
+        this.monsters.set(
+          lane.entityId,
+          createMonster(
+            lane.entityId,
+            'Cave Rat',
+            row,
+            col,
+            this.createCaveRatStats(),
+          ),
+        );
+      }
+      return createTile(row, col, { type: 'monster', id: lane.entityId });
+    }
+
+    if ((lane.kind === 'gold' || lane.kind === 'potion') && lane.entityId) {
+      if (!this.collectibles.has(lane.entityId)) {
+        this.collectibles.set(
+          lane.entityId,
+          createCollectible(lane.entityId, lane.kind, row, col),
+        );
+      }
+      return createTile(row, col, { type: lane.kind, id: lane.entityId });
+    }
+
     return createEmptyTile(row, col);
   }
 }

@@ -3,6 +3,7 @@ import {
   CapsuleGeometry,
   CircleGeometry,
   Color,
+  CylinderGeometry,
   DirectionalLight,
   DoubleSide,
   Fog,
@@ -19,6 +20,7 @@ import {
   type Camera,
 } from 'three';
 import {
+  COLLECT_FX_SEC,
   LANE_COUNT,
   ROW_POOL_SIZE,
   TILE_PITCH,
@@ -27,8 +29,9 @@ import {
   rowWorldZ,
 } from '../game/config';
 import { type CombatLogEntry } from '../game/combat';
+import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
-import { type GameState } from '../game/GameState';
+import { type GameState, type PickupResult } from '../game/GameState';
 import { type Tile } from '../game/Tile';
 
 interface RowView {
@@ -36,6 +39,8 @@ interface RowView {
   tiles: Mesh[];
   hitPlanes: Mesh[];
   monsters: Mesh[];
+  golds: Mesh[];
+  potions: Mesh[];
   assignedRow: number;
 }
 
@@ -54,6 +59,13 @@ interface CombatHitFx {
   playerBaseX: number;
 }
 
+interface CollectFx {
+  kind: CollectibleKind;
+  mesh: Mesh;
+  startedAt: number;
+  baseY: number;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
@@ -65,12 +77,16 @@ export class SceneManager {
   private readonly floorMaterialB: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
   private readonly monsterMaterial: MeshStandardMaterial;
+  private readonly goldMaterial: MeshStandardMaterial;
+  private readonly potionMaterial: MeshStandardMaterial;
   private readonly hitMaterial: MeshBasicMaterial;
 
   private scrollZ = 0;
   private highlightRow = Number.NaN;
   private encounterFx: EncounterFxView[] = [];
   private combatHit: CombatHitFx | null = null;
+  private collectFx: CollectFx[] = [];
+  private clock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({
@@ -109,6 +125,24 @@ export class SceneManager {
       color: 0xc4372e,
       roughness: 0.45,
       metalness: 0.12,
+      transparent: true,
+      opacity: 1,
+    });
+    this.goldMaterial = new MeshStandardMaterial({
+      color: 0xf4c430,
+      emissive: 0xffd24a,
+      emissiveIntensity: 0.55,
+      roughness: 0.28,
+      metalness: 0.55,
+      transparent: true,
+      opacity: 1,
+    });
+    this.potionMaterial = new MeshStandardMaterial({
+      color: 0x3ec6cf,
+      emissive: 0x3ec6cf,
+      emissiveIntensity: 0.4,
+      roughness: 0.32,
+      metalness: 0.18,
       transparent: true,
       opacity: 1,
     });
@@ -189,8 +223,28 @@ export class SceneManager {
   }
 
   update(elapsedSec: number): void {
+    this.clock = elapsedSec;
     const pulse = 0.22 + 0.18 * Math.sin(elapsedSec * 3.4);
     this.highlightMaterial.emissiveIntensity = pulse;
+    this.updateCollectibleIdle(elapsedSec);
+    this.updateCollectFx(elapsedSec);
+  }
+
+  beginCollectFx(pickup: PickupResult): void {
+    const mesh =
+      pickup.kind === 'gold'
+        ? this.findGoldMesh(pickup.row, pickup.col)
+        : this.findPotionMesh(pickup.row, pickup.col);
+    if (!mesh) {
+      return;
+    }
+    mesh.visible = true;
+    this.collectFx.push({
+      kind: pickup.kind,
+      mesh,
+      startedAt: this.clock,
+      baseY: pickup.kind === 'gold' ? 0.38 : 0.42,
+    });
   }
 
   /** Visual-only: show the resolved monster again so the outcome can play. */
@@ -319,6 +373,7 @@ export class SceneManager {
   clearTransientFx(): void {
     this.endEncounterFx();
     this.endCombatHit();
+    this.collectFx = [];
   }
 
   endEncounterFx(): void {
@@ -358,12 +413,16 @@ export class SceneManager {
     const tileGeo = new BoxGeometry(TILE_SIZE, 0.14, TILE_SIZE);
     const hitGeo = new PlaneGeometry(TILE_PITCH * 0.96, TILE_PITCH * 0.96);
     const monsterGeo = new SphereGeometry(0.28, 10, 8);
+    const goldGeo = new CylinderGeometry(0.16, 0.16, 0.05, 14);
+    const potionGeo = new CapsuleGeometry(0.09, 0.16, 3, 8);
 
     for (let i = 0; i < ROW_POOL_SIZE; i += 1) {
       const group = new Group();
       const tiles: Mesh[] = [];
       const hitPlanes: Mesh[] = [];
       const monsters: Mesh[] = [];
+      const golds: Mesh[] = [];
+      const potions: Mesh[] = [];
 
       for (let col = 0; col < LANE_COUNT; col += 1) {
         const tile = new Mesh(tileGeo, this.floorMaterialA);
@@ -377,10 +436,21 @@ export class SceneManager {
         monster.position.set(laneWorldX(col), 0.46, 0);
         monster.visible = false;
 
-        group.add(tile, hit, monster);
+        const gold = new Mesh(goldGeo, this.goldMaterial.clone());
+        gold.position.set(laneWorldX(col), 0.38, 0);
+        gold.rotation.x = Math.PI / 2;
+        gold.visible = false;
+
+        const potion = new Mesh(potionGeo, this.potionMaterial.clone());
+        potion.position.set(laneWorldX(col), 0.42, 0);
+        potion.visible = false;
+
+        group.add(tile, hit, monster, gold, potion);
         tiles.push(tile);
         hitPlanes.push(hit);
         monsters.push(monster);
+        golds.push(gold);
+        potions.push(potion);
       }
 
       this.scene.add(group);
@@ -389,6 +459,8 @@ export class SceneManager {
         tiles,
         hitPlanes,
         monsters,
+        golds,
+        potions,
         assignedRow: i,
       });
     }
@@ -406,6 +478,8 @@ export class SceneManager {
       const mesh = view.tiles[col];
       const hit = view.hitPlanes[col];
       const monster = view.monsters[col];
+      const gold = view.golds[col];
+      const potion = view.potions[col];
       const tile = tiles?.[col];
 
       mesh.userData.row = view.assignedRow;
@@ -419,16 +493,99 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      const playingFx =
+      const playingMonsterFx =
         this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
         this.combatHit?.monsterMesh === monster;
-      monster.visible = playingFx || tile?.content.type === 'monster';
+      monster.visible = playingMonsterFx || tile?.content.type === 'monster';
+
+      const collectingGold = this.collectFx.some((fx) => fx.mesh === gold);
+      const collectingPotion = this.collectFx.some((fx) => fx.mesh === potion);
+      if (!collectingGold) {
+        this.resetCollectibleMesh(gold, col, 0.38, Math.PI / 2);
+      }
+      if (!collectingPotion) {
+        this.resetCollectibleMesh(potion, col, 0.42, 0);
+      }
+      gold.visible = collectingGold || tile?.content.type === 'gold';
+      potion.visible = collectingPotion || tile?.content.type === 'potion';
     }
+  }
+
+  private resetCollectibleMesh(
+    mesh: Mesh,
+    col: number,
+    baseY: number,
+    tiltX: number,
+  ): void {
+    mesh.position.set(laneWorldX(col), baseY, 0);
+    mesh.scale.setScalar(1);
+    mesh.rotation.set(tiltX, 0, 0);
+    const material = mesh.material as MeshStandardMaterial;
+    material.opacity = 1;
+  }
+
+  private updateCollectibleIdle(elapsedSec: number): void {
+    for (const view of this.rowViews) {
+      if (!view.group.visible) {
+        continue;
+      }
+      for (let col = 0; col < LANE_COUNT; col += 1) {
+        const gold = view.golds[col];
+        const potion = view.potions[col];
+        const phase = elapsedSec * 3 + view.assignedRow + col;
+        if (gold.visible && !this.collectFx.some((fx) => fx.mesh === gold)) {
+          gold.position.y = 0.38 + Math.sin(phase) * 0.05;
+          gold.rotation.y = elapsedSec * 2.2;
+        }
+        if (potion.visible && !this.collectFx.some((fx) => fx.mesh === potion)) {
+          potion.position.y = 0.42 + Math.sin(phase + 0.8) * 0.05;
+          potion.rotation.y = elapsedSec * 1.4;
+        }
+      }
+    }
+  }
+
+  private updateCollectFx(elapsedSec: number): void {
+    const remaining: CollectFx[] = [];
+    for (const fx of this.collectFx) {
+      const t = Math.min(1, (elapsedSec - fx.startedAt) / COLLECT_FX_SEC);
+      const material = fx.mesh.material as MeshStandardMaterial;
+      if (fx.kind === 'gold') {
+        fx.mesh.position.y = fx.baseY + t * 0.55;
+        fx.mesh.scale.setScalar(1 + t * 0.45);
+        fx.mesh.rotation.y += 0.18;
+        material.opacity = 1 - t;
+      } else {
+        fx.mesh.position.y = fx.baseY + t * 0.28;
+        fx.mesh.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.35);
+        material.emissiveIntensity = 0.4 + (1 - t) * 0.8;
+        material.opacity = 1 - t;
+      }
+      if (t < 1) {
+        remaining.push(fx);
+        continue;
+      }
+      fx.mesh.visible = false;
+      material.opacity = 1;
+      material.emissiveIntensity = fx.kind === 'gold' ? 0.55 : 0.4;
+      fx.mesh.scale.setScalar(1);
+    }
+    this.collectFx = remaining;
   }
 
   private findMonsterMesh(row: number, col: number): Mesh | undefined {
     const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
     return view?.monsters[col];
+  }
+
+  private findGoldMesh(row: number, col: number): Mesh | undefined {
+    const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
+    return view?.golds[col];
+  }
+
+  private findPotionMesh(row: number, col: number): Mesh | undefined {
+    const view = this.rowViews.find((rowView) => rowView.assignedRow === row);
+    return view?.potions[col];
   }
 
   private createPlayer(): { group: Group; body: Mesh } {

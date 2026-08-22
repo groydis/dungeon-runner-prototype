@@ -12,11 +12,12 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 
 - Floor tiles are simple dark stone boxes.
 - The player is a green capsule.
-- A single red Cave Rat sits a few rows ahead in the centre lane.
+- Rows can contain empty lanes, Cave Rats, gold, or health potions.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
 - Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
 - Combat is automatic and plays in place. There is no battle screen.
+- The loop is: choose a lane, fight or evade, collect gold or potions, keep moving.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -28,18 +29,19 @@ Included:
 - Click / tap selection via raycasting
 - Smooth lane-change, hop, and board-scroll animation
 - Row recycling: the row that leaves the screen is reused as the new far row
-- A demo Cave Rat a few rows ahead in the centre lane
+- A demo Cave Rat after a 3-row safe opening, then weighted procedural rows
+- Gold and potion pickups with run-scoped gold and healing
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, HP text/bar, and status
+- HUD with distance, gold, HP text/bar, and status
 - Death overlay and in-place Restart Run
 - Responsive full-screen layout for phone and desktop
 
 Not included:
 
-- Equipment, levelling, crits, healing, or enemy variety
-- Loot, traps, doors, shops
-- Procedural biomes or authored encounter tables
+- Equipment, levelling, crits, extra enemy types, or an inventory screen
+- Shops, traps, doors
+- Authored biomes beyond the current weights
 - GLB characters or environment art
 - Sound, saves, accounts, or networking
 
@@ -67,7 +69,8 @@ Query-string helpers (no on-screen debug UI):
 
 - `/?avoid=1` — always evade a side pass
 - `/?avoid=0` — always Surprise Attack combat on a side pass
-- `/?fatal=1` — demo Cave Rat hits hard enough to kill, for death/restart testing
+- `/?fatal=1` — Cave Rats hit hard enough to kill, for death/restart testing
+- `/?seed=123` — seeded row generation only; Restart Run replays the same content sequence
 
 ## Controls
 
@@ -87,14 +90,17 @@ src/
   main.ts                 Entry point: canvas + game loop bootstrap
   game/
     Game.ts               Orchestration, animation, HUD, restart
-    GameState.ts          Turn state, health, monsters, row generation
+    GameState.ts          Turn state, health, gold, entities, pickups
     Grid.ts               Logical 3-wide sliding tile window
     Tile.ts               Cell coordinates + content type
     Monster.ts            Monster entity plus independent combat stats
-    Player.ts             Logical lane / row and player stats
+    Collectible.ts        Gold and potion entities
+    Player.ts             Logical lane / row, gold, and combat stats
     Combatant.ts          Combat stat types and starting values
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
+    rowGeneration.ts      Weighted row recipes and safety rules
+    random.ts             Seeded RNG for generation only
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
   rendering/
@@ -113,7 +119,7 @@ Each board cell is a logical `Tile`:
 
 - `row` — world row index. `0` is the starting row; values increase as the dungeon extends forward.
 - `col` — lane index: `0` left, `1` centre, `2` right.
-- `content.type` — `empty` | `monster` | `loot` | `trap` | `door` | `shop` | `decoration`.
+- `content.type` — `empty` | `monster` | `gold` | `potion` | plus unused future types.
 
 `Grid` stores rows in a map and creates them on demand through a factory. After each step it prunes rows more than a couple of indexes behind the player so a long run does not grow forever.
 
@@ -136,7 +142,40 @@ World layout (rendering only):
 4. `SceneManager` rebinds only the row that just left the bottom of the screen and assigns it to the new far index. Other row meshes keep their logical rows.
 5. The player mesh stays in the lower part of the frame; the camera is mostly static, with a small nudge on each step.
 
-The demo Cave Rat is authored at row `4`, centre lane (`col 1`). Later, the tile factory in `GameState` is the place to plug in biome tables, encounter weights, and decoration.
+After `commitMove()`, resolution order is:
+
+1. `resolveLandedPickup()` — gold or potion on the occupied tile
+2. `resolveMonsterEncountersAfterMove()` — cardinal-plus combat / evade
+
+A tile never holds both loot and a monster, so those two steps cannot conflict. If both a pickup and an encounter happen in one step (loot in one lane, rat beside it), the pickup is applied first; an encounter then overwrites the status line.
+
+## Procedural row content
+
+`src/game/rowGeneration.ts` builds a 3-lane recipe. Rendering only shows whatever the recipe produced.
+
+Safety guarantees:
+
+- Rows `0..3` are empty. The first three moves are therefore safe.
+- Row `4` always has the demo Cave Rat in the centre lane so front-on and side-pass combat stay easy to test.
+- From row `5` onward, each row is rolled from early prototype weights:
+  - 45% all empty
+  - 25% one Cave Rat
+  - 15% one gold
+  - 10% one potion
+  - 5% one Cave Rat + one loot item (gold or potion, 50/50)
+- Every generated row has at least one empty lane. There is never a three-wide monster wall.
+- At most one Cave Rat and at most one collectible per row.
+- Two entities never share a tile.
+
+`?seed=<number>` seeds **row generation only** (Mulberry32). Combat, avoidance, and `Math.random` elsewhere are unchanged. Without `?seed`, generation uses `Math.random`. Restart Run rebuilds the RNG from the same seed, so `?seed=123` always replays the same row sequence.
+
+Gold and potions:
+
+- Gold starts at `0`. Landing on gold adds `1` and removes the item: `You found 1 gold.`
+- A potion heals `4` HP, capped at max HP, and is consumed even at full health.
+  - Heal: `You drink a potion and restore [N] HP.`
+  - Full: `You find a potion, but are already at full health.`
+- Pickup meshes pop/fade in place and do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
 
 ## Monster encounters
 
@@ -209,15 +248,15 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats, position, distance, monsters, grid, meshes, and status without reloading the page.
+Restart Run resets player stats, gold, position, distance, monsters, collectibles, generation RNG, grid, meshes, and status without reloading the page.
 
 ## Intended next steps
 
-- Equipment, levelling, crits, healing, and more enemy types
+- Equipment, levelling, crits, and more enemy types
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
 - Smarter avoidance than a flat 50/50
-- Loot, traps, doors, shops
-- Procedural biomes
+- Spend gold at shops; more loot kinds
+- Traps, doors, and authored biomes
 - GLB models
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 

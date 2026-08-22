@@ -15,6 +15,7 @@ import {
 } from './encounters';
 import { caveRatStatsFromSearch } from './Combatant';
 import { GameState } from './GameState';
+import { rngFactoryFromSearch } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type Monster } from './Monster';
 import { CameraController } from '../rendering/CameraController';
@@ -38,12 +39,14 @@ export class Game {
   private readonly state = new GameState({
     rollAvoidance: avoidanceRollerFromSearch(window.location.search),
     createCaveRatStats: () => caveRatStatsFromSearch(window.location.search),
+    createRng: rngFactoryFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
   private readonly scene: SceneManager;
   private readonly input: InputController;
   private readonly canvas: HTMLCanvasElement;
   private readonly distanceEl: HTMLElement;
+  private readonly goldEl: HTMLElement;
   private readonly statusEl: HTMLElement;
   private readonly healthTextEl: HTMLElement;
   private readonly healthBarEl: HTMLElement;
@@ -75,6 +78,7 @@ export class Game {
     );
 
     this.distanceEl = this.requireElement('#distance');
+    this.goldEl = this.requireElement('#gold');
     this.statusEl = this.requireElement('#status');
     this.healthTextEl = this.requireElement('#health-text');
     this.healthBarEl = this.requireElement('#health-bar');
@@ -179,6 +183,10 @@ export class Game {
     this.scene.layoutRows(this.state.player.row);
     this.scene.setPlayerVisual(laneWorldX(this.state.player.col), 0);
 
+    const pickup = this.state.resolveLandedPickup();
+    if (pickup) {
+      this.scene.beginCollectFx(pickup);
+    }
     this.pendingEvents = this.state.resolveMonsterEncountersAfterMove();
     this.scene.refreshHighlights(this.state);
     this.updateHud();
@@ -330,6 +338,7 @@ export class Game {
     const { health, maxHealth } = this.state.playerStats;
     const ratio = maxHealth <= 0 ? 0 : Math.max(0, Math.min(1, health / maxHealth));
     this.distanceEl.textContent = `Distance: ${this.state.distance}`;
+    this.goldEl.textContent = `Gold: ${this.state.gold}`;
     this.statusEl.textContent = this.state.status;
     this.healthTextEl.textContent = `HP ${health} / ${maxHealth}`;
     this.healthBarEl.setAttribute('aria-valuemax', String(maxHealth));

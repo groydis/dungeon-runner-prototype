@@ -11,8 +11,15 @@ export const TILE_PITCH = TILE_SIZE + TILE_GAP;
 export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
 export const COMBAT_HIT_SEC = 0.3;
+export const COLLECT_FX_SEC = 0.38;
 
-/** Demo Cave Rat a few rows ahead in the centre lane so a straight walk is a head-on fight. */
+/** Rows 1..N after the start row stay empty so the first N moves are safe. */
+export const SAFE_ROWS_AFTER_START = 3;
+
+export const GOLD_AMOUNT = 1;
+export const POTION_HEAL = 4;
+
+/** Demo Cave Rat after the safe opening, centre lane, for front-on / side-pass tests. */
 export const DEMO_MONSTER_ROW = 4;
 export const DEMO_MONSTER_COL = 1;
 export const DEMO_MONSTER_ID = 'demo-cave-rat';

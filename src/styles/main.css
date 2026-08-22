@@ -63,10 +63,15 @@ body {
   font-weight: 600;
 }
 
-#distance {
+#distance,
+#gold {
   margin: 6px 0 0;
   color: var(--hud-accent);
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
+}
+
+#gold {
+  color: #f0d27a;
 }
 
 .health {

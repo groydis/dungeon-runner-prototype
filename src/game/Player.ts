@@ -5,11 +5,13 @@ import { type CombatStats, createPlayerStats } from './Combatant';
 export class Player {
   row = START_ROW;
   col = START_COL;
+  gold = 0;
   stats: CombatStats = createPlayerStats();
 
   reset(): void {
     this.row = START_ROW;
     this.col = START_COL;
+    this.gold = 0;
     this.stats = createPlayerStats();
   }
 }
