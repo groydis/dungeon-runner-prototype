@@ -69,6 +69,33 @@ body {
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
 }
 
+.health {
+  margin-top: 10px;
+  max-width: 14rem;
+}
+
+#health-text {
+  margin: 0 0 6px;
+  font-size: clamp(0.85rem, 3vw, 1rem);
+}
+
+.health-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(243, 239, 228, 0.18);
+}
+
+.health-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8f2d2d, #d4453a);
+  transform-origin: left center;
+}
+
 .hud-bottom {
   display: flex;
   flex-direction: column;
@@ -90,6 +117,59 @@ body {
   min-height: 1.3em;
   color: #f0d2a8;
   font-size: clamp(0.85rem, 3vw, 1rem);
+}
+
+.game-over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right))
+    calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
+  background: rgba(8, 8, 10, 0.72);
+}
+
+.game-over[hidden] {
+  display: none;
+}
+
+.game-over-card {
+  width: min(22rem, 100%);
+  padding: 28px 24px;
+  border-radius: 12px;
+  background: #1b1c20;
+  color: var(--hud);
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.game-over-card h2 {
+  margin: 0;
+  letter-spacing: 0.08em;
+  font-size: clamp(1.8rem, 7vw, 2.4rem);
+}
+
+#game-over-distance {
+  margin: 12px 0 22px;
+  color: var(--hud-accent);
+}
+
+#restart-run {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 22px;
+  background: #e4c36a;
+  color: #1b1c20;
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#restart-run:focus-visible {
+  outline: 2px solid #f3efe4;
+  outline-offset: 3px;
 }
 
 @media (min-width: 720px) {

@@ -8,9 +8,16 @@ import {
   START_ROW,
 } from './config';
 import {
+  type CombatResult,
+  type CombatLogEntry,
+} from './combat';
+import { type CombatStats, createCaveRatStats } from './Combatant';
+import {
   type AvoidanceRoll,
   type EncounterEvent,
-  encounterStatusText,
+  combatDefeatText,
+  combatVictoryText,
+  encounterStartText,
   findAlignedMonsterEncounters,
   rollAvoidance,
 } from './encounters';
@@ -29,6 +36,7 @@ export interface MoveResult {
 
 export interface GameStateOptions {
   rollAvoidance?: AvoidanceRoll;
+  createCaveRatStats?: () => CombatStats;
 }
 
 export class GameState {
@@ -39,16 +47,19 @@ export class GameState {
   distance = 0;
   status = '';
   isAnimating = false;
+  runOver = false;
 
   private readonly rollAvoidance: AvoidanceRoll;
+  private readonly createCaveRatStats: () => CombatStats;
 
   constructor(options: GameStateOptions = {}) {
     this.rollAvoidance = options.rollAvoidance ?? (() => rollAvoidance());
-    this.grid.ensureRange(
-      START_ROW,
-      START_ROW + ROW_POOL_SIZE + 2,
-      (row, col) => this.createTile(row, col),
-    );
+    this.createCaveRatStats = options.createCaveRatStats ?? createCaveRatStats;
+    this.populateInitialRows();
+  }
+
+  get playerStats(): CombatStats {
+    return this.player.stats;
   }
 
   isValidLane(col: number): boolean {
@@ -60,6 +71,9 @@ export class GameState {
   }
 
   prepareAhead(): void {
+    if (this.runOver) {
+      return;
+    }
     this.grid.ensureRange(
       this.player.row,
       this.player.row + ROW_POOL_SIZE + 2,
@@ -70,6 +84,9 @@ export class GameState {
 
   /** Commits a one-row advance. Encounters are resolved separately after this. */
   commitMove(toCol: number): MoveResult {
+    if (this.runOver) {
+      throw new Error('Cannot move after the run is over');
+    }
     if (!this.isValidLane(toCol)) {
       throw new Error(`Invalid lane: ${toCol}`);
     }
@@ -99,33 +116,75 @@ export class GameState {
   }
 
   /**
-   * After the player has advanced, resolve monsters in the cardinal plus around them.
-   * Same lane is a guaranteed fight; an adjacent lane rolls avoidance once.
+   * After the player has advanced, find monsters in the cardinal plus.
+   * Evade/combat application happens after this so combat can play back a log.
    */
   resolveMonsterEncountersAfterMove(): EncounterEvent[] {
+    if (this.runOver) {
+      return [];
+    }
+
     const events = findAlignedMonsterEncounters(
       this.player,
       this.monsters.values(),
       this.rollAvoidance,
     );
-
-    this.status = '';
-    for (const event of events) {
-      this.markMonsterResolved(event.monster);
-    }
-    if (events.length > 0) {
-      this.status = events.map(encounterStatusText).join(' ');
-    }
-
+    this.status = events.length > 0 ? events.map(encounterStartText).join(' ') : '';
     return events;
   }
 
-  private markMonsterResolved(monster: Monster): void {
+  applyEvade(monster: Monster): void {
+    this.status = encounterStartText({ kind: 'evade', monster });
+    this.removeMonster(monster);
+  }
+
+  applyCombatLogEntry(entry: CombatLogEntry, monster: Monster): void {
+    if (entry.target === 'player') {
+      this.player.stats.health = entry.targetHealthAfter;
+      return;
+    }
+    monster.stats.health = entry.targetHealthAfter;
+  }
+
+  finishCombat(result: CombatResult, monster: Monster): void {
+    this.player.stats.health = result.playerHealthAfter;
+
+    if (result.winner === 'player') {
+      this.status = combatVictoryText(result.monsterName);
+      this.removeMonster(monster);
+      return;
+    }
+
+    this.player.stats.health = 0;
+    this.runOver = true;
+    this.status = combatDefeatText(result.monsterName);
+  }
+
+  reset(): void {
+    this.player.reset();
+    this.distance = 0;
+    this.status = '';
+    this.isAnimating = false;
+    this.runOver = false;
+    this.monsters.clear();
+    this.grid.clear();
+    this.populateInitialRows();
+  }
+
+  private removeMonster(monster: Monster): void {
     monster.encounterResolved = true;
     const tile = this.grid.getTile(monster.row, monster.col);
     if (tile?.content.id === monster.id) {
       tile.content = { type: 'empty' };
     }
+  }
+
+  private populateInitialRows(): void {
+    this.grid.ensureRange(
+      START_ROW,
+      START_ROW + ROW_POOL_SIZE + 2,
+      (row, col) => this.createTile(row, col),
+    );
   }
 
   private createTile(row: number, col: number): Tile {
@@ -135,6 +194,7 @@ export class GameState {
         DEMO_MONSTER_NAME,
         row,
         col,
+        this.createCaveRatStats(),
       );
       this.monsters.set(monster.id, monster);
       return createTile(row, col, { type: 'monster', id: monster.id });

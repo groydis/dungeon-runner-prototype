@@ -1,7 +1,15 @@
 import { START_COL, START_ROW } from './config';
+import { type CombatStats, createPlayerStats } from './Combatant';
 
-/** Logical player position on the three-lane grid. */
+/** Logical player position and combat stats. */
 export class Player {
   row = START_ROW;
   col = START_COL;
+  stats: CombatStats = createPlayerStats();
+
+  reset(): void {
+    this.row = START_ROW;
+    this.col = START_COL;
+    this.stats = createPlayerStats();
+  }
 }

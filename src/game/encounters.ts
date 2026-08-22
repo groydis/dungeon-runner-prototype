@@ -100,13 +100,21 @@ export function findAlignedMonsterEncounters(
   return events;
 }
 
-export function encounterStatusText(event: EncounterEvent): string {
+export function encounterStartText(event: EncounterEvent): string {
   const { name } = event.monster;
   if (event.kind === 'evade') {
     return `You slip past the ${name}.`;
   }
   if (event.approach === 'surprise') {
-    return `You catch the ${name} off guard! Surprise attack — combat will resolve here later.`;
+    return `You catch the ${name} off guard!`;
   }
-  return `A ${name} blocks your path! Combat will resolve here later.`;
+  return `A ${name} blocks your path!`;
+}
+
+export function combatVictoryText(monsterName: string): string {
+  return `You defeated the ${monsterName}.`;
+}
+
+export function combatDefeatText(monsterName: string): string {
+  return `You were killed by the ${monsterName}.`;
 }

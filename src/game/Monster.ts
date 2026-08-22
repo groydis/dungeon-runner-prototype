@@ -1,9 +1,12 @@
+import { type CombatStats, createCaveRatStats, createCombatStats } from './Combatant';
+
 export interface Monster {
   id: string;
   name: string;
   row: number;
   col: number;
   encounterResolved: boolean;
+  stats: CombatStats;
 }
 
 export function createMonster(
@@ -11,6 +14,7 @@ export function createMonster(
   name: string,
   row: number,
   col: number,
+  stats: CombatStats = createCaveRatStats(),
 ): Monster {
   return {
     id,
@@ -18,5 +22,6 @@ export function createMonster(
     row,
     col,
     encounterResolved: false,
+    stats: createCombatStats(stats),
   };
 }

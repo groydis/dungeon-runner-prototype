@@ -15,8 +15,8 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - A single red Cave Rat sits a few rows ahead in the centre lane.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
-- Adjacent lane (same row) = a 50/50 chance to slip past, or a future Surprise Attack fight.
-- Combat math and the Surprise Attack bonus are not implemented yet; the HUD reports the outcome.
+- Adjacent lane (same row) = a 50/50 chance to slip past, or a Surprise Attack fight.
+- Combat is automatic and plays in place. There is no battle screen.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -29,13 +29,16 @@ Included:
 - Smooth lane-change, hop, and board-scroll animation
 - Row recycling: the row that leaves the screen is reused as the new far row
 - A demo Cave Rat a few rows ahead in the centre lane
-- Cardinal-plus encounters: front-on fight, evade, or Surprise Attack context
-- A minimal HUD (title, distance, instruction, encounter line)
+- Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
+- Automatic combat with a short playback of each hit
+- HUD with distance, HP text/bar, and status
+- Death overlay and in-place Restart Run
 - Responsive full-screen layout for phone and desktop
 
 Not included:
 
-- Combat math, stats, loot, traps, doors, shops
+- Equipment, levelling, crits, healing, or enemy variety
+- Loot, traps, doors, shops
 - Procedural biomes or authored encounter tables
 - GLB characters or environment art
 - Sound, saves, accounts, or networking
@@ -60,15 +63,20 @@ npm run preview
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
-To force the adjacent-lane pass result while testing, open `/?avoid=1` (always evade) or `/?avoid=0` (always Surprise Attack combat).
+Query-string helpers (no on-screen debug UI):
+
+- `/?avoid=1` — always evade a side pass
+- `/?avoid=0` — always Surprise Attack combat on a side pass
+- `/?fatal=1` — demo Cave Rat hits hard enough to kill, for death/restart testing
 
 ## Controls
 
-There is no keyboard movement.
+There is no keyboard movement and no combat input.
 
 - **Tap or click** one of the three glowing tiles in the next row.
 - Left tile = forward-left, centre = forward, right = forward-right.
-- Input is locked for the duration of the step animation and any encounter feedback.
+- Input is locked during the step animation and while combat or evade feedback plays.
+- After death, use **Restart Run**. The page does not reload.
 
 Selection uses pointer events and a Three.js raycaster against invisible hit planes on the highlighted tiles, so the same path works for mouse and touch.
 
@@ -78,24 +86,26 @@ Selection uses pointer events and a Three.js raycaster against invisible hit pla
 src/
   main.ts                 Entry point: canvas + game loop bootstrap
   game/
-    Game.ts               Orchestration, animation, HUD
-    GameState.ts          Turn state, monster entities, row generation
+    Game.ts               Orchestration, animation, HUD, restart
+    GameState.ts          Turn state, health, monsters, row generation
     Grid.ts               Logical 3-wide sliding tile window
     Tile.ts               Cell coordinates + content type
-    Monster.ts            Stable monster entity (id, name, row, col, resolved)
-    encounters.ts         Cardinal-plus encounter rules and injectable avoidance rolls
-    Player.ts             Logical lane / row position
+    Monster.ts            Monster entity plus independent combat stats
+    Player.ts             Logical lane / row and player stats
+    Combatant.ts          Combat stat types and starting values
+    combat.ts             Pure automatic-combat resolver and log
+    encounters.ts         Cardinal-plus rules and avoidance rolls
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
   rendering/
-    SceneManager.ts       Scene, lights, recycled row meshes
+    SceneManager.ts       Scene, lights, recycled row meshes, hit FX
     CameraController.ts   Elevated follow camera
   styles/
-    main.css              Full-viewport + safe-area HUD
+    main.css              Full-viewport HUD and game-over overlay
 public/                   Static assets
 ```
 
-Game rules live under `src/game`. Meshes, cameras, and materials live under `src/rendering`. Rendering code reads tile content and encounter *events* in order to show placeholders and short feedback; it does not decide combat, avoidance, or movement legality.
+Game rules live under `src/game`. Meshes, cameras, and materials live under `src/rendering`. Rendering plays combat-log entries; it does not calculate damage or decide winners.
 
 ## Tile and grid model
 
@@ -130,7 +140,7 @@ The demo Cave Rat is authored at row `4`, centre lane (`col 1`). Later, the tile
 
 ## Monster encounters
 
-Monsters are game entities with a stable `id`, `name`, `row`, `col`, and `encounterResolved` flag. They sit on a world row ahead of the player. A monster attacks only from the four orthogonal tiles around it:
+Monsters are game entities with a stable `id`, `name`, `row`, `col`, `encounterResolved` flag, and their own `stats`. A monster attacks only from the four orthogonal tiles around it:
 
 ```text
        [ x ]
@@ -138,9 +148,7 @@ Monsters are game entities with a stable `id`, `name`, `row`, `col`, and `encoun
        [ x ]
 ```
 
-Diagonals do not engage. `GameState.resolveMonsterEncountersAfterMove()` runs after each successful step and resolves each eligible monster exactly once.
-
-Encounter events carry the context future combat will need:
+Diagonals do nothing. After each successful step, `resolveMonsterEncountersAfterMove()` finds eligible monsters. Events are unchanged:
 
 ```ts
 type CombatApproach = 'frontOn' | 'surprise';
@@ -150,29 +158,68 @@ type EncounterEvent =
   | { kind: 'evade'; monster: Monster };
 ```
 
-- **Same lane** (tile in front of or behind the monster) — `{ kind: 'combat', approach: 'frontOn' }`. This is a normal fight. HUD: `A Cave Rat blocks your path! Combat will resolve here later.`
-- **Same row, adjacent lane** — one 50/50 avoidance roll (`rollAvoidance()`).
-  - Success: `{ kind: 'evade' }`. HUD: `You slip past the Cave Rat.`
-  - Failure: `{ kind: 'combat', approach: 'surprise' }`. The player chose to go around and still entered a fight, so later combat should grant a Surprise Attack advantage. HUD: `You catch the Cave Rat off guard! Surprise attack — combat will resolve here later.`
+- **Same lane** (in front or behind) — `{ kind: 'combat', approach: 'frontOn' }`
+- **Same row, adjacent lane** — one 50/50 roll
+  - success: `{ kind: 'evade' }` — monster is removed, no health change
+  - failure: `{ kind: 'combat', approach: 'surprise' }`
 
-In every case the monster is marked resolved and removed from its tile so it cannot roll again. Combat stats and the actual Surprise Attack bonus are **not implemented yet**; the event only preserves the approach.
+## Combat
 
-To test the two pass outcomes without relying on luck, append a query string (no on-screen debug UI):
+Starting stats:
 
-- `http://localhost:5173/?avoid=1` — always evade
-- `http://localhost:5173/?avoid=0` — always Surprise Attack combat
+|        | HP | Attack | Defence |
+|--------|----|--------|---------|
+| Player | 20 | 5      | 1       |
+| Cave Rat | 8 | 3      | 0       |
 
-A straight walk down the centre lane puts you on the tile in front of the Cave Rat (distance 3) and starts a fight. Restart and walk a side lane until you come alongside it to exercise the pass roll.
+Each Cave Rat gets a fresh stats object. Damage is:
+
+```text
+damage = Math.max(1, attacker.attack - defender.defence)
+```
+
+`resolveAutomaticCombat()` in `src/game/combat.ts` is a pure function. It returns an ordered log; `GameState` then applies that log.
+
+**Front-on:** the player strikes first, then the monster, then they alternate until one reaches 0 HP. The player can take damage.
+
+**Surprise Attack:** the player still strikes first, but the opening hit is `Math.ceil(normalDamage * 1.5)` and is marked `isSurpriseStrike`. If the monster lives, the rest of the fight is the same player-then-monster alternation. That 150% opener is the only Surprise Attack bonus for now.
+
+A Cave Rat has 8 HP and 0 defence, so a normal player hit deals 5 and a surprise opener deals 8. A front-on rat usually gets one counterattack (2 damage) before dying. A surprise opener kills it immediately.
+
+The fight is resolved immediately in game logic. The renderer then plays each log entry for about 300 ms:
+
+- Player hit: player lunges, monster recoils/flashes
+- Monster hit: monster lunges, player recoils/flashes
+- Surprise strike: a stronger gold lunge/flash
+- HP text and bar update after every entry
+
+Outcomes:
+
+- Player wins: `You defeated the Cave Rat.` Movement unlocks.
+- Player dies: `You were killed by the Cave Rat.` Input locks and the overlay appears.
+- Evade: `You slip past the Cave Rat.` No combat, no HP change.
+
+## Death and restart
+
+On death the board stops. Distance is preserved. No further rows or encounters are generated.
+
+The overlay shows:
+
+- YOU DIED
+- final distance
+- Restart Run
+
+Restart Run resets player stats, position, distance, monsters, grid, meshes, and status without reloading the page.
 
 ## Intended next steps
 
-- **Combat resolution** — replace the HUD hook with turn-resolution combat. Use `approach: 'surprise'` to grant the player a Surprise Attack bonus; `frontOn` is a normal fight.
-- **Smarter avoidance** — replace the flat 50/50 with stealth / awareness versus monster detection.
-- **Stats** — HP, attack, armour, and a compact mobile sheet that does not fight the 3D view.
-- **Loot** — gold, consumables, and item tiles that can appear in generated rows.
-- **Procedural biomes** — replace the empty-row factory with themed tables (crypt, cavern, ruins) that pick monsters, traps, doors, shops, and dressing.
-- **GLB models** — swap the capsule / sphere / box placeholders for lightweight mobile-friendly meshes, still driven by the same tile content types.
-- **Mobile optimisation** — bake lights or use cheaper materials, atlas textures, object pooling for VFX, and a settings toggle for pixel ratio / effects.
+- Equipment, levelling, crits, healing, and more enemy types
+- Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
+- Smarter avoidance than a flat 50/50
+- Loot, traps, doors, shops
+- Procedural biomes
+- GLB models
+- Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 
 ## License
 

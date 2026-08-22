@@ -1,7 +1,22 @@
-import { ENCOUNTER_FX_SEC, MOVE_DURATION_SEC, TILE_PITCH, laneWorldX } from './config';
-import { avoidanceRollerFromSearch } from './encounters';
+import {
+  COMBAT_HIT_SEC,
+  ENCOUNTER_FX_SEC,
+  MOVE_DURATION_SEC,
+  TILE_PITCH,
+  laneWorldX,
+} from './config';
+import {
+  type CombatResult,
+  resolveAutomaticCombat,
+} from './combat';
+import {
+  type EncounterEvent,
+  avoidanceRollerFromSearch,
+} from './encounters';
+import { caveRatStatsFromSearch } from './Combatant';
 import { GameState } from './GameState';
 import { InputController, type TilePick } from './InputController';
+import { type Monster } from './Monster';
 import { CameraController } from '../rendering/CameraController';
 import { SceneManager } from '../rendering/SceneManager';
 
@@ -12,9 +27,17 @@ interface MoveAnimation {
   elapsed: number;
 }
 
+interface CombatPlayback {
+  result: CombatResult;
+  monster: Monster;
+  entryIndex: number;
+  elapsed: number;
+}
+
 export class Game {
   private readonly state = new GameState({
     rollAvoidance: avoidanceRollerFromSearch(window.location.search),
+    createCaveRatStats: () => caveRatStatsFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
   private readonly scene: SceneManager;
@@ -22,10 +45,21 @@ export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly distanceEl: HTMLElement;
   private readonly statusEl: HTMLElement;
+  private readonly healthTextEl: HTMLElement;
+  private readonly healthBarEl: HTMLElement;
+  private readonly healthFillEl: HTMLElement;
+  private readonly gameOverEl: HTMLElement;
+  private readonly gameOverDistanceEl: HTMLElement;
+  private readonly restartButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver;
+  private readonly onRestart = (): void => {
+    this.restartRun();
+  };
 
   private animation: MoveAnimation | null = null;
   private encounterFxElapsed: number | null = null;
+  private pendingEvents: EncounterEvent[] = [];
+  private combatPlayback: CombatPlayback | null = null;
   private lastTimeMs = 0;
   private running = false;
 
@@ -42,6 +76,13 @@ export class Game {
 
     this.distanceEl = this.requireElement('#distance');
     this.statusEl = this.requireElement('#status');
+    this.healthTextEl = this.requireElement('#health-text');
+    this.healthBarEl = this.requireElement('#health-bar');
+    this.healthFillEl = this.requireElement('#health-fill');
+    this.gameOverEl = this.requireElement('#game-over');
+    this.gameOverDistanceEl = this.requireElement('#game-over-distance');
+    this.restartButton = this.requireElement('#restart-run') as HTMLButtonElement;
+    this.restartButton.addEventListener('click', this.onRestart);
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -63,6 +104,7 @@ export class Game {
   dispose(): void {
     this.running = false;
     this.resizeObserver.disconnect();
+    this.restartButton.removeEventListener('click', this.onRestart);
     this.input.dispose();
     this.scene.dispose();
   }
@@ -77,6 +119,7 @@ export class Game {
 
     this.updateMove(dt);
     this.updateEncounterFx(dt);
+    this.updateCombatPlayback(dt);
     this.camera.update(dt);
     this.scene.update(nowMs / 1000);
     this.scene.render(this.camera.camera);
@@ -85,7 +128,11 @@ export class Game {
   };
 
   private tryMove(tile: TilePick): void {
-    if (this.state.isAnimating || !this.state.isForwardTile(tile.row, tile.col)) {
+    if (
+      this.state.runOver ||
+      this.state.isAnimating ||
+      !this.state.isForwardTile(tile.row, tile.col)
+    ) {
       return;
     }
 
@@ -132,19 +179,40 @@ export class Game {
     this.scene.layoutRows(this.state.player.row);
     this.scene.setPlayerVisual(laneWorldX(this.state.player.col), 0);
 
-    const events = this.state.resolveMonsterEncountersAfterMove();
+    this.pendingEvents = this.state.resolveMonsterEncountersAfterMove();
+    this.scene.refreshHighlights(this.state);
     this.updateHud();
+    this.playNextPendingEvent();
+  }
 
-    if (events.length === 0) {
-      this.state.isAnimating = false;
-      this.scene.refreshHighlights(this.state);
-      this.input.setEnabled(true);
+  private playNextPendingEvent(): void {
+    const event = this.pendingEvents.shift();
+    if (!event || this.state.runOver) {
+      this.finishEncounterSequence();
       return;
     }
 
-    this.scene.refreshHighlights(this.state);
-    this.scene.beginEncounterFx(events, this.state.player.col);
-    this.encounterFxElapsed = 0;
+    if (event.kind === 'evade') {
+      this.state.applyEvade(event.monster);
+      this.updateHud();
+      this.scene.beginEncounterFx([event], this.state.player.col);
+      this.encounterFxElapsed = 0;
+      return;
+    }
+
+    const result = resolveAutomaticCombat(
+      this.state.playerStats,
+      event.monster.stats,
+      event.approach,
+      { id: event.monster.id, name: event.monster.name },
+    );
+    this.combatPlayback = {
+      result,
+      monster: event.monster,
+      entryIndex: 0,
+      elapsed: 0,
+    };
+    this.beginCurrentCombatHit();
   }
 
   private updateEncounterFx(dt: number): void {
@@ -162,14 +230,111 @@ export class Game {
 
     this.scene.endEncounterFx();
     this.encounterFxElapsed = null;
+    this.playNextPendingEvent();
+  }
+
+  private updateCombatPlayback(dt: number): void {
+    if (!this.combatPlayback) {
+      return;
+    }
+
+    this.combatPlayback.elapsed += dt;
+    const t = Math.min(1, this.combatPlayback.elapsed / COMBAT_HIT_SEC);
+    this.scene.updateCombatHit(t);
+
+    if (t < 1) {
+      return;
+    }
+
+    this.scene.endCombatHit();
+    this.combatPlayback.entryIndex += 1;
+    this.combatPlayback.elapsed = 0;
+
+    if (this.combatPlayback.entryIndex >= this.combatPlayback.result.log.length) {
+      this.state.finishCombat(this.combatPlayback.result, this.combatPlayback.monster);
+      this.combatPlayback = null;
+      this.scene.refreshHighlights(this.state);
+      this.updateHud();
+      this.playNextPendingEvent();
+      return;
+    }
+
+    this.beginCurrentCombatHit();
+  }
+
+  private beginCurrentCombatHit(): void {
+    const playback = this.combatPlayback;
+    if (!playback) {
+      return;
+    }
+
+    const entry = playback.result.log[playback.entryIndex];
+    if (!entry) {
+      this.state.finishCombat(playback.result, playback.monster);
+      this.combatPlayback = null;
+      this.scene.refreshHighlights(this.state);
+      this.updateHud();
+      this.playNextPendingEvent();
+      return;
+    }
+
+    this.state.applyCombatLogEntry(entry, playback.monster);
+    this.updateHud();
+    this.scene.beginCombatHit(
+      entry,
+      this.state.player.col,
+      playback.monster.row,
+      playback.monster.col,
+    );
+  }
+
+  private finishEncounterSequence(): void {
+    this.scene.refreshHighlights(this.state);
+    this.updateHud();
+
+    if (this.state.runOver) {
+      this.state.isAnimating = false;
+      this.input.setEnabled(false);
+      this.showGameOver();
+      return;
+    }
+
     this.state.isAnimating = false;
     this.scene.refreshHighlights(this.state);
     this.input.setEnabled(true);
   }
 
+  private restartRun(): void {
+    this.animation = null;
+    this.encounterFxElapsed = null;
+    this.combatPlayback = null;
+    this.pendingEvents = [];
+    this.scene.clearTransientFx();
+    this.state.reset();
+    this.scene.bindWindow(this.state);
+    this.hideGameOver();
+    this.input.setEnabled(true);
+    this.updateHud();
+  }
+
+  private showGameOver(): void {
+    this.gameOverDistanceEl.textContent = `Distance: ${this.state.distance}`;
+    this.gameOverEl.hidden = false;
+  }
+
+  private hideGameOver(): void {
+    this.gameOverEl.hidden = true;
+  }
+
   private updateHud(): void {
+    const { health, maxHealth } = this.state.playerStats;
+    const ratio = maxHealth <= 0 ? 0 : Math.max(0, Math.min(1, health / maxHealth));
     this.distanceEl.textContent = `Distance: ${this.state.distance}`;
     this.statusEl.textContent = this.state.status;
+    this.healthTextEl.textContent = `HP ${health} / ${maxHealth}`;
+    this.healthBarEl.setAttribute('aria-valuemax', String(maxHealth));
+    this.healthBarEl.setAttribute('aria-valuenow', String(health));
+    this.healthFillEl.style.transform = `scaleX(${ratio})`;
   }
 
   private handleResize(): void {

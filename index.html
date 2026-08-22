@@ -17,10 +17,38 @@
         <header class="hud-top">
           <h1>Dungeon Runner</h1>
           <p id="distance">Distance: 0</p>
+          <div class="health">
+            <p id="health-text">HP 20 / 20</p>
+            <div
+              id="health-bar"
+              class="health-bar"
+              role="progressbar"
+              aria-label="Health"
+              aria-valuemin="0"
+              aria-valuemax="20"
+              aria-valuenow="20"
+            >
+              <div id="health-fill" class="health-fill"></div>
+            </div>
+          </div>
         </header>
         <div class="hud-bottom">
           <p id="instruction">Tap a glowing tile to advance one row</p>
           <p id="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <div
+        id="game-over"
+        class="game-over"
+        hidden
+        role="dialog"
+        aria-labelledby="game-over-title"
+        aria-modal="true"
+      >
+        <div class="game-over-card">
+          <h2 id="game-over-title">YOU DIED</h2>
+          <p id="game-over-distance">Distance: 0</p>
+          <button type="button" id="restart-run">Restart Run</button>
         </div>
       </div>
     </div>

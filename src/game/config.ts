@@ -10,6 +10,7 @@ export const TILE_PITCH = TILE_SIZE + TILE_GAP;
 
 export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
+export const COMBAT_HIT_SEC = 0.3;
 
 /** Demo Cave Rat a few rows ahead in the centre lane so a straight walk is a head-on fight. */
 export const DEMO_MONSTER_ROW = 4;

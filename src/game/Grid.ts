@@ -48,4 +48,8 @@ export class Grid {
       }
     }
   }
+
+  clear(): void {
+    this.rows.clear();
+  }
 }

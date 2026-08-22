@@ -26,6 +26,7 @@ import {
   laneWorldX,
   rowWorldZ,
 } from '../game/config';
+import { type CombatLogEntry } from '../game/combat';
 import { type EncounterEvent } from '../game/encounters';
 import { type GameState } from '../game/GameState';
 import { type Tile } from '../game/Tile';
@@ -45,12 +46,21 @@ interface EncounterFxView {
   playerBaseX: number;
 }
 
+interface CombatHitFx {
+  attacker: CombatLogEntry['attacker'];
+  isSurpriseStrike: boolean;
+  monsterMesh: Mesh;
+  monsterBaseX: number;
+  playerBaseX: number;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
 
   private readonly rowViews: RowView[] = [];
   private readonly playerMesh: Group;
+  private readonly playerBody: Mesh;
   private readonly floorMaterialA: MeshStandardMaterial;
   private readonly floorMaterialB: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
@@ -60,6 +70,7 @@ export class SceneManager {
   private scrollZ = 0;
   private highlightRow = Number.NaN;
   private encounterFx: EncounterFxView[] = [];
+  private combatHit: CombatHitFx | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({
@@ -109,7 +120,9 @@ export class SceneManager {
     });
 
     this.buildRowPool();
-    this.playerMesh = this.createPlayer();
+    const player = this.createPlayer();
+    this.playerMesh = player.group;
+    this.playerBody = player.body;
     this.scene.add(this.playerMesh);
   }
 
@@ -229,6 +242,85 @@ export class SceneManager {
     }
   }
 
+  beginCombatHit(
+    entry: CombatLogEntry,
+    playerCol: number,
+    monsterRow: number,
+    monsterCol: number,
+  ): void {
+    const mesh = this.findMonsterMesh(monsterRow, monsterCol);
+    if (!mesh) {
+      this.combatHit = null;
+      return;
+    }
+    mesh.visible = true;
+    this.combatHit = {
+      attacker: entry.attacker,
+      isSurpriseStrike: entry.isSurpriseStrike,
+      monsterMesh: mesh,
+      monsterBaseX: laneWorldX(monsterCol),
+      playerBaseX: laneWorldX(playerCol),
+    };
+  }
+
+  updateCombatHit(t: number): void {
+    const fx = this.combatHit;
+    if (!fx) {
+      return;
+    }
+
+    const swing = Math.sin(t * Math.PI);
+    const towardMonster = fx.monsterBaseX - fx.playerBaseX;
+    const playerMaterial = this.playerBody.material as MeshStandardMaterial;
+    const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
+
+    if (fx.attacker === 'player') {
+      const reach = fx.isSurpriseStrike ? 0.72 : 0.42;
+      this.playerMesh.position.x = fx.playerBaseX + towardMonster * swing * reach;
+      this.playerMesh.scale.setScalar(1 + swing * (fx.isSurpriseStrike ? 0.22 : 0.1));
+      fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.16;
+      fx.monsterMesh.scale.setScalar(1 - swing * 0.14);
+      monsterMaterial.emissive.setHex(0xfff1c8);
+      monsterMaterial.emissiveIntensity = swing * (fx.isSurpriseStrike ? 1.1 : 0.7);
+      playerMaterial.emissive.setHex(fx.isSurpriseStrike ? 0xffe27a : 0x3ecf8e);
+      playerMaterial.emissiveIntensity = swing * (fx.isSurpriseStrike ? 0.9 : 0.2);
+      return;
+    }
+
+    const towardPlayer = fx.playerBaseX - fx.monsterBaseX;
+    fx.monsterMesh.position.x = fx.monsterBaseX + towardPlayer * swing * 0.5;
+    fx.monsterMesh.scale.setScalar(1 + swing * 0.12);
+    this.playerMesh.position.x = fx.playerBaseX + towardPlayer * swing * 0.18;
+    this.playerMesh.scale.setScalar(1 - swing * 0.08);
+    playerMaterial.emissive.setHex(0xff5a4a);
+    playerMaterial.emissiveIntensity = swing * 0.85;
+    monsterMaterial.emissive.setHex(0xc4372e);
+    monsterMaterial.emissiveIntensity = swing * 0.35;
+  }
+
+  endCombatHit(): void {
+    const fx = this.combatHit;
+    const playerMaterial = this.playerBody.material as MeshStandardMaterial;
+    playerMaterial.emissive.setHex(0x000000);
+    playerMaterial.emissiveIntensity = 0;
+    this.playerMesh.scale.setScalar(1);
+    if (fx) {
+      fx.monsterMesh.scale.setScalar(1);
+      fx.monsterMesh.position.x = fx.monsterBaseX;
+      fx.monsterMesh.position.y = 0.46;
+      const monsterMaterial = fx.monsterMesh.material as MeshStandardMaterial;
+      monsterMaterial.emissive.setHex(0x000000);
+      monsterMaterial.emissiveIntensity = 0;
+      this.playerMesh.position.x = fx.playerBaseX;
+    }
+    this.combatHit = null;
+  }
+
+  clearTransientFx(): void {
+    this.endEncounterFx();
+    this.endCombatHit();
+  }
+
   endEncounterFx(): void {
     for (const fx of this.encounterFx) {
       fx.monsterMesh.visible = false;
@@ -327,7 +419,9 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      const playingFx = this.encounterFx.some((fx) => fx.monsterMesh === monster);
+      const playingFx =
+        this.encounterFx.some((fx) => fx.monsterMesh === monster) ||
+        this.combatHit?.monsterMesh === monster;
       monster.visible = playingFx || tile?.content.type === 'monster';
     }
   }
@@ -337,7 +431,7 @@ export class SceneManager {
     return view?.monsters[col];
   }
 
-  private createPlayer(): Group {
+  private createPlayer(): { group: Group; body: Mesh } {
     const group = new Group();
 
     const body = new Mesh(
@@ -363,6 +457,6 @@ export class SceneManager {
 
     group.add(shadow, body);
     group.position.set(0, 0.62, 0);
-    return group;
+    return { group, body };
   }
 }
