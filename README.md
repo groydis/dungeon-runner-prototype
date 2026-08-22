@@ -1,6 +1,6 @@
 # Dungeon Runner
 
-A mobile-first, tile-based dungeon roguelite prototype. The playfield is a three-lane “highway” seen from a slightly elevated 3D view. You are not free to roam: every turn you choose one of three tiles immediately ahead, then the board scrolls forward one row.
+A mobile-first, tile-based dungeon roguelite prototype. The playfield is a three-lane “highway” seen from a slightly elevated 3D view. You are not free to roam: every turn you advance exactly one row, and you may shift at most one lane sideways.
 
 This repository is a working visual skeleton, not a complete game. It is built with **Vite**, **TypeScript**, and **Three.js** (no React).
 
@@ -78,8 +78,12 @@ Query-string helpers (no on-screen debug UI):
 
 There is no keyboard movement and no combat input.
 
-- **Tap or click** one of the three glowing tiles in the next row.
-- Left tile = forward-left, centre = forward, right = forward-right.
+- **Tap or click** a glowing tile in the next row. You always advance exactly one row.
+- You may move at most one lane sideways per step:
+  - Left lane → left or centre
+  - Centre lane → left, centre, or right
+  - Right lane → centre or right
+- A two-lane jump (left ↔ right) is illegal. Only legal destinations glow and can be tapped.
 - Input is locked during the step animation, while combat or evade feedback plays, and while a Merchant shop is open.
 - After death, use **Restart Run**. The page does not reload.
 
@@ -156,7 +160,7 @@ Each board cell is a logical `Tile`:
 
 `Grid` stores rows in a map and creates them on demand through a factory. After each step it prunes rows more than a couple of indexes behind the player so a long run does not grow forever.
 
-The player’s legal destinations are always the three tiles at `player.row + 1`. That rule stays in `GameState`, not in the scene graph.
+A destination is legal only when it is the next row and at most one lane away: `row === player.row + 1 && Math.abs(col - player.col) <= 1`. That rule lives in `GameState.isForwardTile()`. Rendering highlights and raycast picks only those tiles.
 
 World layout (rendering only):
 

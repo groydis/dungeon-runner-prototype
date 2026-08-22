@@ -95,6 +95,7 @@ export class SceneManager {
 
   private scrollZ = 0;
   private highlightRow = Number.NaN;
+  private readonly highlightCols = new Set<number>();
   private encounterFx: EncounterFxView[] = [];
   private combatHit: CombatHitFx | null = null;
   private collectFx: CollectFx[] = [];
@@ -242,6 +243,14 @@ export class SceneManager {
 
   refreshHighlights(state: GameState, presentation: { interactive: boolean }): void {
     this.highlightRow = presentation.interactive ? state.player.row + 1 : Number.NaN;
+    this.highlightCols.clear();
+    if (presentation.interactive) {
+      for (let col = 0; col < LANE_COUNT; col += 1) {
+        if (state.isForwardTile(this.highlightRow, col)) {
+          this.highlightCols.add(col);
+        }
+      }
+    }
     for (const view of this.rowViews) {
       this.applyTileChrome(view, state.getRow(view.assignedRow));
     }
@@ -262,7 +271,9 @@ export class SceneManager {
       if (view.assignedRow !== this.highlightRow) {
         continue;
       }
-      meshes.push(...view.hitPlanes, ...view.tiles);
+      for (const col of this.highlightCols) {
+        meshes.push(view.hitPlanes[col], view.tiles[col]);
+      }
     }
     return meshes;
   }
@@ -552,9 +563,9 @@ export class SceneManager {
   }
 
   private applyTileChrome(view: RowView, tiles: Tile[] | undefined): void {
-    const highlighted = view.assignedRow === this.highlightRow;
-
     for (let col = 0; col < LANE_COUNT; col += 1) {
+      const highlighted =
+        view.assignedRow === this.highlightRow && this.highlightCols.has(col);
       const mesh = view.tiles[col];
       const hit = view.hitPlanes[col];
       const monster = view.monsters[col];

@@ -170,7 +170,11 @@ export class GameState {
   }
 
   isForwardTile(row: number, col: number): boolean {
-    return row === this.player.row + 1 && this.isValidLane(col);
+    return (
+      row === this.player.row + 1 &&
+      this.isValidLane(col) &&
+      Math.abs(col - this.player.col) <= 1
+    );
   }
 
   /**
@@ -186,6 +190,9 @@ export class GameState {
     }
     if (!this.isValidLane(toCol)) {
       throw new Error(`Invalid lane: ${toCol}`);
+    }
+    if (Math.abs(toCol - this.player.col) > 1) {
+      throw new Error(`Cannot jump two lanes from ${this.player.col} to ${toCol}`);
     }
 
     this.commitMove(toCol);

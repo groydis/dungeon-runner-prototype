@@ -25,6 +25,9 @@ function shopColAt(state: GameState, row: number): number {
 function safestCol(state: GameState): number {
   const nextRow = state.player.row + 1;
   for (let col = 0; col < 3; col += 1) {
+    if (!state.isForwardTile(nextRow, col)) {
+      continue;
+    }
     const here = state.getTile(nextRow, col)?.content.type;
     const ahead = state.getTile(nextRow + 1, col)?.content.type;
     if (here !== 'monster' && ahead !== 'monster') {
@@ -37,7 +40,10 @@ function safestCol(state: GameState): number {
 function walkTo(state: GameState, row: number, col: number): void {
   while (state.player.row < row) {
     const nextRow = state.player.row + 1;
-    const nextCol = nextRow === row ? col : safestCol(state);
+    const nextCol =
+      nextRow === row && state.isForwardTile(nextRow, col)
+        ? col
+        : safestCol(state);
     const resolution = state.resolveCompletedMove(nextCol);
 
     for (const event of resolution.encounters) {

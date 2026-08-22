@@ -32,6 +32,9 @@ function shopColAt(state: GameState, row: number): number {
 function safestCol(state: GameState): number {
   const nextRow = state.player.row + 1;
   for (let col = 0; col < 3; col += 1) {
+    if (!state.isForwardTile(nextRow, col)) {
+      continue;
+    }
     const here = state.getTile(nextRow, col)?.content.type;
     const ahead = state.getTile(nextRow + 1, col)?.content.type;
     if (here !== 'monster' && ahead !== 'monster') {
@@ -59,7 +62,10 @@ function walkTo(state: GameState, row: number, col: number): TurnResolution | nu
   let last: TurnResolution | null = null;
   while (state.player.row < row) {
     const nextRow = state.player.row + 1;
-    const nextCol = nextRow === row ? col : safestCol(state);
+    const nextCol =
+      nextRow === row && state.isForwardTile(nextRow, col)
+        ? col
+        : safestCol(state);
     last = state.resolveCompletedMove(nextCol);
     playEncounters(state, last.encounters);
     if (state.runOver) {
@@ -161,6 +167,54 @@ describe('turn action validity', () => {
   });
 });
 
+describe('one-lane sideways movement', () => {
+  it('from the centre lane, left, centre, and right are valid', () => {
+    const state = new GameState();
+    expect(state.player.col).toBe(1);
+    expect(state.isForwardTile(1, 0)).toBe(true);
+    expect(state.isForwardTile(1, 1)).toBe(true);
+    expect(state.isForwardTile(1, 2)).toBe(true);
+  });
+
+  it('from the left lane, left and centre are valid and right is invalid', () => {
+    const state = new GameState();
+    state.resolveCompletedMove(0);
+    expect(state.player.col).toBe(0);
+    expect(state.isForwardTile(2, 0)).toBe(true);
+    expect(state.isForwardTile(2, 1)).toBe(true);
+    expect(state.isForwardTile(2, 2)).toBe(false);
+  });
+
+  it('from the right lane, centre and right are valid and left is invalid', () => {
+    const state = new GameState();
+    state.resolveCompletedMove(2);
+    expect(state.player.col).toBe(2);
+    expect(state.isForwardTile(2, 0)).toBe(false);
+    expect(state.isForwardTile(2, 1)).toBe(true);
+    expect(state.isForwardTile(2, 2)).toBe(true);
+  });
+
+  it('does not advance the run when a two-lane jump is rejected', () => {
+    const state = new GameState();
+    state.resolveCompletedMove(0);
+    const before = {
+      row: state.player.row,
+      col: state.player.col,
+      distance: state.distance,
+      gold: state.gold,
+      status: state.status,
+    };
+
+    expect(() => state.resolveCompletedMove(2)).toThrow(/two lanes/);
+    expect(state.player.row).toBe(before.row);
+    expect(state.player.col).toBe(before.col);
+    expect(state.distance).toBe(before.distance);
+    expect(state.gold).toBe(before.gold);
+    expect(state.status).toBe(before.status);
+    expect(state.shopOpen).toBe(false);
+  });
+});
+
 describe('turn resolution order', () => {
   it('returns an empty TurnResolution for a safe opening move', () => {
     const state = new GameState();
@@ -196,7 +250,10 @@ describe('turn resolution order', () => {
       const nextRow = state.player.row + 1;
       let col = safestCol(state);
       for (let lane = 0; lane < 3; lane += 1) {
-        if (state.getTile(nextRow, lane)?.content.type === 'gold') {
+        if (
+          state.isForwardTile(nextRow, lane) &&
+          state.getTile(nextRow, lane)?.content.type === 'gold'
+        ) {
           col = lane;
           break;
         }
