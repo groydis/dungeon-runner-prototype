@@ -33,6 +33,7 @@ import {
 import {
   applyLevelUpChoice,
   buildLevelUpView,
+  evaluateLevelUpChoice,
   type LevelUpChoice,
   type LevelUpResult,
   type LevelUpView,
@@ -469,7 +470,7 @@ export class GameState {
     if (level === undefined) {
       return null;
     }
-    return buildLevelUpView(level, this.player.experience);
+    return buildLevelUpView(level, this.player.experience, this.player.evade);
   }
 
   chooseLevelUp(choice: LevelUpChoice): LevelUpResult {
@@ -483,6 +484,21 @@ export class GameState {
         evadeGained: 0,
         pendingRemaining: 0,
         status: 'There is no level-up to claim.',
+      };
+    }
+
+    const eligibility = evaluateLevelUpChoice(choice, this.player.evade);
+    if (!eligibility.available) {
+      return {
+        success: false,
+        choice,
+        reason: eligibility.reason ?? 'capped',
+        maxHealthGained: 0,
+        attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
+        pendingRemaining: this.pendingLevelUps.length,
+        status: eligibility.disabledReason ?? 'That reward is unavailable.',
       };
     }
 

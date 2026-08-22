@@ -1020,6 +1020,9 @@ describe('XP and level-up', () => {
     expect(partial.player.evade).toBe(16);
     partial.player.addExperience(2);
     fightDemoRatPending(partial);
+    expect(partial.getLevelUpView()?.choices.find((choice) => choice.id === 'evasive')?.available).toBe(
+      true,
+    );
     expect(partial.chooseLevelUp('evasive')).toMatchObject({
       success: true,
       evadeGained: 4,
@@ -1034,11 +1037,31 @@ describe('XP and level-up', () => {
     expect(atCap.player.evade).toBe(PLAYER_EVADE_MAX);
     atCap.player.addExperience(2);
     fightDemoRatPending(atCap);
-    expect(atCap.chooseLevelUp('evasive')).toMatchObject({
-      success: true,
-      evadeGained: 0,
+    const view = atCap.getLevelUpView();
+    expect(view?.choices.find((choice) => choice.id === 'evasive')).toMatchObject({
+      available: false,
+      reason: 'capped',
+      disabledReason: 'Evade is already at maximum (20).',
     });
+    expect(
+      view?.choices.filter((choice) => choice.id !== 'evasive').every((choice) => choice.available),
+    ).toBe(true);
+
+    const statusBefore = atCap.status;
+    const experienceBefore = atCap.player.experience;
+    const rejected = atCap.chooseLevelUp('evasive');
+    expect(rejected).toMatchObject({
+      success: false,
+      reason: 'capped',
+      evadeGained: 0,
+      pendingRemaining: 1,
+    });
+    expect(atCap.levelUpOpen).toBe(true);
+    expect(atCap.status).toBe(statusBefore);
+    expect(atCap.player.experience).toBe(experienceBefore);
     expect(atCap.player.evade).toBe(PLAYER_EVADE_MAX);
+    expect(atCap.chooseLevelUp('vitality').success).toBe(true);
+    expect(atCap.levelUpOpen).toBe(false);
   });
 
   it('queues one choice at a time when a combat crosses several thresholds', () => {

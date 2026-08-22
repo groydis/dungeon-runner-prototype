@@ -19,6 +19,13 @@ export function experienceHudText(
   return `XP: ${experience} / ${nextLevelExperience}`;
 }
 
+export function levelUpChoiceAriaLabel(choice: LevelUpChoiceView): string {
+  if (choice.available) {
+    return `${choice.title}. ${choice.description}`;
+  }
+  return `${choice.title}. Unavailable. ${choice.disabledReason ?? 'Unavailable'}`;
+}
+
 export class LevelUpOverlayView {
   private readonly overlayEl: HTMLElement;
   private readonly levelEl: HTMLElement;
@@ -26,6 +33,7 @@ export class LevelUpOverlayView {
   private readonly buttons: Record<LevelUpChoice, HTMLButtonElement>;
   private readonly titles: Record<LevelUpChoice, HTMLElement>;
   private readonly descs: Record<LevelUpChoice, HTMLElement>;
+  private readonly reasons: Record<LevelUpChoice, HTMLElement>;
   private readonly handlers: Partial<Record<LevelUpChoice, () => void>> = {};
 
   constructor(root: ParentNode = document) {
@@ -49,6 +57,12 @@ export class LevelUpOverlayView {
       sharpened: requireElement(root, '#level-up-sharpened-desc'),
       armoured: requireElement(root, '#level-up-armoured-desc'),
       evasive: requireElement(root, '#level-up-evasive-desc'),
+    };
+    this.reasons = {
+      vitality: requireElement(root, '#level-up-vitality-reason'),
+      sharpened: requireElement(root, '#level-up-sharpened-reason'),
+      armoured: requireElement(root, '#level-up-armoured-reason'),
+      evasive: requireElement(root, '#level-up-evasive-reason'),
     };
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
   }
@@ -89,11 +103,11 @@ export class LevelUpOverlayView {
   private renderChoice(choice: LevelUpChoiceView): void {
     this.titles[choice.id].textContent = choice.title;
     this.descs[choice.id].textContent = choice.description;
-    this.buttons[choice.id].disabled = false;
-    this.buttons[choice.id].setAttribute(
-      'aria-label',
-      `${choice.title}. ${choice.description}`,
-    );
+    this.reasons[choice.id].textContent = choice.available
+      ? ''
+      : (choice.disabledReason ?? '');
+    this.buttons[choice.id].disabled = !choice.available;
+    this.buttons[choice.id].setAttribute('aria-label', levelUpChoiceAriaLabel(choice));
   }
 
   private detach(choice: LevelUpChoice): void {

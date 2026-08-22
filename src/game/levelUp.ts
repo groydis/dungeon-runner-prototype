@@ -16,10 +16,15 @@ export const LEVEL_UP_SHARPENED_ATTACK = 1;
 export const LEVEL_UP_ARMOURED_DEFENCE = 1;
 export const LEVEL_UP_EVASIVE_EVADE = 5;
 
+export type LevelUpUnavailableReason = 'noLevelUp' | 'capped';
+
 export interface LevelUpChoiceView {
   id: LevelUpChoice;
   title: string;
   description: string;
+  available: boolean;
+  reason?: Exclude<LevelUpUnavailableReason, 'noLevelUp'>;
+  disabledReason?: string;
 }
 
 export interface LevelUpView {
@@ -32,7 +37,7 @@ export interface LevelUpView {
 export interface LevelUpResult {
   success: boolean;
   choice?: LevelUpChoice;
-  reason?: 'noLevelUp';
+  reason?: LevelUpUnavailableReason;
   maxHealthGained: number;
   attackGained: number;
   defenceGained: number;
@@ -63,19 +68,43 @@ export const LEVEL_UP_CATALOG: Record<
   },
 };
 
+export const LEVEL_UP_EVASIVE_CAPPED_REASON =
+  `Evade is already at maximum (${PLAYER_EVADE_MAX}).`;
+
+export function evaluateLevelUpChoice(
+  choice: LevelUpChoice,
+  evade: number,
+): { available: boolean; reason?: 'capped'; disabledReason?: string } {
+  if (choice === 'evasive' && evade >= PLAYER_EVADE_MAX) {
+    return {
+      available: false,
+      reason: 'capped',
+      disabledReason: LEVEL_UP_EVASIVE_CAPPED_REASON,
+    };
+  }
+  return { available: true };
+}
+
 export function buildLevelUpView(
   level: number,
   experience: number,
+  evade: number,
 ): LevelUpView {
   return {
     level,
     experience,
     nextLevelExperience: nextLevelExperience(experience),
-    choices: LEVEL_UP_CHOICES.map((id) => ({
-      id,
-      title: LEVEL_UP_CATALOG[id].title,
-      description: LEVEL_UP_CATALOG[id].description,
-    })),
+    choices: LEVEL_UP_CHOICES.map((id) => {
+      const evaluation = evaluateLevelUpChoice(id, evade);
+      return {
+        id,
+        title: LEVEL_UP_CATALOG[id].title,
+        description: LEVEL_UP_CATALOG[id].description,
+        available: evaluation.available,
+        reason: evaluation.reason,
+        disabledReason: evaluation.disabledReason,
+      };
+    }),
   };
 }
 

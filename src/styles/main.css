@@ -269,16 +269,19 @@ body {
 
 .shop-offer-desc,
 .shop-offer-reason,
-.level-up-choice-desc {
+.level-up-choice-desc,
+.level-up-choice-reason {
   color: var(--hud-muted);
   font-size: 0.9rem;
 }
 
-.shop-offer-reason:empty {
+.shop-offer-reason:empty,
+.level-up-choice-reason:empty {
   display: none;
 }
 
-.shop-offer:disabled {
+.shop-offer:disabled,
+.level-up-choice:disabled {
   opacity: 0.48;
   cursor: not-allowed;
 }

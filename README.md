@@ -420,7 +420,7 @@ Crossing a threshold pauses the board and opens a level-up overlay. If one fight
 | Vitality | +1 max HP; current HP is unchanged |
 | Sharpened | +1 attack |
 | Armoured | +1 defence |
-| Evasive | +5 Evade, hard maximum 20 |
+| Evasive | +5 Evade, hard maximum 20. Disabled at 20 (`Evade is already at maximum (20).`). The overlay stays open so another reward can still be chosen. |
 
 After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restart Run restores level, XP, pending choices, and the four combat stats to their base values.
 
