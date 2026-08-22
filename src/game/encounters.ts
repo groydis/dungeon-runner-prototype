@@ -1,12 +1,18 @@
 import { type Monster } from './Monster';
 import { type Player } from './Player';
 
-export type EncounterKind = 'combat' | 'evade' | 'ambush';
+export type CombatApproach = 'frontOn' | 'surprise';
 
-export interface EncounterEvent {
-  kind: EncounterKind;
-  monster: Monster;
-}
+export type EncounterEvent =
+  | {
+      kind: 'combat';
+      approach: CombatApproach;
+      monster: Monster;
+    }
+  | {
+      kind: 'evade';
+      monster: Monster;
+    };
 
 export type AvoidanceRoll = () => boolean;
 
@@ -15,8 +21,8 @@ export function rollAvoidance(random: () => number = Math.random): boolean {
 }
 
 /**
- * Development helper: `?avoid=1` always evades, `?avoid=0` always ambushes.
- * Production play uses a live 50/50 roll.
+ * Development helper: `?avoid=1` always evades, `?avoid=0` always starts
+ * Surprise Attack combat. Production play uses a live 50/50 roll.
  */
 export function avoidanceRollerFromSearch(search: string): AvoidanceRoll {
   const params = new URLSearchParams(
@@ -69,7 +75,7 @@ export function findAlignedMonsterEncounters(
     }
 
     if (isOnMonsterTile(player, monster)) {
-      events.push({ kind: 'combat', monster });
+      events.push({ kind: 'combat', approach: 'frontOn', monster });
       continue;
     }
 
@@ -77,17 +83,18 @@ export function findAlignedMonsterEncounters(
       continue;
     }
 
-    // Same lane, one row in front or behind: guaranteed fight.
+    // Same lane, one row in front or behind: guaranteed front-on fight.
     if (monster.col === player.col) {
-      events.push({ kind: 'combat', monster });
+      events.push({ kind: 'combat', approach: 'frontOn', monster });
       continue;
     }
 
     // Same row, adjacent lane: one avoidance roll.
-    events.push({
-      kind: roll() ? 'evade' : 'ambush',
-      monster,
-    });
+    if (roll()) {
+      events.push({ kind: 'evade', monster });
+    } else {
+      events.push({ kind: 'combat', approach: 'surprise', monster });
+    }
   }
 
   return events;
@@ -95,11 +102,11 @@ export function findAlignedMonsterEncounters(
 
 export function encounterStatusText(event: EncounterEvent): string {
   const { name } = event.monster;
-  if (event.kind === 'combat') {
-    return `A ${name} blocks your path! Combat will resolve here later.`;
-  }
   if (event.kind === 'evade') {
     return `You slip past the ${name}.`;
   }
-  return `The ${name} ambushes you! Combat will resolve here later.`;
+  if (event.approach === 'surprise') {
+    return `You catch the ${name} off guard! Surprise attack — combat will resolve here later.`;
+  }
+  return `A ${name} blocks your path! Combat will resolve here later.`;
 }

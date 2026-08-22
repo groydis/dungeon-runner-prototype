@@ -14,8 +14,9 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - The player is a green capsule.
 - A single red Cave Rat sits a few rows ahead in the centre lane.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
-- Same lane (in front or behind) = automatic combat hook. Adjacent lane (same row) = a one-time 50/50 evade or ambush.
-- Combat math is not implemented yet; the HUD reports the outcome.
+- Same lane (in front or behind) = a normal front-on fight.
+- Adjacent lane (same row) = a 50/50 chance to slip past, or a future Surprise Attack fight.
+- Combat math and the Surprise Attack bonus are not implemented yet; the HUD reports the outcome.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -28,7 +29,7 @@ Included:
 - Smooth lane-change, hop, and board-scroll animation
 - Row recycling: the row that leaves the screen is reused as the new far row
 - A demo Cave Rat a few rows ahead in the centre lane
-- Cardinal-plus encounters: head-on fight, or a 50/50 pass from an adjacent lane
+- Cardinal-plus encounters: front-on fight, evade, or Surprise Attack context
 - A minimal HUD (title, distance, instruction, encounter line)
 - Responsive full-screen layout for phone and desktop
 
@@ -59,7 +60,7 @@ npm run preview
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
-To force the adjacent-lane pass result while testing, open `/?avoid=1` (always evade) or `/?avoid=0` (always ambush).
+To force the adjacent-lane pass result while testing, open `/?avoid=1` (always evade) or `/?avoid=0` (always Surprise Attack combat).
 
 ## Controls
 
@@ -137,25 +138,35 @@ Monsters are game entities with a stable `id`, `name`, `row`, `col`, and `encoun
        [ x ]
 ```
 
-Diagonals do not engage. `GameState.resolveMonsterEncountersAfterMove()` runs after each successful step and resolves each eligible monster exactly once:
+Diagonals do not engage. `GameState.resolveMonsterEncountersAfterMove()` runs after each successful step and resolves each eligible monster exactly once.
 
-- **Same lane** (tile in front of or behind the monster) — guaranteed fight. HUD: `A Cave Rat blocks your path! Combat will resolve here later.`
+Encounter events carry the context future combat will need:
+
+```ts
+type CombatApproach = 'frontOn' | 'surprise';
+
+type EncounterEvent =
+  | { kind: 'combat'; approach: CombatApproach; monster: Monster }
+  | { kind: 'evade'; monster: Monster };
+```
+
+- **Same lane** (tile in front of or behind the monster) — `{ kind: 'combat', approach: 'frontOn' }`. This is a normal fight. HUD: `A Cave Rat blocks your path! Combat will resolve here later.`
 - **Same row, adjacent lane** — one 50/50 avoidance roll (`rollAvoidance()`).
-  - Success: `You slip past the Cave Rat.`
-  - Failure: `The Cave Rat ambushes you! Combat will resolve here later.`
+  - Success: `{ kind: 'evade' }`. HUD: `You slip past the Cave Rat.`
+  - Failure: `{ kind: 'combat', approach: 'surprise' }`. The player chose to go around and still entered a fight, so later combat should grant a Surprise Attack advantage. HUD: `You catch the Cave Rat off guard! Surprise attack — combat will resolve here later.`
 
-In every case the monster is marked resolved and removed from its tile so it cannot roll again. Combat itself is still a placeholder HUD event; no damage or stats are applied.
+In every case the monster is marked resolved and removed from its tile so it cannot roll again. Combat stats and the actual Surprise Attack bonus are **not implemented yet**; the event only preserves the approach.
 
 To test the two pass outcomes without relying on luck, append a query string (no on-screen debug UI):
 
 - `http://localhost:5173/?avoid=1` — always evade
-- `http://localhost:5173/?avoid=0` — always ambush
+- `http://localhost:5173/?avoid=0` — always Surprise Attack combat
 
 A straight walk down the centre lane puts you on the tile in front of the Cave Rat (distance 3) and starts a fight. Restart and walk a side lane until you come alongside it to exercise the pass roll.
 
 ## Intended next steps
 
-- **Combat resolution** — replace the HUD hook with turn-resolution combat (initiative, damage, and a result that can block the path).
+- **Combat resolution** — replace the HUD hook with turn-resolution combat. Use `approach: 'surprise'` to grant the player a Surprise Attack bonus; `frontOn` is a normal fight.
 - **Smarter avoidance** — replace the flat 50/50 with stealth / awareness versus monster detection.
 - **Stats** — HP, attack, armour, and a compact mobile sheet that does not fight the 3D view.
 - **Loot** — gold, consumables, and item tiles that can appear in generated rows.

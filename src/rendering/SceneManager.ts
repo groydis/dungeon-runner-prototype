@@ -39,10 +39,10 @@ interface RowView {
 }
 
 interface EncounterFxView {
-  kind: EncounterEvent['kind'];
+  event: EncounterEvent;
   monsterMesh: Mesh;
-  baseX: number;
-  targetX: number;
+  monsterBaseX: number;
+  playerBaseX: number;
 }
 
 export class SceneManager {
@@ -195,10 +195,10 @@ export class SceneManager {
       const material = mesh.material as MeshStandardMaterial;
       material.opacity = 1;
       this.encounterFx.push({
-        kind: event.kind,
+        event,
         monsterMesh: mesh,
-        baseX: laneWorldX(event.monster.col),
-        targetX: laneWorldX(playerCol),
+        monsterBaseX: laneWorldX(event.monster.col),
+        playerBaseX: laneWorldX(playerCol),
       });
     }
   }
@@ -207,15 +207,18 @@ export class SceneManager {
     const swing = Math.sin(t * Math.PI);
     for (const fx of this.encounterFx) {
       const material = fx.monsterMesh.material as MeshStandardMaterial;
-      if (fx.kind === 'evade') {
+      if (fx.event.kind === 'evade') {
         fx.monsterMesh.scale.setScalar(Math.max(0.02, 1 - t));
         fx.monsterMesh.position.y = 0.46 + t * 0.32;
         material.opacity = 1 - t;
         continue;
       }
-      if (fx.kind === 'ambush') {
-        fx.monsterMesh.position.x = fx.baseX + (fx.targetX - fx.baseX) * swing;
-        fx.monsterMesh.position.y = 0.46 + swing * 0.3;
+      if (fx.event.approach === 'surprise') {
+        const towardMonster = fx.monsterBaseX - fx.playerBaseX;
+        this.playerMesh.position.x = fx.playerBaseX + towardMonster * swing * 0.45;
+        this.playerMesh.scale.setScalar(1 + swing * 0.12);
+        fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.18;
+        fx.monsterMesh.scale.setScalar(1 - swing * 0.18);
         material.opacity = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;
         continue;
       }
@@ -230,9 +233,10 @@ export class SceneManager {
     for (const fx of this.encounterFx) {
       fx.monsterMesh.visible = false;
       fx.monsterMesh.scale.setScalar(1);
-      fx.monsterMesh.position.x = fx.baseX;
+      fx.monsterMesh.position.x = fx.monsterBaseX;
       fx.monsterMesh.position.y = 0.46;
       (fx.monsterMesh.material as MeshStandardMaterial).opacity = 1;
+      this.playerMesh.position.x = fx.playerBaseX;
     }
     this.playerMesh.scale.setScalar(1);
     this.encounterFx = [];
