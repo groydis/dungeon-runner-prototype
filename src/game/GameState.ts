@@ -1,15 +1,22 @@
 import {
-  type AlarmConsumedKind,
   alarmTrapMessage,
   chooseEnemyAdvanceStep,
   selectClosestVisibleEnemy,
 } from './alarm';
 import {
+  type BoardSnapshot,
+  type CollectibleSnapshot,
+  type EnemyMoveResult,
+  type MonsterSnapshot,
+  type PickupResult,
+  type TileSnapshot,
+  type TrapSnapshot,
+  emptyBoardSnapshot,
+} from './BoardSnapshot';
+import {
   GOLD_AMOUNT,
   LANE_COUNT,
   POTION_HEAL,
-  ROW_POOL_SIZE,
-  START_ROW,
   gameplayVisibleRowRange,
 } from './config';
 import {
@@ -17,18 +24,14 @@ import {
   type CombatLogEntry,
   resolveAutomaticCombat,
 } from './combat';
-import { type CombatStats } from './Combatant';
-import {
-  createCollectible,
-  type Collectible,
-  type CollectibleKind,
-} from './Collectible';
+import { createCombatStats, type CombatStats } from './Combatant';
 import {
   createEnemyStats,
   enemyDropCollectibleId,
   rollEnemyDrop,
   type EnemyDropResult,
   type EnemyStatsFactory,
+  type EnemyType,
 } from './definitions/enemies';
 import {
   applyLevelUpChoice,
@@ -47,9 +50,7 @@ import {
   findAlignedMonsterEncounters,
   rollAvoidance,
 } from './encounters';
-import { Grid } from './Grid';
-import { createMerchant, type Merchant } from './Merchant';
-import { createMonster, type Monster } from './Monster';
+import { type Monster } from './Monster';
 import {
   buildClassSelectionView,
   type ClassSelectionView,
@@ -57,12 +58,8 @@ import {
 } from './definitions/classes';
 import { Player } from './Player';
 import { type Rng } from './random';
-import {
-  createRowRecipe,
-  monsterLane,
-  type LaneRecipe,
-  type RowRecipeFactory,
-} from './rowGeneration';
+import { createRowRecipe, type RowRecipeFactory } from './rowGeneration';
+import { RunWorld } from './RunWorld';
 import {
   type ActiveShop,
   applyShopPurchase,
@@ -76,32 +73,24 @@ import {
   type ShopPurchaseResult,
   type ShopView,
 } from './shop';
-import { createEmptyTile, createTile, type GridPosition, type Tile } from './Tile';
-import { createTrap, type Trap, type TrapKind } from './Trap';
+import { type TrapKind } from './Trap';
+
+export type {
+  BoardSnapshot,
+  CollectibleSnapshot,
+  EnemyMoveResult,
+  MonsterSnapshot,
+  PickupResult,
+  TileSnapshot,
+  TrapSnapshot,
+} from './BoardSnapshot';
 
 export interface MoveResult {
   fromCol: number;
   toCol: number;
   fromRow: number;
   toRow: number;
-  destination: Tile;
-}
-
-export interface PickupResult {
-  kind: CollectibleKind;
-  id: string;
-  row: number;
-  col: number;
-  goldGained: number;
-  healthRestored: number;
-  alreadyFull: boolean;
-}
-
-export interface EnemyMoveResult {
-  enemyId: string;
-  from: GridPosition;
-  to: GridPosition;
-  consumed?: AlarmConsumedKind;
+  destination: TileSnapshot;
 }
 
 export interface TrapResolution {
@@ -147,17 +136,13 @@ export interface GameStateOptions {
   createDropRng?: () => Rng;
   createEvadeRng?: () => Rng;
   createRowRecipe?: RowRecipeFactory;
+  enemyExperience?: (type: EnemyType) => number;
 }
 
 export class GameState {
   private _player: Player | null = null;
+  private readonly world: RunWorld;
 
-  private readonly grid = new Grid();
-  private readonly monsters = new Map<string, Monster>();
-  private readonly collectibles = new Map<string, Collectible>();
-  private readonly merchants = new Map<string, Merchant>();
-  private readonly traps = new Map<string, Trap>();
-  private readonly recipes = new Map<number, LaneRecipe[]>();
   private activeShop: ActiveShop | null = null;
   private shopProgress: ShopProgress = createShopProgress();
   private readonly pendingLevelUps: number[] = [];
@@ -167,21 +152,23 @@ export class GameState {
   private _runOver = false;
 
   private readonly rollAvoidance: AvoidanceRoll;
-  private readonly createEnemyStats: EnemyStatsFactory;
+  private readonly enemyExperience?: (type: EnemyType) => number;
   private readonly createRng: () => Rng;
   private readonly createDropRng: () => Rng;
   private readonly createEvadeRng: () => Rng;
-  private readonly createRowRecipe: RowRecipeFactory;
   private rng: Rng;
   private dropRng: Rng;
   private evadeRng: Rng;
 
   constructor(options: GameStateOptions = {}) {
-    this.createEnemyStats = options.createEnemyStats ?? createEnemyStats;
+    this.world = new RunWorld(
+      options.createEnemyStats ?? createEnemyStats,
+      options.createRowRecipe ?? createRowRecipe,
+    );
+    this.enemyExperience = options.enemyExperience;
     this.createRng = options.createRng ?? (() => Math.random);
     this.createDropRng = options.createDropRng ?? (() => Math.random);
     this.createEvadeRng = options.createEvadeRng ?? (() => Math.random);
-    this.createRowRecipe = options.createRowRecipe ?? createRowRecipe;
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
@@ -221,11 +208,16 @@ export class GameState {
   }
 
   get playerStats(): CombatStats {
-    return this.player.stats;
+    return this._player?.stats ?? createCombatStats({
+      maxHealth: 0,
+      health: 0,
+      attack: 0,
+      defence: 0,
+    });
   }
 
   get gold(): number {
-    return this.player.gold;
+    return this._player?.gold ?? 0;
   }
 
   get shopOpen(): boolean {
@@ -268,6 +260,18 @@ export class GameState {
     };
   }
 
+  getBoardSnapshot(): BoardSnapshot {
+    if (!this._player) {
+      return emptyBoardSnapshot();
+    }
+    return this.world.createBoardSnapshot({
+      playerRow: this._player.row,
+      playerCol: this._player.col,
+      hasSelectedClass: true,
+      legalMoveCols: this.legalMoveCols(),
+    });
+  }
+
   getClassSelectionView(): ClassSelectionView {
     return buildClassSelectionView();
   }
@@ -279,57 +283,29 @@ export class GameState {
   /** Clear the current run and return to no-class-selected. */
   clearSelectedClass(): void {
     this._player = null;
-    this.clearRunWorld();
+    this.clearRunSession();
+    this.world.clear();
     this.rebuildStreams();
   }
 
-  getTile(row: number, col: number): Tile | undefined {
-    return this.grid.getTile(row, col);
+  getTile(row: number, col: number): TileSnapshot | undefined {
+    return this.world.snapshotTile(row, col);
   }
 
-  getRow(row: number): Tile[] | undefined {
-    return this.grid.getRow(row);
+  getMonsterAt(row: number, col: number): MonsterSnapshot | undefined {
+    return this.world.snapshotMonsterAt(row, col);
   }
 
-  getMonsterAt(row: number, col: number): Monster | undefined {
-    const tile = this.grid.getTile(row, col);
-    if (!tile || tile.content.type !== 'monster' || !tile.content.id) {
-      return undefined;
-    }
-    return this.monsters.get(tile.content.id);
+  getTrapAt(row: number, col: number): TrapSnapshot | undefined {
+    return this.world.snapshotTrapAt(row, col);
   }
 
-  getTrapAt(row: number, col: number): Trap | undefined {
-    const tile = this.grid.getTile(row, col);
-    if (!tile || tile.content.type !== 'trap' || !tile.content.id) {
-      return undefined;
-    }
-    return this.traps.get(tile.content.id);
-  }
-
-  getCollectibleAt(row: number, col: number): Collectible | undefined {
-    const tile = this.grid.getTile(row, col);
-    if (
-      !tile ||
-      (tile.content.type !== 'gold' && tile.content.type !== 'potion') ||
-      !tile.content.id
-    ) {
-      return undefined;
-    }
-    return this.collectibles.get(tile.content.id);
+  getCollectibleAt(row: number, col: number): CollectibleSnapshot | undefined {
+    return this.world.snapshotCollectibleAt(row, col);
   }
 
   isValidLane(col: number): boolean {
     return col >= 0 && col < LANE_COUNT;
-  }
-
-  private isOccupiedByMonster(row: number, col: number): boolean {
-    const tile = this.grid.getTile(row, col);
-    if (!tile || tile.content.type !== 'monster' || !tile.content.id) {
-      return false;
-    }
-    const monster = this.monsters.get(tile.content.id);
-    return Boolean(monster && !monster.encounterResolved);
   }
 
   isForwardTile(row: number, col: number): boolean {
@@ -340,7 +316,7 @@ export class GameState {
       row === this._player.row + 1 &&
       this.isValidLane(col) &&
       Math.abs(col - this._player.col) <= 1 &&
-      !this.isOccupiedByMonster(row, col)
+      !this.world.isOccupiedByMonster(row, col)
     );
   }
 
@@ -364,10 +340,10 @@ export class GameState {
     if (!this.isValidLane(toCol)) {
       throw new Error(`Invalid lane: ${toCol}`);
     }
-    if (Math.abs(toCol - this.player.col) > 1) {
-      throw new Error(`Cannot jump two lanes from ${this.player.col} to ${toCol}`);
+    if (Math.abs(toCol - this._player.col) > 1) {
+      throw new Error(`Cannot jump two lanes from ${this._player.col} to ${toCol}`);
     }
-    if (this.isOccupiedByMonster(this.player.row + 1, toCol)) {
+    if (this.world.isOccupiedByMonster(this._player.row + 1, toCol)) {
       throw new Error('Cannot move onto an occupied enemy tile');
     }
 
@@ -397,23 +373,41 @@ export class GameState {
   }
 
   canBuyShopOffer(offerId: ShopOfferId): boolean {
+    if (!this._player || !this.activeShop) {
+      return false;
+    }
     return evaluateShopOffer(
-      this.activeShop?.merchant ?? null,
+      this.activeShop.merchant,
       offerId,
-      this.player.gold,
-      shopStatSnapshot(this.player),
+      this._player.gold,
+      shopStatSnapshot(this._player),
       this.shopProgress,
     ).available;
   }
 
   buyShopOffer(offerId: ShopOfferId): ShopPurchaseResult {
+    if (!this._player) {
+      return {
+        success: false,
+        offerId,
+        reason: 'noClass',
+        goldRemaining: 0,
+        goldSpent: 0,
+        maxHealthGained: 0,
+        attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
+        status: 'Choose a class first.',
+      };
+    }
+
     const merchant = this.activeShop?.merchant;
     if (!merchant) {
       return {
         success: false,
         offerId,
         reason: 'noShop',
-        goldRemaining: this.player.gold,
+        goldRemaining: this._player.gold,
         goldSpent: 0,
         maxHealthGained: 0,
         attackGained: 0,
@@ -426,8 +420,8 @@ export class GameState {
     const result = applyShopPurchase(
       merchant,
       offerId,
-      this.player.gold,
-      shopStatSnapshot(this.player),
+      this._player.gold,
+      shopStatSnapshot(this._player),
       this.shopProgress,
     );
     if (!result.success) {
@@ -435,11 +429,11 @@ export class GameState {
       return result;
     }
 
-    this.player.trySpendGold(result.goldSpent);
-    this.player.increaseMaxHealth(result.maxHealthGained);
-    this.player.increaseAttack(result.attackGained);
-    this.player.increaseDefence(result.defenceGained);
-    this.player.increaseEvade(result.evadeGained);
+    this._player.trySpendGold(result.goldSpent);
+    this._player.increaseMaxHealth(result.maxHealthGained);
+    this._player.increaseAttack(result.attackGained);
+    this._player.increaseDefence(result.defenceGained);
+    this._player.increaseEvade(result.evadeGained);
     this._status = result.status;
     return result;
   }
@@ -452,9 +446,8 @@ export class GameState {
 
     const { row, col, id } = shop.merchant;
     shop.merchant.markUsed();
-    const tile = this.grid.getTile(row, col);
-    if (tile?.content.id === id) {
-      this.clearTileContent(tile);
+    if (this.world.tileContent(row, col)?.id === id) {
+      this.world.clearContent(row, col);
     }
     this.activeShop = null;
     this._status = 'You leave the merchant behind.';
@@ -468,16 +461,19 @@ export class GameState {
 
   applyEvade(monster: Monster, evadeChance?: number): void {
     this._status = encounterStartText({ kind: 'evade', monster, evadeChance });
-    this.removeMonster(monster);
+    this.world.removeMonster(monster);
   }
 
   createCombatResult(event: EncounterEvent): CombatResult {
+    if (!this._player) {
+      throw new Error('Cannot resolve combat before a class is selected');
+    }
     if (event.kind !== 'combat') {
       throw new Error('Cannot create a combat result for an evade event');
     }
 
     return resolveAutomaticCombat(
-      this.player.stats,
+      this._player.stats,
       event.monster.stats,
       event.approach,
       { id: event.monster.id, name: event.monster.name },
@@ -485,22 +481,30 @@ export class GameState {
   }
 
   applyCombatLogEntry(entry: CombatLogEntry, monster: Monster): void {
+    if (!this._player) {
+      throw new Error('Cannot resolve combat before a class is selected');
+    }
     if (entry.target === 'player') {
-      this.player.applyHealth(entry.targetHealthAfter);
+      this._player.applyHealth(entry.targetHealthAfter);
       return;
     }
     monster.applyHealth(entry.targetHealthAfter);
   }
 
   finishCombat(result: CombatResult, monster: Monster): CombatFinishResult {
-    this.player.applyHealth(result.playerHealthAfter);
+    if (!this._player) {
+      throw new Error('Cannot resolve combat before a class is selected');
+    }
+    this._player.applyHealth(result.playerHealthAfter);
 
     if (result.winner === 'player') {
       const awardRewards = !monster.encounterResolved && monster.defeated;
-      this.removeMonster(monster);
+      this.world.removeMonster(monster);
       const drop = awardRewards ? this.trySpawnDefeatDrop(monster) : null;
       const xpGain = awardRewards
-        ? this.player.addExperience(monster.experience)
+        ? this._player.addExperience(
+            this.enemyExperience?.(monster.type) ?? monster.experience,
+          )
         : { gained: 0, levelsReached: [] as number[] };
       this.pendingLevelUps.push(...xpGain.levelsReached);
       this._status = combatVictoryText(result.monsterName);
@@ -518,7 +522,7 @@ export class GameState {
       };
     }
 
-    this.player.applyHealth(0);
+    this._player.applyHealth(0);
     this._runOver = true;
     this._status = combatDefeatText(result.monsterName);
     return {
@@ -531,18 +535,18 @@ export class GameState {
 
   getLevelUpView(): LevelUpView | null {
     const level = this.pendingLevelUps[0];
-    if (level === undefined) {
+    if (level === undefined || !this._player) {
       return null;
     }
     return buildLevelUpView(
       level,
-      this.player.experience,
-      shopStatSnapshot(this.player),
+      this._player.experience,
+      shopStatSnapshot(this._player),
     );
   }
 
   chooseLevelUp(choice: LevelUpChoice): LevelUpResult {
-    if (this.pendingLevelUps.length === 0) {
+    if (this.pendingLevelUps.length === 0 || !this._player) {
       return {
         success: false,
         reason: 'noLevelUp',
@@ -557,7 +561,7 @@ export class GameState {
 
     const eligibility = evaluateLevelUpChoice(
       choice,
-      shopStatSnapshot(this.player),
+      shopStatSnapshot(this._player),
     );
     if (!eligibility.available) {
       return {
@@ -574,7 +578,7 @@ export class GameState {
     }
 
     this.pendingLevelUps.shift();
-    const applied = applyLevelUpChoice(this.player, choice);
+    const applied = applyLevelUpChoice(this._player, choice);
     this._status = applied.status;
     return {
       success: true,
@@ -599,24 +603,19 @@ export class GameState {
 
   private beginRun(classId: PlayerClassId): void {
     this._player = new Player(classId);
-    this.clearRunWorld();
+    this.clearRunSession();
+    this.world.clear();
     this.rebuildStreams();
-    this.populateInitialRows();
+    this.world.populateInitial(this.rng);
   }
 
-  private clearRunWorld(): void {
+  private clearRunSession(): void {
     this._distance = 0;
     this._status = '';
     this._runOver = false;
-    this.monsters.clear();
-    this.collectibles.clear();
-    this.merchants.clear();
-    this.traps.clear();
     this.activeShop = null;
     this.shopProgress = createShopProgress();
     this.pendingLevelUps.length = 0;
-    this.recipes.clear();
-    this.grid.clear();
   }
 
   private rebuildStreams(): void {
@@ -625,31 +624,31 @@ export class GameState {
     this.evadeRng = this.createEvadeRng();
   }
 
-  private prepareAhead(): void {
-    if (this._runOver) {
-      return;
+  private legalMoveCols(): number[] {
+    if (!this._player) {
+      return [];
     }
-    this.grid.ensureRange(
-      this.player.row,
-      this.player.row + ROW_POOL_SIZE + 2,
-      (row, col) => this.createTile(row, col),
-    );
-    const minRow = this.player.row - 2;
-    this.grid.pruneBelow(minRow);
-    this.pruneEntitiesBelow(minRow);
+    const cols: number[] = [];
+    const row = this._player.row + 1;
+    for (let col = 0; col < LANE_COUNT; col += 1) {
+      if (this.isForwardTile(row, col)) {
+        cols.push(col);
+      }
+    }
+    return cols;
   }
 
   private commitMove(toCol: number): MoveResult {
-    const fromCol = this.player.col;
-    const fromRow = this.player.row;
+    const player = this.player;
+    const fromCol = player.col;
+    const fromRow = player.row;
     const toRow = fromRow + 1;
 
-    this.player.moveTo(toRow, toCol);
+    player.moveTo(toRow, toCol);
     this._distance += 1;
+    this.world.prepareAhead(player.row, this.rng, this._runOver);
 
-    this.prepareAhead();
-
-    const destination = this.grid.getTile(toRow, toCol);
+    const destination = this.world.snapshotTile(toRow, toCol);
     if (!destination) {
       throw new Error(`Missing destination tile ${toRow}:${toCol}`);
     }
@@ -670,23 +669,22 @@ export class GameState {
    * together.
    */
   private resolveLandedPickup(): PickupResult | null {
-    const tile = this.grid.getTile(this.player.row, this.player.col);
-    if (!tile || (tile.content.type !== 'gold' && tile.content.type !== 'potion')) {
+    const player = this.player;
+    const content = this.world.tileContent(player.row, player.col);
+    if (!content || (content.type !== 'gold' && content.type !== 'potion')) {
       return null;
     }
 
-    const collectible = tile.content.id
-      ? this.collectibles.get(tile.content.id)
-      : undefined;
+    const collectible = this.world.collectibleAt(player.row, player.col);
     if (!collectible || !collectible.collect()) {
-      this.clearTileContent(tile);
+      this.world.clearContent(player.row, player.col);
       return null;
     }
 
-    this.clearTileContent(tile);
+    this.world.clearContent(player.row, player.col);
 
     if (collectible.kind === 'gold') {
-      this.player.addGold(GOLD_AMOUNT);
+      player.addGold(GOLD_AMOUNT);
       this._status = `You found ${GOLD_AMOUNT} gold.`;
       return {
         kind: 'gold',
@@ -699,7 +697,7 @@ export class GameState {
       };
     }
 
-    const restored = this.player.heal(POTION_HEAL);
+    const restored = player.heal(POTION_HEAL);
     this._status =
       restored > 0
         ? `You drink a potion and restore ${restored} HP.`
@@ -721,27 +719,27 @@ export class GameState {
    * closest visible enemy one legal cardinal tile toward the player.
    */
   private resolveLandedAlarmTrap(): TrapResolution | null {
-    if (this._runOver || this.activeShop) {
+    if (this._runOver || this.activeShop || !this._player) {
       return null;
     }
 
-    const tile = this.grid.getTile(this.player.row, this.player.col);
-    if (!tile || tile.content.type !== 'trap' || !tile.content.id) {
+    const content = this.world.tileContent(this._player.row, this._player.col);
+    if (!content || content.type !== 'trap' || !content.id) {
       return null;
     }
 
-    const trap = this.traps.get(tile.content.id);
+    const trap = this.world.trapAt(this._player.row, this._player.col);
     if (!trap || !trap.trigger()) {
-      tile.content = { type: 'empty' };
+      this.world.clearContent(this._player.row, this._player.col);
       return null;
     }
 
-    this.clearTileContent(tile);
+    this.world.clearContent(this._player.row, this._player.col);
 
     const enemy = selectClosestVisibleEnemy(
-      this.player,
-      this.monsters.values(),
-      gameplayVisibleRowRange(this.player.row),
+      this._player,
+      this.world.livingMonsters(),
+      gameplayVisibleRowRange(this._player.row),
     );
     if (!enemy) {
       const message = alarmTrapMessage({ moved: false });
@@ -754,8 +752,8 @@ export class GameState {
     }
 
     const from = { row: enemy.row, col: enemy.col };
-    const dest = chooseEnemyAdvanceStep(from, this.player, (row, col) =>
-      this.isValidEnemyDestination(row, col, enemy.id),
+    const dest = chooseEnemyAdvanceStep(from, this._player, (row, col) =>
+      this.world.isValidEnemyDestination(row, col, enemy.id),
     );
     if (!dest) {
       const message = alarmTrapMessage({ enemyName: enemy.name, moved: false });
@@ -767,7 +765,7 @@ export class GameState {
       };
     }
 
-    const consumed = this.moveMonster(enemy, dest);
+    const consumed = this.world.moveMonster(enemy, dest);
     const message = alarmTrapMessage({
       enemyName: enemy.name,
       moved: true,
@@ -793,13 +791,13 @@ export class GameState {
    * nothing engages.
    */
   private resolveMonsterEncountersAfterMove(): EncounterEvent[] {
-    if (this._runOver) {
+    if (this._runOver || !this._player) {
       return [];
     }
 
     const events = findAlignedMonsterEncounters(
-      this.player,
-      this.monsters.values(),
+      this._player,
+      this.world.livingMonsters(),
       this.rollAvoidance,
     );
     if (events.length > 0) {
@@ -813,32 +811,22 @@ export class GameState {
    * Shop rows have no other content, so encounters should not fire here.
    */
   private openShopForCurrentTile(): boolean {
-    if (this._runOver || this.activeShop) {
+    if (this._runOver || this.activeShop || !this._player) {
       return false;
     }
 
-    const tile = this.grid.getTile(this.player.row, this.player.col);
-    if (!tile || tile.content.type !== 'shop' || !tile.content.id) {
+    const merchant = this.world.merchantAt(this._player.row, this._player.col);
+    if (!merchant) {
       return false;
     }
-
-    const merchant = this.merchants.get(tile.content.id);
-    if (!merchant || merchant.used) {
-      this.clearTileContent(tile);
+    if (merchant.used) {
+      this.world.clearContent(merchant.row, merchant.col);
       return false;
     }
 
     this.activeShop = createActiveShop(merchant);
     this._status = 'A travelling merchant beckons.';
     return true;
-  }
-
-  private removeMonster(monster: Monster): void {
-    monster.resolveEncounter();
-    const tile = this.grid.getTile(monster.row, monster.col);
-    if (tile?.content.id === monster.id) {
-      this.clearTileContent(tile);
-    }
   }
 
   private trySpawnDefeatDrop(monster: Monster): EnemyDropResult | null {
@@ -848,22 +836,12 @@ export class GameState {
     }
 
     const collectibleId = enemyDropCollectibleId(kind, monster.id);
-    const collectible = createCollectible(
+    this.world.createCollectibleOnTile(
       collectibleId,
       kind,
       monster.row,
       monster.col,
     );
-    this.collectibles.set(collectibleId, collectible);
-
-    const tile = this.grid.getTile(monster.row, monster.col);
-    if (tile) {
-      tile.content = { type: kind, id: collectibleId };
-      this.writeLaneRecipe(monster.row, monster.col, {
-        kind,
-        entityId: collectibleId,
-      });
-    }
 
     return {
       enemyId: monster.id,
@@ -873,198 +851,5 @@ export class GameState {
       row: monster.row,
       col: monster.col,
     };
-  }
-
-  private isValidEnemyDestination(
-    row: number,
-    col: number,
-    movingId: string,
-  ): boolean {
-    if (!this.isValidLane(col)) {
-      return false;
-    }
-    const tile = this.grid.getTile(row, col);
-    if (!tile) {
-      return false;
-    }
-    if (tile.content.type === 'shop') {
-      return false;
-    }
-    if (tile.content.type === 'monster') {
-      return tile.content.id === movingId;
-    }
-    return (
-      tile.content.type === 'empty' ||
-      tile.content.type === 'gold' ||
-      tile.content.type === 'potion' ||
-      tile.content.type === 'trap'
-    );
-  }
-
-  private moveMonster(monster: Monster, dest: GridPosition): AlarmConsumedKind | undefined {
-    const fromTile = this.grid.getTile(monster.row, monster.col);
-    if (fromTile?.content.id === monster.id) {
-      this.clearTileContent(fromTile);
-    }
-
-    const destTile = this.grid.getTile(dest.row, dest.col);
-    if (!destTile) {
-      throw new Error(`Missing enemy destination tile ${dest.row}:${dest.col}`);
-    }
-
-    const consumed = this.consumeBlockingContent(destTile);
-    monster.moveTo(dest.row, dest.col);
-    destTile.content = { type: 'monster', id: monster.id };
-    this.writeLaneRecipe(dest.row, dest.col, monsterLane(monster.id, monster.type));
-    return consumed;
-  }
-
-  private consumeBlockingContent(tile: Tile): AlarmConsumedKind | undefined {
-    if (tile.content.type === 'gold' || tile.content.type === 'potion') {
-      const item = tile.content.id
-        ? this.collectibles.get(tile.content.id)
-        : undefined;
-      item?.collect();
-      const kind = tile.content.type;
-      this.clearTileContent(tile);
-      return kind;
-    }
-
-    if (tile.content.type === 'trap') {
-      const trap = tile.content.id ? this.traps.get(tile.content.id) : undefined;
-      trap?.trigger();
-      this.clearTileContent(tile);
-      return 'trap';
-    }
-
-    return undefined;
-  }
-
-  private clearTileContent(tile: Tile): void {
-    this.writeLaneRecipe(tile.row, tile.col, { kind: 'empty' });
-    tile.content = { type: 'empty' };
-  }
-
-  private writeLaneRecipe(row: number, col: number, recipe: LaneRecipe): void {
-    const lanes = this.recipes.get(row);
-    if (!lanes || col < 0 || col >= lanes.length) {
-      return;
-    }
-    lanes[col] = recipe;
-  }
-
-  private pruneEntitiesBelow(minRow: number): void {
-    for (const [id, monster] of this.monsters) {
-      if (monster.row < minRow) {
-        this.monsters.delete(id);
-      }
-    }
-    for (const [id, item] of this.collectibles) {
-      if (item.row < minRow) {
-        this.collectibles.delete(id);
-      }
-    }
-    for (const [id, merchant] of this.merchants) {
-      if (merchant.row < minRow) {
-        this.merchants.delete(id);
-      }
-    }
-    for (const [id, trap] of this.traps) {
-      if (trap.row < minRow) {
-        this.traps.delete(id);
-      }
-    }
-    for (const row of this.recipes.keys()) {
-      if (row < minRow) {
-        this.recipes.delete(row);
-      }
-    }
-  }
-
-  private populateInitialRows(): void {
-    this.grid.ensureRange(
-      START_ROW,
-      START_ROW + ROW_POOL_SIZE + 2,
-      (row, col) => this.createTile(row, col),
-    );
-  }
-
-  private recipeFor(row: number): LaneRecipe[] {
-    const existing = this.recipes.get(row);
-    if (existing) {
-      return existing;
-    }
-    const recipe = this.createRowRecipe(row, this.rng).map((lane) => ({ ...lane }));
-    this.recipes.set(row, recipe);
-    return recipe;
-  }
-
-  private createTile(row: number, col: number): Tile {
-    const lane = this.recipeFor(row)[col] ?? { kind: 'empty' };
-
-    if (lane.kind === 'monster') {
-      const existing = this.monsters.get(lane.entityId);
-      if (existing) {
-        if (
-          existing.row === row &&
-          existing.col === col &&
-          !existing.encounterResolved
-        ) {
-          return createTile(row, col, { type: 'monster', id: lane.entityId });
-        }
-        return createEmptyTile(row, col);
-      }
-      this.monsters.set(
-        lane.entityId,
-        createMonster(
-          lane.entityId,
-          lane.enemyType,
-          row,
-          col,
-          this.createEnemyStats(lane.enemyType),
-        ),
-      );
-      return createTile(row, col, { type: 'monster', id: lane.entityId });
-    }
-
-    if (lane.kind === 'shop') {
-      if (!this.merchants.has(lane.entityId)) {
-        this.merchants.set(
-          lane.entityId,
-          createMerchant(lane.entityId, row, col),
-        );
-      }
-      return createTile(row, col, { type: 'shop', id: lane.entityId });
-    }
-
-    if (lane.kind === 'trap') {
-      const existing = this.traps.get(lane.entityId);
-      if (existing?.triggered) {
-        return createEmptyTile(row, col);
-      }
-      if (!existing) {
-        this.traps.set(
-          lane.entityId,
-          createTrap(lane.entityId, lane.trapKind, row, col),
-        );
-      }
-      return createTile(row, col, { type: 'trap', id: lane.entityId });
-    }
-
-    if (lane.kind === 'gold' || lane.kind === 'potion') {
-      const existing = this.collectibles.get(lane.entityId);
-      if (existing?.collected) {
-        return createEmptyTile(row, col);
-      }
-      if (!existing) {
-        this.collectibles.set(
-          lane.entityId,
-          createCollectible(lane.entityId, lane.kind, row, col),
-        );
-      }
-      return createTile(row, col, { type: lane.kind, id: lane.entityId });
-    }
-
-    return createEmptyTile(row, col);
   }
 }

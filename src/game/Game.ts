@@ -113,7 +113,7 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
 
-    this.scene.bindWindow(this.state, { interactive: false });
+    this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
     this.classSelect.show(this.state.getClassSelectionView());
     this.setBoardInteractive(false);
     this.handleResize();
@@ -209,7 +209,7 @@ export class Game {
 
     const resolution = this.state.resolveCompletedMove(toCol);
     this.scene.setScrollZ(0);
-    this.scene.recycleDepartingRow(leftBehindRow, this.state);
+    this.scene.recycleDepartingRow(leftBehindRow, this.state.getBoardSnapshot());
     this.scene.layoutRows(this.state.player.row);
     this.scene.setPlayerVisual(laneWorldX(this.state.player.col), 0);
 
@@ -445,7 +445,7 @@ export class Game {
   private selectClass(classId: PlayerClassId): void {
     this.state.selectClass(classId);
     this.classSelect.hide();
-    this.scene.bindWindow(this.state, { interactive: true });
+    this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: true });
     this.setBoardInteractive(true);
     this.updateHud();
   }
@@ -462,7 +462,7 @@ export class Game {
     this.levelUp.hide();
     this.gameOver.hide();
     this.state.clearSelectedClass();
-    this.scene.bindWindow(this.state, { interactive: false });
+    this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
     this.classSelect.show(this.state.getClassSelectionView());
     this.setBoardInteractive(false);
     this.updateHud();
@@ -532,7 +532,7 @@ export class Game {
 
   private setBoardInteractive(interactive: boolean): void {
     this.input.setEnabled(interactive);
-    this.scene.refreshHighlights(this.state, { interactive });
+    this.scene.refreshHighlights(this.state.getBoardSnapshot(), { interactive });
   }
 
   private updateHud(): void {

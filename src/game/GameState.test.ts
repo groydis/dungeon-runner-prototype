@@ -19,6 +19,7 @@ import {
   enemyStatsFactoryFromSearch,
 } from './definitions/enemies';
 import { type EncounterEvent } from './encounters';
+import { tileAt } from './BoardSnapshot';
 import { GameState, type CombatFinishResult, type GameStateOptions, type TurnResolution } from './GameState';
 import { mulberry32 } from './random';
 import {
@@ -359,7 +360,6 @@ describe('alarm trap triggering', () => {
     );
     expect(state.getTrapAt(8, 1)).toBeUndefined();
     expect(state.getTile(8, 1)?.content.type).toBe('empty');
-    expect(trap?.triggered).toBe(true);
     expect(state.status).toMatch(/nothing answers/);
 
     expect(state.resolveCompletedMove(1).trap).toBeNull();
@@ -502,11 +502,10 @@ describe('alarm item consumption', () => {
       11: [emptyRow()[0], monsterLane('trap-eater', 'cryptGuard'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
-    const crushed = state.getTrapAt(10, 1);
+    expect(state.getTrapAt(10, 1)?.triggered).toBe(false);
     const resolution = state.resolveCompletedMove(1);
     expect(resolution.trap?.enemyMove?.consumed).toBe('trap');
     expect(resolution.trap?.enemyMove?.enemyId).toBe('trap-eater');
-    expect(crushed?.triggered).toBe(true);
     expect(state.getTrapAt(10, 1)).toBeUndefined();
     expect(state.getMonsterAt(9, 1)).toBeUndefined();
     expect(state.getMonsterAt(10, 1)?.id).toBe('trap-eater');
@@ -1084,26 +1083,22 @@ describe('XP and level-up', () => {
   });
 
   it('queues one choice at a time when a combat crosses several thresholds', () => {
-    const original = ENEMY_DEFINITIONS.caveRat.experience;
-    ENEMY_DEFINITIONS.caveRat.experience = 12;
-    try {
-      const state = createState({
-        createDropRng: alwaysDrop(0),
-        rollAvoidance: () => true,
-      });
-      const finish = fightDemoRatPending(state);
-      expect(finish.experienceGained).toBe(12);
-      expect(finish.levelsReached).toEqual([2, 3, 4]);
-      expect(finish.levelUp?.level).toBe(2);
-      expect(state.chooseLevelUp('vitality').pendingRemaining).toBe(2);
-      expect(state.getLevelUpView()?.level).toBe(3);
-      expect(state.chooseLevelUp('sharpened').pendingRemaining).toBe(1);
-      expect(state.getLevelUpView()?.level).toBe(4);
-      expect(state.chooseLevelUp('armoured').pendingRemaining).toBe(0);
-      expect(state.levelUpOpen).toBe(false);
-    } finally {
-      ENEMY_DEFINITIONS.caveRat.experience = original;
-    }
+    const state = createState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+      enemyExperience: (type) =>
+        type === 'caveRat' ? 12 : ENEMY_DEFINITIONS[type].experience,
+    });
+    const finish = fightDemoRatPending(state);
+    expect(finish.experienceGained).toBe(12);
+    expect(finish.levelsReached).toEqual([2, 3, 4]);
+    expect(finish.levelUp?.level).toBe(2);
+    expect(state.chooseLevelUp('vitality').pendingRemaining).toBe(2);
+    expect(state.getLevelUpView()?.level).toBe(3);
+    expect(state.chooseLevelUp('sharpened').pendingRemaining).toBe(1);
+    expect(state.getLevelUpView()?.level).toBe(4);
+    expect(state.chooseLevelUp('armoured').pendingRemaining).toBe(0);
+    expect(state.levelUpOpen).toBe(false);
   });
 
   it('returns typed drop and level-up results so playback can keep drop-then-choice order', () => {
@@ -1367,6 +1362,155 @@ describe('player class selection', () => {
     expect(state.player.gold).toBe(0);
     expect(state.player.experience).toBe(0);
     expect(state.distance).toBe(0);
+  });
+});
+
+describe('board snapshots and no-class APIs', () => {
+  it('returns read-only board views that cannot mutate the live run', () => {
+    const state = createState();
+    const snapshot = state.getBoardSnapshot();
+    const tile = state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
+    expect(tile?.content.type).toBe('monster');
+    expect(tile?.monster?.renderKey).toBe('caveRat');
+
+    expect(() => {
+      (snapshot.rows as unknown as { row: number }[]).push({ row: 99 });
+    }).toThrow(TypeError);
+    expect(() => {
+      (tile!.content as unknown as { type: string }).type = 'gold';
+    }).toThrow(TypeError);
+
+    const copy = { ...tile!.content, type: 'gold' as const };
+    expect(copy.type).toBe('gold');
+    expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content.type).toBe(
+      'monster',
+    );
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
+      DEMO_MONSTER_ID,
+    );
+  });
+
+  it('does not consume seeded streams or change run state when a snapshot is taken', () => {
+    const rngOptions = {
+      createRng: () => mulberry32(123),
+      createDropRng: () => mulberry32(456),
+      createEvadeRng: () => mulberry32(789),
+    };
+    const snapshotted = new GameState({ playerClass: 'ranger', ...rngOptions });
+    const untouched = new GameState({ playerClass: 'ranger', ...rngOptions });
+
+    const before = {
+      distance: snapshotted.distance,
+      gold: snapshotted.gold,
+      stats: snapshotted.player.stats,
+      evade: snapshotted.player.evade,
+      rows: rowWindow(snapshotted),
+    };
+    snapshotted.getBoardSnapshot();
+    snapshotted.getBoardSnapshot();
+    snapshotted.getTile(4, 1);
+    snapshotted.getMonsterAt(4, 1);
+
+    expect(snapshotted.distance).toBe(before.distance);
+    expect(snapshotted.gold).toBe(before.gold);
+    expect(snapshotted.player.stats).toEqual(before.stats);
+    expect(snapshotted.player.evade).toBe(before.evade);
+    expect(rowWindow(snapshotted)).toEqual(before.rows);
+    expect(rowWindow(snapshotted)).toEqual(rowWindow(untouched));
+
+    expect(fightDemoRatPending(snapshotted).drop).toEqual(
+      fightDemoRatPending(untouched).drop,
+    );
+  });
+
+  it('includes enough render data for every current tile and enemy variant', () => {
+    const state = createState({
+      createRowRecipe: scriptedRecipes({
+        5: [
+          monsterLane('rat-5', 'caveRat'),
+          monsterLane('guard-5', 'cryptGuard'),
+          { kind: 'gold', entityId: 'gold-5' },
+        ],
+        6: [
+          monsterLane('brute-6', 'boneBrute'),
+          { kind: 'potion', entityId: 'potion-6' },
+          alarmLane(6, 2),
+        ],
+        7: [
+          { kind: 'shop', entityId: 'shop-7' },
+          emptyRow()[1],
+          emptyRow()[2],
+        ],
+      }),
+    });
+    const snapshot = state.getBoardSnapshot();
+
+    expect(tileAt(snapshot, 5, 0)?.monster).toMatchObject({
+      type: 'caveRat',
+      renderKey: 'caveRat',
+    });
+    expect(tileAt(snapshot, 5, 1)?.monster).toMatchObject({
+      type: 'cryptGuard',
+      renderKey: 'cryptGuard',
+    });
+    expect(tileAt(snapshot, 5, 2)?.content.type).toBe('gold');
+    expect(tileAt(snapshot, 6, 0)?.monster).toMatchObject({
+      type: 'boneBrute',
+      renderKey: 'boneBrute',
+    });
+    expect(tileAt(snapshot, 6, 1)?.content.type).toBe('potion');
+    expect(tileAt(snapshot, 6, 2)?.content.type).toBe('trap');
+    expect(tileAt(snapshot, 7, 0)?.content.type).toBe('shop');
+    expect(snapshot.legalMoveCols.length).toBeGreaterThan(0);
+    expect(snapshot.hasSelectedClass).toBe(true);
+  });
+
+  it('clears stale world entities when a class is reselected', () => {
+    const state = createState({
+      createRng: () => mulberry32(11),
+      rollAvoidance: () => true,
+    });
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeDefined();
+    walkTo(state, 3, 1);
+    expect(state.distance).toBeGreaterThan(0);
+
+    state.selectClass('mage');
+    expect(state.distance).toBe(0);
+    expect(state.player.row).toBe(0);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe(
+      'caveRat',
+    );
+    expect(state.getCollectibleAt(5, 0)).toBeUndefined();
+    expect(state.getTrapAt(8, 1)).toBeUndefined();
+    expect(state.getBoardSnapshot().originRow).toBe(0);
+  });
+
+  it('keeps shop read/purchase APIs safe before a class is selected', () => {
+    const state = new GameState();
+    expect(state.getShopView()).toBeNull();
+    expect(state.canBuyShopOffer('sharpened')).toBe(false);
+    expect(state.buyShopOffer('sharpened')).toMatchObject({
+      success: false,
+      reason: 'noClass',
+      goldRemaining: 0,
+      goldSpent: 0,
+    });
+    expect(state.leaveShop()).toBeNull();
+    expect(state.gold).toBe(0);
+    expect(state.playerStats).toEqual({
+      maxHealth: 0,
+      health: 0,
+      attack: 0,
+      defence: 0,
+    });
+    expect(state.getLevelUpView()).toBeNull();
+    expect(state.chooseLevelUp('vitality').reason).toBe('noLevelUp');
+    expect(state.getBoardSnapshot().hasSelectedClass).toBe(false);
+    expect(state.isForwardTile(1, 1)).toBe(false);
+    expect(() => state.resolveCompletedMove(1)).toThrow(
+      'Cannot move before a class is selected',
+    );
+    expect(() => state.player).toThrow('No class selected');
   });
 });
 

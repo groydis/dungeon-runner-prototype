@@ -12,6 +12,7 @@ import {
   type PlayerClassDefinition,
   type PlayerClassId,
 } from './definitions/classes';
+import { type DeepReadonly } from './freeze';
 import {
   type ExperienceGain,
   PLAYER_START_EXPERIENCE,
@@ -44,7 +45,7 @@ export class Player {
     return this.definition.name;
   }
 
-  get definition(): PlayerClassDefinition {
+  get definition(): DeepReadonly<PlayerClassDefinition> {
     return getPlayerClassDefinition(this._classId);
   }
 

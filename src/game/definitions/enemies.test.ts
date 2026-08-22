@@ -4,6 +4,7 @@ import {
   ENEMY_DEFINITIONS,
   createEnemyStats,
   enemyStatsFactoryFromSearch,
+  getEnemyDefinition,
 } from './enemies';
 
 describe('enemy definitions', () => {
@@ -35,6 +36,29 @@ describe('enemy definitions', () => {
     expect(createMonster('xp-rat', 'caveRat', 4, 1).experience).toBe(1);
     expect(createMonster('xp-guard', 'cryptGuard', 4, 1).experience).toBe(2);
     expect(createMonster('xp-brute', 'boneBrute', 4, 1).experience).toBe(4);
+  });
+
+  it('does not let public definition access corrupt a fresh Monster', () => {
+    const definition = getEnemyDefinition('cryptGuard');
+    const monster = createMonster('guard-mut', 'cryptGuard', 20, 0);
+    expect(() => {
+      (definition as { perception: number }).perception = 80;
+    }).toThrow(TypeError);
+    expect(() => {
+      (definition.startingStats as { attack: number }).attack = 99;
+    }).toThrow(TypeError);
+    expect(() => {
+      (definition.dropTable[0] as { weight: number }).weight = 1;
+    }).toThrow(TypeError);
+    expect(() => {
+      (monster.definition.startingStats as { health: number }).health = 1;
+    }).toThrow(TypeError);
+
+    const fresh = createMonster('guard-fresh', 'cryptGuard', 20, 1);
+    expect(fresh.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
+    expect(fresh.perception).toBe(5);
+    expect(fresh.experience).toBe(2);
+    expect(fresh.definition.dropTable).toEqual(ENEMY_DEFINITIONS.caveRat.dropTable);
   });
 
   it('gives each monster an independent mutable stats clone', () => {

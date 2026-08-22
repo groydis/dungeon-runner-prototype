@@ -16,7 +16,7 @@ export const SHOP_OFFER_IDS = [
 
 export type ShopOfferId = (typeof SHOP_OFFER_IDS)[number];
 
-export type ShopUnavailableReason = 'noShop' | 'unaffordable' | 'capped';
+export type ShopUnavailableReason = 'noShop' | 'noClass' | 'unaffordable' | 'capped';
 
 export type ShopStatKey = 'maxHealth' | 'attack' | 'defence' | 'evade';
 
@@ -203,6 +203,9 @@ export function unavailableReasonText(reason: ShopUnavailableReason): string {
   }
   if (reason === 'unaffordable') {
     return 'Not enough gold';
+  }
+  if (reason === 'noClass') {
+    return 'Choose a class first.';
   }
   return 'Unavailable';
 }

@@ -4,12 +4,13 @@ import {
   type EnemyType,
   getEnemyDefinition,
 } from './definitions/enemies';
+import { type DeepReadonly } from './freeze';
 
 /** Run-specific monster instance. Type/stats come from a static definition. */
 export class Monster {
   readonly id: string;
   readonly type: EnemyType;
-  readonly definition: EnemyDefinition;
+  readonly definition: DeepReadonly<EnemyDefinition>;
   private _row: number;
   private _col: number;
   private _encounterResolved = false;

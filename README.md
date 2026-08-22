@@ -106,9 +106,11 @@ src/
   main.ts                 Entry point: canvas + game loop bootstrap
   game/
     Game.ts               Animation, input, and view/render orchestration
-    GameState.ts          Single-run aggregate and turn resolution
+    GameState.ts          Single-run aggregate and public rule boundary
+    RunWorld.ts           Grid, recipes, entities, and board snapshots
+    BoardSnapshot.ts      Immutable board/read models for rendering
     Grid.ts               Logical 3-wide sliding tile window
-    Tile.ts               Cell coordinates + content type
+    Tile.ts               Internal cell coordinates + content type
     Monster.ts            Run-specific enemy instance
     Collectible.ts        Gold and potion entities
     Trap.ts               Alarm Trap entity and consume state
@@ -122,7 +124,7 @@ src/
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
     rowGeneration.ts      Weighted row recipes and safety rules
-    random.ts             Seeded RNG for generation only
+    random.ts             Isolated generation, drop, and Evade streams
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
     definitions/
@@ -147,14 +149,15 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the single-run aggregate. It owns one selected-class run, grid, entities, shop session, pending level-ups, and rule flags (`runOver`, status, distance). There is no fake default class: until `selectClass()` runs, movement is rejected and the HUD has no class stats. Entity maps stay private. Invalid actions such as moving before a class is chosen, after death, while a shop or level-up is open, or into a bad lane are rejected. High-level methods: `selectClass()`, `clearSelectedClass()`, `resolveCompletedMove()`, `buyShopOffer()`, `chooseLevelUp()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
-- **Game.ts** owns overlay order, animation, and input-lock state. It shows **Choose Your Class** on launch and after Restart Run, then binds the scene to the new run. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
+- **GameState** is the public single-run aggregate and rule boundary. It owns the selected class, Player, distance, status, shop session/progress, pending level-ups, legal movement, turn order, pickup/Merchant/alarm/encounter/combat/XP consequences, and public APIs. There is no fake default class: until `selectClass()` runs, movement throws `Cannot move before a class is selected`, board reads are empty, and shop APIs return a typed `noClass` result. High-level methods: `selectClass()`, `clearSelectedClass()`, `resolveCompletedMove()`, `buyShopOffer()`, `chooseLevelUp()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`, `getBoardSnapshot()`.
+- **RunWorld** owns the mutable board: Grid, row recipes, monster/collectible/merchant/trap maps, tile materialisation, ahead-window prepare/prune, entity lookup, safe content replacement, alarm movement onto consumables, world reset, and immutable board snapshots. It does not own Player, shop prices, or level-ups.
+- **Board snapshots** are frozen read models. Rendering and tests receive `TileSnapshot` / `BoardSnapshot` data, not live `Tile` objects or entity maps.
+- **Game.ts** owns overlay order, animation, and input-lock state. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views.
-- **Class definitions** in `src/game/definitions/classes.ts` are the only source of class names, flavour copy, starting combat stats, and starting Evade.
-- **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
-- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, Perception, XP reward, render key, and drop table. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
+- **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Cave Rat attack on top of the immutable base.
+- **SceneManager** remains rendering-only. It binds an immutable `BoardSnapshot` plus `{ interactive }` and does not import `GameState`, Player, Grid, or other mutable domain classes. Highlight legality is supplied on the snapshot (`legalMoveCols`). Existing FX still receive focused playback results (pickup, combat hit, trap move, drop) without mutating game state.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -165,7 +168,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, XP and level-up choices, player classes and class selection, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use an injected class (`ranger` when a neutral setup is needed), RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, XP and level-up choices, player classes and class selection, player gold/healing, Merchant purchases, immutable definitions and board snapshots, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use an injected class (`ranger` when a neutral setup is needed), RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 

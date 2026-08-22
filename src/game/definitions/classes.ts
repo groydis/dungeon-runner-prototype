@@ -1,4 +1,5 @@
 import { type CombatStats, createCombatStats } from '../Combatant';
+import { deepFreeze, type DeepReadonly } from '../freeze';
 
 export type PlayerClassId =
   | 'rogue'
@@ -16,11 +17,11 @@ export const PLAYER_CLASS_IDS: readonly PlayerClassId[] = [
 ];
 
 export interface PlayerClassDefinition {
-  id: PlayerClassId;
-  name: string;
-  description: string;
-  startingStats: CombatStats;
-  startingEvade: number;
+  readonly id: PlayerClassId;
+  readonly name: string;
+  readonly description: string;
+  readonly startingStats: Readonly<CombatStats>;
+  readonly startingEvade: number;
 }
 
 export interface ClassOptionView {
@@ -50,10 +51,9 @@ function classStats(
   });
 }
 
-export const PLAYER_CLASS_DEFINITIONS: Record<
-  PlayerClassId,
-  PlayerClassDefinition
-> = {
+export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
+  Record<PlayerClassId, PlayerClassDefinition>
+> = deepFreeze({
   rogue: {
     id: 'rogue',
     name: 'Rogue',
@@ -89,11 +89,11 @@ export const PLAYER_CLASS_DEFINITIONS: Record<
     startingStats: classStats(28, 7, 0),
     startingEvade: 0,
   },
-};
+});
 
 export function getPlayerClassDefinition(
   classId: PlayerClassId,
-): PlayerClassDefinition {
+): DeepReadonly<PlayerClassDefinition> {
   return PLAYER_CLASS_DEFINITIONS[classId];
 }
 

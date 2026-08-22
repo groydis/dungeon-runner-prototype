@@ -5,7 +5,7 @@ export interface CombatStats {
   defence: number;
 }
 
-export function createCombatStats(stats: CombatStats): CombatStats {
+export function createCombatStats(stats: Readonly<CombatStats>): CombatStats {
   return {
     maxHealth: stats.maxHealth,
     health: stats.health,

@@ -25,23 +25,22 @@ import {
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
-  START_COL,
-  START_ROW,
   TILE_PITCH,
   TILE_SIZE,
   laneWorldX,
   rowWorldZ,
 } from '../game/config';
 import { type CombatLogEntry } from '../game/combat';
+import {
+  tileAt,
+  type BoardSnapshot,
+  type EnemyMoveResult,
+  type PickupResult,
+} from '../game/BoardSnapshot';
 import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type EnemyType } from '../game/definitions/enemies';
 import { type EnemyDropResult } from '../game/definitions/enemies';
-import {
-  type EnemyMoveResult,
-  type GameState,
-  type PickupResult,
-} from '../game/GameState';
 
 const ENEMY_RENDER_KEYS: readonly EnemyType[] = ['caveRat', 'cryptGuard', 'boneBrute'];
 
@@ -292,45 +291,47 @@ export class SceneManager {
   }
 
   /** Initial bind of the recycled row pool to the current logical window. */
-  bindWindow(state: GameState, presentation: { interactive: boolean }): void {
-    const originRow = state.hasSelectedClass ? state.player.row : START_ROW;
-    const originCol = state.hasSelectedClass ? state.player.col : START_COL;
+  bindWindow(
+    snapshot: BoardSnapshot,
+    presentation: { interactive: boolean },
+  ): void {
     for (let i = 0; i < this.rowViews.length; i += 1) {
-      const row = originRow + i;
-      this.bindRow(this.rowViews[i], row, state);
+      const row = snapshot.originRow + i;
+      this.bindRow(this.rowViews[i], row, snapshot);
     }
-    this.refreshHighlights(state, presentation);
-    this.layoutRows(originRow);
-    this.setPlayerVisual(laneWorldX(originCol), 0);
+    this.refreshHighlights(snapshot, presentation);
+    this.layoutRows(snapshot.originRow);
+    this.setPlayerVisual(laneWorldX(snapshot.originCol), 0);
   }
 
   /**
    * Reuses the row that just left the screen as the new far row
    * instead of allocating more meshes.
    */
-  recycleDepartingRow(leftBehindRow: number, state: GameState): void {
-    const farRow = state.player.row + ROW_POOL_SIZE - 1;
+  recycleDepartingRow(leftBehindRow: number, snapshot: BoardSnapshot): void {
+    const farRow = snapshot.playerRow + ROW_POOL_SIZE - 1;
     const view = this.rowViews.find((rowView) => rowView.assignedRow === leftBehindRow);
     if (view) {
-      this.bindRow(view, farRow, state);
+      this.bindRow(view, farRow, snapshot);
     }
   }
 
-  refreshHighlights(state: GameState, presentation: { interactive: boolean }): void {
+  refreshHighlights(
+    snapshot: BoardSnapshot,
+    presentation: { interactive: boolean },
+  ): void {
     this.highlightRow =
-      presentation.interactive && state.hasSelectedClass
-        ? state.player.row + 1
+      presentation.interactive && snapshot.hasSelectedClass
+        ? snapshot.playerRow + 1
         : Number.NaN;
     this.highlightCols.clear();
     if (presentation.interactive) {
-      for (let col = 0; col < LANE_COUNT; col += 1) {
-        if (state.isForwardTile(this.highlightRow, col)) {
-          this.highlightCols.add(col);
-        }
+      for (const col of snapshot.legalMoveCols) {
+        this.highlightCols.add(col);
       }
     }
     for (const view of this.rowViews) {
-      this.applyTileChrome(view, state);
+      this.applyTileChrome(view, snapshot);
     }
   }
 
@@ -810,7 +811,7 @@ export class SceneManager {
     }
   }
 
-  private bindRow(view: RowView, row: number, state: GameState): void {
+  private bindRow(view: RowView, row: number, snapshot: BoardSnapshot): void {
     this.merchantLeaveFx = this.merchantLeaveFx.filter(
       (fx) => !view.merchants.includes(fx.group),
     );
@@ -828,11 +829,10 @@ export class SceneManager {
       this.endDropSpawnFx();
     }
     view.assignedRow = row;
-    this.applyTileChrome(view, state);
+    this.applyTileChrome(view, snapshot);
   }
 
-  private applyTileChrome(view: RowView, state: GameState): void {
-    const tiles = state.getRow(view.assignedRow);
+  private applyTileChrome(view: RowView, snapshot: BoardSnapshot): void {
     for (let col = 0; col < LANE_COUNT; col += 1) {
       const highlighted =
         view.assignedRow === this.highlightRow && this.highlightCols.has(col);
@@ -843,7 +843,7 @@ export class SceneManager {
       const potion = view.potions[col];
       const trap = view.traps[col];
       const merchant = view.merchants[col];
-      const tile = tiles?.[col];
+      const tile = tileAt(snapshot, view.assignedRow, col);
 
       mesh.userData.row = view.assignedRow;
       mesh.userData.col = col;
@@ -856,7 +856,7 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      const renderKey = state.getMonsterAt(view.assignedRow, col)?.renderKey;
+      const renderKey = tile?.monster?.renderKey;
       for (const key of ENEMY_RENDER_KEYS) {
         const monster = variants[key];
         const playingMonsterFx =

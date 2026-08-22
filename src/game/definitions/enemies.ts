@@ -1,4 +1,5 @@
 import { type CombatStats, createCombatStats } from '../Combatant';
+import { deepFreeze, type DeepReadonly } from '../freeze';
 import { pickWeighted, type Rng } from '../random';
 
 export type EnemyType = 'caveRat' | 'cryptGuard' | 'boneBrute';
@@ -6,16 +7,17 @@ export type EnemyType = 'caveRat' | 'cryptGuard' | 'boneBrute';
 export type EnemyDropKind = 'none' | 'gold' | 'potion';
 
 export interface EnemyDropTableEntry {
-  item: EnemyDropKind;
-  weight: number;
+  readonly item: EnemyDropKind;
+  readonly weight: number;
 }
 
 /** Shared first-version table. Swap per enemy later without changing GameState. */
-export const DEFAULT_ENEMY_DROP_TABLE: readonly EnemyDropTableEntry[] = [
-  { item: 'none', weight: 60 },
-  { item: 'gold', weight: 25 },
-  { item: 'potion', weight: 15 },
-];
+export const DEFAULT_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> =
+  deepFreeze([
+    { item: 'none', weight: 60 },
+    { item: 'gold', weight: 25 },
+    { item: 'potion', weight: 15 },
+  ]);
 
 export interface EnemyDropResult {
   enemyId: string;
@@ -27,14 +29,14 @@ export interface EnemyDropResult {
 }
 
 export interface EnemyDefinition {
-  type: EnemyType;
-  name: string;
-  startingStats: CombatStats;
+  readonly type: EnemyType;
+  readonly name: string;
+  readonly startingStats: Readonly<CombatStats>;
   /** Percent subtracted from player Evade on a side pass. */
-  perception: number;
-  experience: number;
-  renderKey: string;
-  dropTable: readonly EnemyDropTableEntry[];
+  readonly perception: number;
+  readonly experience: number;
+  readonly renderKey: string;
+  readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
 }
 
 export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
@@ -42,7 +44,8 @@ export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
 /** Testing-only Cave Rat attack used by `?fatal=1`. */
 export const FATAL_CAVE_RAT_ATTACK = 99;
 
-export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
+export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>> =
+  deepFreeze({
   caveRat: {
     type: 'caveRat',
     name: 'Cave Rat',
@@ -85,9 +88,9 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     renderKey: 'boneBrute',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
-};
+});
 
-export function getEnemyDefinition(type: EnemyType): EnemyDefinition {
+export function getEnemyDefinition(type: EnemyType): DeepReadonly<EnemyDefinition> {
   return ENEMY_DEFINITIONS[type];
 }
 

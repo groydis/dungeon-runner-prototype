@@ -60,6 +60,25 @@ describe('player class definitions', () => {
     }
   });
 
+  it('does not let public definition access corrupt a fresh Player', () => {
+    const definition = getPlayerClassDefinition('ranger');
+    const player = new Player('ranger');
+    expect(() => {
+      (definition as { startingEvade: number }).startingEvade = 99;
+    }).toThrow(TypeError);
+    expect(() => {
+      (definition.startingStats as { attack: number }).attack = 99;
+    }).toThrow(TypeError);
+    expect(() => {
+      (player.definition.startingStats as { maxHealth: number }).maxHealth = 1;
+    }).toThrow(TypeError);
+
+    const fresh = new Player('ranger');
+    expect(fresh.stats).toEqual(getPlayerClassDefinition('ranger').startingStats);
+    expect(fresh.evade).toBe(getPlayerClassDefinition('ranger').startingEvade);
+    expect(fresh.stats.attack).toBe(CLASS_PACKAGES.ranger.attack);
+  });
+
   it('is the only source of class options shown to the view layer', () => {
     const view = buildClassSelectionView();
     expect(view.classes.map((option) => option.id)).toEqual([...PLAYER_CLASS_IDS]);
