@@ -1683,6 +1683,66 @@ describe('immutable encounter and player boundaries', () => {
       state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.health,
     ).toBe(ENEMY_DEFINITIONS.caveRat.startingStats.health);
   });
+
+  it('allows only one active combat session at a time', () => {
+    const state = createState({
+      createDropRng: alwaysDrop(0),
+      createRowRecipe: scriptedRecipes({
+        4: [
+          emptyRow()[0],
+          monsterLane(DEMO_MONSTER_ID, 'caveRat'),
+          emptyRow()[2],
+        ],
+        5: [
+          emptyRow()[0],
+          monsterLane('second-rat', 'caveRat'),
+          emptyRow()[2],
+        ],
+      }),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+    const firstCombat = state
+      .resolveCompletedMove(DEMO_MONSTER_COL)
+      .encounters.find((event) => event.kind === 'combat');
+    if (!firstCombat || firstCombat.kind !== 'combat') {
+      throw new Error('Expected a front-on Cave Rat fight');
+    }
+    const first = state.createCombatResult(firstCombat);
+    const secondCombat: EncounterEvent = {
+      kind: 'combat',
+      approach: 'frontOn',
+      monster: {
+        id: 'second-rat',
+        type: 'caveRat',
+        name: 'Cave Rat',
+        row: 5,
+        col: 1,
+        renderKey: 'caveRat',
+      },
+    };
+
+    expect(() => state.createCombatResult(secondCombat)).toThrow(
+      `Cannot start combat while target ${DEMO_MONSTER_ID} is still active`,
+    );
+    expect(() => state.createCombatResult(firstCombat)).toThrow(
+      `Cannot start combat while target ${DEMO_MONSTER_ID} is still active`,
+    );
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
+      DEMO_MONSTER_ID,
+    );
+    expect(state.getMonsterAt(5, 1)?.id).toBe('second-rat');
+    expect(playerOf(state).experience).toBe(0);
+
+    for (const entry of first.log) {
+      state.applyCombatLogEntry(entry, firstCombat.monster);
+    }
+    const finish = state.finishCombat(first, firstCombat.monster);
+    expect(finish.experienceGained).toBe(1);
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
+    expect(state.getMonsterAt(5, 1)?.id).toBe('second-rat');
+    expect(playerOf(state).experience).toBe(1);
+  });
 });
 
 function rowWindow(state: GameState): Array<Array<string | undefined>> {

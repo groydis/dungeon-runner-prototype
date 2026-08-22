@@ -508,6 +508,11 @@ export class GameState {
   }
 
   createCombatResult(event: EncounterEvent): CombatResult {
+    if (this.activeCombatTargetId !== null) {
+      throw new Error(
+        `Cannot start combat while target ${this.activeCombatTargetId} is still active`,
+      );
+    }
     const player = this.requirePlayer();
     if (event.kind !== 'combat') {
       throw new Error('Cannot create a combat result for an evade event');
