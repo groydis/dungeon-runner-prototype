@@ -50,6 +50,10 @@ export class Monster {
     return this.definition.perception;
   }
 
+  get experience(): number {
+    return this.definition.experience;
+  }
+
   get encounterResolved(): boolean {
     return this._encounterResolved;
   }

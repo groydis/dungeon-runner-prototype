@@ -1,4 +1,5 @@
 import {
+  SHOP_OFFER_IDS,
   type ShopOfferId,
   type ShopOfferView,
   type ShopView,
@@ -8,48 +9,53 @@ import { requireElement } from './dom';
 export class ShopOverlayView {
   private readonly overlayEl: HTMLElement;
   private readonly goldEl: HTMLElement;
-  private readonly healButton: HTMLButtonElement;
-  private readonly attackButton: HTMLButtonElement;
   private readonly leaveButton: HTMLButtonElement;
-  private readonly healTitleEl: HTMLElement;
-  private readonly healDescEl: HTMLElement;
-  private readonly healReasonEl: HTMLElement;
-  private readonly attackTitleEl: HTMLElement;
-  private readonly attackDescEl: HTMLElement;
-  private readonly attackReasonEl: HTMLElement;
-  private healHandler: (() => void) | null = null;
-  private attackHandler: (() => void) | null = null;
+  private readonly buttons: Record<ShopOfferId, HTMLButtonElement>;
+  private readonly titles: Record<ShopOfferId, HTMLElement>;
+  private readonly descs: Record<ShopOfferId, HTMLElement>;
+  private readonly reasons: Record<ShopOfferId, HTMLElement>;
+  private readonly handlers: Partial<Record<ShopOfferId, () => void>> = {};
   private leaveHandler: (() => void) | null = null;
 
   constructor(root: ParentNode = document) {
     this.overlayEl = requireElement(root, '#shop');
     this.goldEl = requireElement(root, '#shop-gold');
-    this.healButton = requireElement(root, '#shop-offer-heal') as HTMLButtonElement;
-    this.attackButton = requireElement(root, '#shop-offer-attack') as HTMLButtonElement;
     this.leaveButton = requireElement(root, '#shop-leave') as HTMLButtonElement;
-    this.healTitleEl = requireElement(root, '#shop-heal-title');
-    this.healDescEl = requireElement(root, '#shop-heal-desc');
-    this.healReasonEl = requireElement(root, '#shop-heal-reason');
-    this.attackTitleEl = requireElement(root, '#shop-attack-title');
-    this.attackDescEl = requireElement(root, '#shop-attack-desc');
-    this.attackReasonEl = requireElement(root, '#shop-attack-reason');
+    this.buttons = {
+      vitality: requireElement(root, '#shop-offer-vitality') as HTMLButtonElement,
+      sharpened: requireElement(root, '#shop-offer-sharpened') as HTMLButtonElement,
+      armoured: requireElement(root, '#shop-offer-armoured') as HTMLButtonElement,
+      evasive: requireElement(root, '#shop-offer-evasive') as HTMLButtonElement,
+    };
+    this.titles = {
+      vitality: requireElement(root, '#shop-vitality-title'),
+      sharpened: requireElement(root, '#shop-sharpened-title'),
+      armoured: requireElement(root, '#shop-armoured-title'),
+      evasive: requireElement(root, '#shop-evasive-title'),
+    };
+    this.descs = {
+      vitality: requireElement(root, '#shop-vitality-desc'),
+      sharpened: requireElement(root, '#shop-sharpened-desc'),
+      armoured: requireElement(root, '#shop-armoured-desc'),
+      evasive: requireElement(root, '#shop-evasive-desc'),
+    };
+    this.reasons = {
+      vitality: requireElement(root, '#shop-vitality-reason'),
+      sharpened: requireElement(root, '#shop-sharpened-reason'),
+      armoured: requireElement(root, '#shop-armoured-reason'),
+      evasive: requireElement(root, '#shop-evasive-reason'),
+    };
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
   }
 
-  onHeal(handler: () => void): void {
-    this.detach('heal');
-    this.healHandler = handler;
-    this.healButton.addEventListener('click', handler);
-  }
-
-  onAttack(handler: () => void): void {
-    this.detach('attack');
-    this.attackHandler = handler;
-    this.attackButton.addEventListener('click', handler);
+  onOffer(offerId: ShopOfferId, handler: () => void): void {
+    this.detachOffer(offerId);
+    this.handlers[offerId] = handler;
+    this.buttons[offerId].addEventListener('click', handler);
   }
 
   onLeave(handler: () => void): void {
-    this.detach('leave');
+    this.detachLeave();
     this.leaveHandler = handler;
     this.leaveButton.addEventListener('click', handler);
   }
@@ -65,66 +71,55 @@ export class ShopOverlayView {
 
   render(view: ShopView): void {
     this.goldEl.textContent = `Gold: ${view.gold}`;
-    this.renderOffer(
-      this.healButton,
-      this.healTitleEl,
-      this.healDescEl,
-      this.healReasonEl,
-      view.offers.find((offer) => offer.id === 'heal'),
-    );
-    this.renderOffer(
-      this.attackButton,
-      this.attackTitleEl,
-      this.attackDescEl,
-      this.attackReasonEl,
-      view.offers.find((offer) => offer.id === 'attack'),
-    );
+    for (const id of SHOP_OFFER_IDS) {
+      this.renderOffer(view.offers.find((offer) => offer.id === id));
+    }
   }
 
   dispose(): void {
-    this.detach('heal');
-    this.detach('attack');
-    this.detach('leave');
+    for (const id of SHOP_OFFER_IDS) {
+      this.detachOffer(id);
+    }
+    this.detachLeave();
     this.overlayEl.removeEventListener('pointerdown', this.blockPointer);
   }
 
-  private renderOffer(
-    button: HTMLButtonElement,
-    titleEl: HTMLElement,
-    descEl: HTMLElement,
-    reasonEl: HTMLElement,
-    offer: ShopOfferView | undefined,
-  ): void {
+  private renderOffer(offer: ShopOfferView | undefined): void {
     if (!offer) {
       return;
     }
 
-    titleEl.textContent = `${offer.title} — ${offer.cost} gold`;
-    descEl.textContent = offer.description;
-    reasonEl.textContent = offer.available ? '' : (offer.reasonText ?? '');
-    button.disabled = !offer.available;
+    this.titles[offer.id].textContent = `${offer.title} — ${offer.cost} gold`;
+    this.descs[offer.id].textContent =
+      `${offer.description} (${offer.currentValue} → ${offer.nextValue})`;
+    this.reasons[offer.id].textContent = offer.available
+      ? ''
+      : (offer.reasonText ?? '');
+    this.buttons[offer.id].disabled = !offer.available;
     const reason = offer.available
-      ? offer.description
+      ? `${offer.description}. ${offer.currentValue} to ${offer.nextValue}`
       : (offer.reasonText ?? 'Unavailable');
-    button.setAttribute(
+    this.buttons[offer.id].setAttribute(
       'aria-label',
       `${offer.title}, ${offer.cost} gold. ${reason}`,
     );
   }
 
-  private detach(kind: ShopOfferId | 'leave'): void {
-    if (kind === 'heal' && this.healHandler) {
-      this.healButton.removeEventListener('click', this.healHandler);
-      this.healHandler = null;
+  private detachOffer(offerId: ShopOfferId): void {
+    const handler = this.handlers[offerId];
+    if (!handler) {
+      return;
     }
-    if (kind === 'attack' && this.attackHandler) {
-      this.attackButton.removeEventListener('click', this.attackHandler);
-      this.attackHandler = null;
+    this.buttons[offerId].removeEventListener('click', handler);
+    delete this.handlers[offerId];
+  }
+
+  private detachLeave(): void {
+    if (!this.leaveHandler) {
+      return;
     }
-    if (kind === 'leave' && this.leaveHandler) {
-      this.leaveButton.removeEventListener('click', this.leaveHandler);
-      this.leaveHandler = null;
-    }
+    this.leaveButton.removeEventListener('click', this.leaveHandler);
+    this.leaveHandler = null;
   }
 
   private readonly blockPointer = (event: PointerEvent): void => {

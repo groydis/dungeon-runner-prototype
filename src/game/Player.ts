@@ -5,12 +5,20 @@ import {
   START_ROW,
 } from './config';
 import { type CombatStats, createCombatStats, createPlayerStats } from './Combatant';
+import {
+  type ExperienceGain,
+  PLAYER_START_EXPERIENCE,
+  levelForExperience,
+  levelsReachedByGain,
+  nextLevelExperience,
+} from './progression';
 
 /** Logical player position, gold, and run-scoped combat stats. */
 export class Player {
   private _row = START_ROW;
   private _col = START_COL;
   private _gold = 0;
+  private _experience = PLAYER_START_EXPERIENCE;
   private _evade = PLAYER_BASE_EVADE;
   private _stats: CombatStats = createPlayerStats();
 
@@ -28,6 +36,18 @@ export class Player {
 
   get evade(): number {
     return this._evade;
+  }
+
+  get experience(): number {
+    return this._experience;
+  }
+
+  get level(): number {
+    return levelForExperience(this._experience);
+  }
+
+  get nextLevelExperience(): number | null {
+    return nextLevelExperience(this._experience);
   }
 
   /** Read-only copy so callers cannot mutate live combat stats. */
@@ -79,6 +99,31 @@ export class Player {
     return gained;
   }
 
+  increaseDefence(amount: number): number {
+    const gained = Math.max(0, amount);
+    this._stats.defence += gained;
+    return gained;
+  }
+
+  /** Raises max HP only. Current HP is unchanged. */
+  increaseMaxHealth(amount: number): number {
+    const gained = Math.max(0, Math.floor(amount));
+    this._stats.maxHealth += gained;
+    return gained;
+  }
+
+  addExperience(amount: number): ExperienceGain {
+    const gained = Math.max(0, Math.floor(amount));
+    const from = this._experience;
+    this._experience += gained;
+    return {
+      gained,
+      experience: this._experience,
+      level: this.level,
+      levelsReached: levelsReachedByGain(from, this._experience),
+    };
+  }
+
   increaseEvade(amount: number): number {
     const gained = Math.max(0, amount);
     const next = Math.min(EVADE_CHANCE_MAX, this._evade + gained);
@@ -91,6 +136,7 @@ export class Player {
     this._row = START_ROW;
     this._col = START_COL;
     this._gold = 0;
+    this._experience = PLAYER_START_EXPERIENCE;
     this._evade = PLAYER_BASE_EVADE;
     this._stats = createPlayerStats();
   }

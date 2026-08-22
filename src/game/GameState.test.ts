@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { createPlayerStats } from './Combatant';
 import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ID,
   DEMO_MONSTER_ROW,
+  EVADE_CHANCE_MAX,
   PLAYER_BASE_EVADE,
 } from './config';
 import {
@@ -12,7 +14,7 @@ import {
   enemyStatsFactoryFromSearch,
 } from './definitions/enemies';
 import { type EncounterEvent } from './encounters';
-import { GameState, type TurnResolution } from './GameState';
+import { GameState, type CombatFinishResult, type TurnResolution } from './GameState';
 import { mulberry32 } from './random';
 import {
   alarmLane,
@@ -55,6 +57,12 @@ function safestCol(state: GameState): number {
   return state.player.col;
 }
 
+function resolvePendingLevelUps(state: GameState): void {
+  while (state.levelUpOpen) {
+    state.chooseLevelUp('vitality');
+  }
+}
+
 function playEncounters(state: GameState, encounters: EncounterEvent[]): void {
   for (const event of encounters) {
     if (event.kind === 'evade') {
@@ -67,6 +75,7 @@ function playEncounters(state: GameState, encounters: EncounterEvent[]): void {
     }
     state.finishCombat(result, event.monster);
   }
+  resolvePendingLevelUps(state);
 }
 
 function walkTo(state: GameState, row: number, col: number): TurnResolution | null {
@@ -802,11 +811,11 @@ describe('evade and perception', () => {
     const state = new GameState();
     expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
     expect(state.getHudSnapshot().evade).toBe(PLAYER_BASE_EVADE);
-    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 1%');
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 1');
 
     state.player.increaseEvade(5);
     expect(state.getHudSnapshot().evade).toBe(6);
-    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 6%');
+    expect(evadeHudText(state.getHudSnapshot().evade)).toBe('EVA: 6');
 
     state.reset();
     expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
@@ -831,7 +840,262 @@ describe('evade and perception', () => {
       kind: 'evade',
       evadeChance: 0,
     });
-    expect(state.status).toMatch(/Evade chance: 0%\./);
+    expect(state.status).toMatch(/Evade chance: 0\./);
+  });
+});
+
+function finishCombatEvent(
+  state: GameState,
+  event: EncounterEvent,
+): CombatFinishResult | null {
+  if (event.kind === 'evade') {
+    state.applyEvade(event.monster, event.evadeChance);
+    return null;
+  }
+  const result = state.createCombatResult(event);
+  for (const entry of result.log) {
+    state.applyCombatLogEntry(entry, event.monster);
+  }
+  return state.finishCombat(result, event.monster);
+}
+
+function fightDemoRatPending(state: GameState): CombatFinishResult {
+  walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+  const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
+  const combat = resolution.encounters.find((event) => event.kind === 'combat');
+  if (!combat) {
+    throw new Error('Expected a front-on Cave Rat fight');
+  }
+  const finish = finishCombatEvent(state, combat);
+  if (!finish) {
+    throw new Error('Expected a combat finish result');
+  }
+  return finish;
+}
+
+describe('XP and level-up', () => {
+  it('starts a run at level 1, 0 XP, and next threshold 3', () => {
+    const state = new GameState();
+    const hud = state.getHudSnapshot();
+    expect(hud.level).toBe(1);
+    expect(hud.experience).toBe(0);
+    expect(hud.nextLevelExperience).toBe(3);
+    expect(state.levelUpOpen).toBe(false);
+  });
+
+  it('awards enemy XP exactly once on a combat win', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    walkTo(state, DEMO_MONSTER_ROW - 2, 1);
+    const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
+    const combat = resolution.encounters.find((event) => event.kind === 'combat');
+    if (!combat) {
+      throw new Error('Expected a front-on Cave Rat fight');
+    }
+    const first = finishCombatEvent(state, combat);
+    expect(first?.experienceGained).toBe(1);
+    expect(first?.levelsReached).toEqual([]);
+    expect(first?.levelUp).toBeNull();
+    expect(state.player.experience).toBe(1);
+    expect(state.player.level).toBe(1);
+
+    const result = state.createCombatResult(combat);
+    const second = state.finishCombat(result, combat.monster);
+    expect(second.experienceGained).toBe(0);
+    expect(state.player.experience).toBe(1);
+  });
+
+  it('does not award XP for evade or a player defeat', () => {
+    const evadeState = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    walkTo(evadeState, DEMO_MONSTER_ROW - 1, 0);
+    const evadeResolution = evadeState.resolveCompletedMove(0);
+    expect(evadeResolution.encounters[0]?.kind).toBe('evade');
+    finishCombatEvent(evadeState, evadeResolution.encounters[0]!);
+    expect(evadeState.player.experience).toBe(0);
+    expect(evadeState.levelUpOpen).toBe(false);
+
+    const deathState = new GameState({
+      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    const death = fightDemoRatPending(deathState);
+    expect(deathState.runOver).toBe(true);
+    expect(death.experienceGained).toBe(0);
+    expect(death.levelUp).toBeNull();
+    expect(deathState.player.experience).toBe(0);
+    expect(deathState.levelUpOpen).toBe(false);
+  });
+
+  it('queues a pending level-up that blocks movement until a choice is made', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    state.player.addExperience(2);
+    const finish = fightDemoRatPending(state);
+    expect(finish.experienceGained).toBe(1);
+    expect(finish.levelsReached).toEqual([2]);
+    expect(finish.levelUp?.level).toBe(2);
+    expect(state.levelUpOpen).toBe(true);
+    expect(state.player.level).toBe(2);
+
+    expect(() => state.resolveCompletedMove(DEMO_MONSTER_COL)).toThrow(
+      'Cannot move while a level-up choice is pending',
+    );
+
+    const first = state.chooseLevelUp('vitality');
+    expect(first.success).toBe(true);
+    expect(first.pendingRemaining).toBe(0);
+    expect(state.chooseLevelUp('sharpened')).toMatchObject({
+      success: false,
+      reason: 'noLevelUp',
+    });
+    expect(state.levelUpOpen).toBe(false);
+    expect(() => state.resolveCompletedMove(DEMO_MONSTER_COL)).not.toThrow();
+  });
+
+  it('applies each level-up choice through Player methods', () => {
+    const vitality = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    vitality.player.addExperience(2);
+    fightDemoRatPending(vitality);
+    vitality.player.takeDamage(5);
+    const healthBefore = vitality.player.stats.health;
+    expect(vitality.chooseLevelUp('vitality')).toMatchObject({
+      success: true,
+      maxHealthGained: 1,
+    });
+    expect(vitality.player.stats.maxHealth).toBe(21);
+    expect(vitality.player.stats.health).toBe(healthBefore);
+
+    const sharpened = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    sharpened.player.addExperience(2);
+    fightDemoRatPending(sharpened);
+    expect(sharpened.chooseLevelUp('sharpened')).toMatchObject({
+      success: true,
+      attackGained: 1,
+    });
+    expect(sharpened.player.stats.attack).toBe(6);
+
+    const armoured = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    armoured.player.addExperience(2);
+    fightDemoRatPending(armoured);
+    expect(armoured.chooseLevelUp('armoured')).toMatchObject({
+      success: true,
+      defenceGained: 1,
+    });
+    expect(armoured.player.stats.defence).toBe(2);
+
+    const evasive = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    evasive.player.addExperience(2);
+    fightDemoRatPending(evasive);
+    expect(evasive.chooseLevelUp('evasive')).toMatchObject({
+      success: true,
+      evadeGained: 5,
+    });
+    expect(evasive.player.evade).toBe(6);
+
+    const capped = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    capped.player.increaseEvade(80);
+    expect(capped.player.evade).toBe(81);
+    capped.player.addExperience(2);
+    fightDemoRatPending(capped);
+    expect(capped.chooseLevelUp('evasive')).toMatchObject({
+      success: true,
+      evadeGained: 4,
+    });
+    expect(capped.player.evade).toBe(EVADE_CHANCE_MAX);
+  });
+
+  it('queues one choice at a time when a combat crosses several thresholds', () => {
+    const original = ENEMY_DEFINITIONS.caveRat.experience;
+    ENEMY_DEFINITIONS.caveRat.experience = 12;
+    try {
+      const state = new GameState({
+        createDropRng: alwaysDrop(0),
+        rollAvoidance: () => true,
+      });
+      const finish = fightDemoRatPending(state);
+      expect(finish.experienceGained).toBe(12);
+      expect(finish.levelsReached).toEqual([2, 3, 4]);
+      expect(finish.levelUp?.level).toBe(2);
+      expect(state.chooseLevelUp('vitality').pendingRemaining).toBe(2);
+      expect(state.getLevelUpView()?.level).toBe(3);
+      expect(state.chooseLevelUp('sharpened').pendingRemaining).toBe(1);
+      expect(state.getLevelUpView()?.level).toBe(4);
+      expect(state.chooseLevelUp('armoured').pendingRemaining).toBe(0);
+      expect(state.levelUpOpen).toBe(false);
+    } finally {
+      ENEMY_DEFINITIONS.caveRat.experience = original;
+    }
+  });
+
+  it('returns typed drop and level-up results so playback can keep drop-then-choice order', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0.7),
+      rollAvoidance: () => true,
+    });
+    state.player.addExperience(2);
+    const finish = fightDemoRatPending(state);
+    expect(finish.drop?.kind).toBe('gold');
+    expect(finish.experienceGained).toBe(1);
+    expect(finish.levelsReached).toEqual([2]);
+    expect(finish.levelUp).toMatchObject({
+      level: 2,
+      experience: 3,
+      nextLevelExperience: 7,
+    });
+    expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
+      'gold',
+    );
+    expect(state.levelUpOpen).toBe(true);
+  });
+
+  it('restores level, XP, pending choices, and combat stats on reset', () => {
+    const state = new GameState({
+      createDropRng: alwaysDrop(0),
+      rollAvoidance: () => true,
+    });
+    state.player.addExperience(2);
+    fightDemoRatPending(state);
+    state.chooseLevelUp('sharpened');
+    expect(state.player.level).toBe(2);
+    expect(state.player.stats.attack).toBe(6);
+
+    state.reset();
+    expect(state.player.level).toBe(1);
+    expect(state.player.experience).toBe(0);
+    expect(state.player.nextLevelExperience).toBe(3);
+    expect(state.levelUpOpen).toBe(false);
+    expect(state.getLevelUpView()).toBeNull();
+    expect(state.player.stats).toEqual(createPlayerStats());
+    expect(state.player.evade).toBe(PLAYER_BASE_EVADE);
+    expect(state.getHudSnapshot()).toMatchObject({
+      level: 1,
+      experience: 0,
+      nextLevelExperience: 3,
+      attack: 5,
+    });
   });
 });
 

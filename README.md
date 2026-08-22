@@ -18,8 +18,9 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Adjacent lane (same row) = roll Evade vs that enemy’s Perception to slip past, or take a Surprise Attack.
 - Combat is automatic and plays in place. There is no battle screen.
 - Gold can be spent at a rare Travelling Merchant for run-only upgrades.
+- Combat wins grant run-scoped XP. Crossing a threshold pauses the board for a level-up choice.
 - An Alarm Trap does not deal damage. It pulls the closest visible enemy one legal tile closer.
-- The loop is: choose a lane, fight or evade, collect gold or potions, trip alarms, spend gold at a Merchant, survive.
+- The loop is: choose a lane, fight or evade, collect gold or potions, trip alarms, spend gold at a Merchant, pick level-up rewards, survive.
 
 The intended target is mobile browsers and thin native wrappers, so the prototype favours simple geometry, a recycled mesh pool, touch-first input, and a capped pixel ratio.
 
@@ -37,14 +38,15 @@ Included:
 - Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
-- HUD with distance, gold, attack, evade, HP text/bar, and status
+- HUD with distance, level, XP, gold, attack, evade (`EVA: 1`, no `%`), HP text/bar, and status
+- Run-scoped XP and a four-choice level-up overlay
 - A rare Travelling Merchant shop overlay
 - Death overlay and in-place Restart Run
 - Responsive full-screen layout for phone and desktop
 
 Not included:
 
-- Equipment, levelling, crits, unique enemy abilities, or an inventory screen
+- Equipment, skill trees, crits, unique enemy abilities, or an inventory screen
 - Damaging traps, extra trap kinds, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - GLB characters or environment art
@@ -88,7 +90,7 @@ There is no keyboard movement and no combat input.
   - Right lane → centre or right
 - A two-lane jump (left ↔ right) is illegal. Tiles occupied by enemies are also illegal.
 - Only legal destinations glow and can be tapped.
-- Input is locked during the step animation, trap/enemy-advance playback, combat or evade feedback, and while a Merchant shop is open.
+- Input is locked during the step animation, trap/enemy-advance playback, combat or evade feedback, while a level-up choice is open, and while a Merchant shop is open.
 - After death, use **Restart Run**. The page does not reload.
 
 Selection uses pointer events and a Three.js raycaster against invisible hit planes on the highlighted tiles, so the same path works for mouse and touch.
@@ -108,8 +110,10 @@ src/
     Trap.ts               Alarm Trap entity and consume state
     alarm.ts              Closest-enemy pick and one-tile advance
     Merchant.ts           Shop entity, used/purchased state
-    shop.ts               Offers, eligibility, gold spend, and shop views
-    Player.ts             Position, gold, and run-scoped combat stats
+    shop.ts               Stat-upgrade offers, escalating prices, and shop views
+    progression.ts        Cumulative XP thresholds and level progress
+    levelUp.ts            Level-up choices, views, and Player applications
+    Player.ts             Position, gold, XP, and run-scoped combat stats
     Combatant.ts          Combat stat types and player starting values
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
@@ -118,17 +122,18 @@ src/
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
     definitions/
-      enemies.ts          Authoritative enemy names, base stats, render keys
+      enemies.ts          Authoritative enemy names, base stats, XP, render keys
       encounterPools.ts   Distance-based enemy-type weights
   ui/
-    HudView.ts            Distance, gold, attack, evade, HP, status
+    HudView.ts            Distance, level, XP, gold, attack, evade, HP, status
     GameOverView.ts       Death overlay and Restart Run
     ShopOverlayView.ts    Merchant overlay
+    LevelUpOverlayView.ts Level-up overlay
   rendering/
     SceneManager.ts       Scene, lights, recycled row meshes, hit FX
     CameraController.ts   Elevated follow camera
   styles/
-    main.css              Full-viewport HUD, shop, and game-over overlays
+    main.css              Full-viewport HUD, shop, level-up, and game-over overlays
 public/                   Static assets
 ```
 
@@ -136,13 +141,13 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the single-run aggregate. It owns grid, entities, shop session, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
-- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop result for spawn playback only.
-- **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, healing, evade, damage, collection, trap consume, and Merchant purchases.
-- **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
-- **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
+- **GameState** is the single-run aggregate. It owns grid, entities, shop session, pending level-ups, and rule flags (`runOver`, status, distance). Entity maps stay private. Invalid actions such as moving after death, while a shop or level-up is open, or into a bad lane are rejected. High-level methods: `resolveCompletedMove()`, `buyShopOffer()`, `chooseLevelUp()`, `createCombatResult()`, `finishCombat()`, `getHudSnapshot()`.
+- **Game.ts** owns animation and input-lock state. It tells `SceneManager` whether destination tiles are interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
+- **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
+- **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
+- **UI views** under `src/ui` update HTML only. They render `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
 - **SceneManager** remains rendering-only. It receives `{ interactive }` from `Game.ts` and does not read animation flags from `GameState`.
-- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, and render key. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
+- **Enemy definitions** in `src/game/definitions/enemies.ts` are the only source of enemy type, display name, base stats, Perception, XP reward, render key, and drop table. Row recipes include `enemyType`. Distance pools in `encounterPools.ts` choose that type. `?fatal=1` is a test override of Cave Rat attack only.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -153,7 +158,7 @@ npm test
 npm run test:watch
 ```
 
-Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
+Unit tests cover combat, encounters, seeded row generation, Alarm Trap targeting and consumption, enemy drops, XP and level-up choices, player gold/healing, Merchant purchases, enemy definitions, distance pools, and `resolveCompletedMove()` validity/order. They use injected RNG, avoidance rolls, recipe factories, and stat factories. They do not exercise WebGL or browser animation.
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
@@ -299,23 +304,28 @@ Landing on a Merchant tile pauses the run and opens a centred shop overlay. The 
 
 Each Merchant may be used once. After Leave, the Merchant is marked used and removed from the board. Movement then continues from that tile. Returning in normal forward play is impossible; leftover state still treats a used Merchant as empty.
 
-Opening the shop does not spend gold. Offers are fixed for this prototype and last only for the current run:
+Opening the shop does not spend gold. Each visit offers the same four run-scoped stat upgrades. A purchase adds exactly `+1` to that stat. Each stat has its own escalating price track: only that stat’s next price increases by 1 gold. Prices persist for the run, not for a single Merchant visit.
 
-| Offer | Cost | Effect |
-|---|---:|---|
-| Field dressing | 1 gold | Restore 5 HP, capped at maximum HP |
-| Sharpen weapon | 3 gold | +1 player attack for the rest of this run |
-| Leave | 0 gold | Close the shop and continue |
+| Offer | Effect | Base | Cap | First price |
+|---|---|---:|---:|---:|
+| Vitality | +1 max HP; current HP is unchanged | 20 | 30 | 2 |
+| Sharpened | +1 attack | 5 | 12 | 3 |
+| Armoured | +1 defence | 1 | 8 | 3 |
+| Evasive | +1 Evade | 1 | 20 | 2 |
+| Leave | Close the shop and continue | — | — | 0 |
+
+Example Attack prices: `3 → 4 → 5 → …` until attack reaches 12. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches 20 from Merchant purchases.
 
 Rules:
 
-- Purchase buttons disable when the player cannot afford the offer, already bought it at this Merchant, or field dressing would heal 0 HP (already at full health).
-- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so the other offer can still be bought.
-- Field dressing never takes gold for zero healing.
-- Attack upgrades persist until Restart Run, which restores base attack (`5`).
-- Shop costs, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
+- Purchase buttons disable when the player cannot afford the offer or that stat is already at its Merchant cap.
+- Gold never becomes negative. Unaffordable and capped offers cannot be purchased.
+- Vitality never heals current HP.
+- The Merchant Evade cap is 20. Level-up Evasive can still raise Evade above 20, up to the global internal cap of 85.
+- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats can still be bought.
+- Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
 
-Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run restores an untouched fresh run: gold, purchases, attack upgrades, merchant entities, and meshes.
+Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run restores an untouched fresh run: gold, stats, Merchant prices and purchase counts, merchant entities, and meshes.
 
 ## Monster encounters
 
@@ -342,7 +352,7 @@ type EncounterEvent =
   - chance: `clamp(player.evade − enemy.perception, 0, 85)`
   - success: `{ kind: 'evade' }` — monster is removed, no health change
   - failure: `{ kind: 'combat', approach: 'surprise' }`
-  - Status includes the chance used, e.g. `Evade chance: 16%.`
+  - Status includes the chance used, e.g. `Evade chance: 16.`
   - `?avoid=1` / `?avoid=0` force the outcome for tests and ignore the formula.
 
 ## Combat
@@ -351,7 +361,7 @@ Starting stats:
 
 |            | HP | Attack | Defence | Evade / Perception |
 |------------|----|--------|---------|-------------------:|
-| Player     | 20 | 5      | 1       | EVA 1% |
+| Player     | 20 | 5      | 1       | EVA 1 |
 | Cave Rat   | 8  | 3      | 0       | Perception 0% |
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
@@ -379,9 +389,40 @@ The fight is resolved immediately in game logic. The renderer then plays each lo
 
 Outcomes:
 
-- Player wins: `You defeated the [enemy name].` If a drop rolled, a short extra sentence is appended. Movement unlocks after any drop-spawn playback.
-- Player dies: `You were killed by the [enemy name].` Input locks and the overlay appears.
-- Evade: `You slip past the [enemy name]. Evade chance: [N]%.` No combat, no HP change.
+- Player wins: `You defeated the [enemy name].` If a drop rolled, a short extra sentence is appended. The enemy’s XP is awarded once. Movement unlocks after drop-spawn playback, or after any level-up choice that followed it.
+- Player dies: `You were killed by the [enemy name].` No XP. Input locks and the overlay appears.
+- Evade: `You slip past the [enemy name]. Evade chance: [N].` No combat, no HP change, no XP.
+
+## Progression
+
+XP is run-scoped. The player starts each run at **level 1** with **0 XP**. Only a combat win awards XP; evade and death do not. XP values live on `EnemyDefinition` and do not consume the generation or drop RNG streams.
+
+| Enemy | XP |
+|---|---:|
+| Cave Rat | 1 |
+| Crypt Guard | 2 |
+| Bone Brute | 4 |
+
+Levels use cumulative thresholds. Append more rows to `LEVEL_XP_THRESHOLDS` to extend the cap.
+
+| Reaching level | Total XP required |
+|---|---:|
+| 2 | 3 |
+| 3 | 7 |
+| 4 | 12 |
+| 5 | 18 |
+| 6 | 25 |
+
+Crossing a threshold pauses the board and opens a level-up overlay. If one fight crosses several thresholds, only the first choice is shown; the next waits until that reward is picked. Choices are not Merchant offers and cannot be bought with gold.
+
+| Choice | Effect |
+|---|---|
+| Vitality | +1 max HP; current HP is unchanged |
+| Sharpened | +1 attack |
+| Armoured | +1 defence |
+| Evasive | +5% Evade, still capped at 85% |
+
+After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restart Run restores level, XP, pending choices, and the four combat stats to their base values.
 
 ## Death and restart
 
@@ -393,14 +434,14 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run resets player stats (including attack and evade), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, generation / drop / evade RNGs, grid, meshes, and status without reloading the page. The game-over overlay sits above the Merchant overlay if both would otherwise be visible.
+Restart Run resets player stats (including level, XP, max HP, attack, defence, and evade), gold, position, distance, monsters, collectibles, traps, merchants, open shop state, pending level-up choices, generation / drop / evade RNGs, grid, meshes, and status without reloading the page. The game-over overlay sits above the level-up and Merchant overlays if they would otherwise be visible.
 
 ## Intended next steps
 
-- Equipment, levelling, crits, and unique enemy abilities
+- Equipment, skill trees, crits, and unique enemy abilities
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
-- Level-up UI that calls `player.increaseEvade()`, and further evade/perception tuning
-- More shop stock, defence upgrades, or meta progression; more loot kinds
+- Further evade/perception tuning and more defined level thresholds
+- More shop stock or meta progression; more loot kinds
 - Damaging traps, more trap kinds, doors, and authored biomes
 - GLB models
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)

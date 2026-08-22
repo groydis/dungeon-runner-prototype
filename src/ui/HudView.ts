@@ -1,10 +1,11 @@
 import { type HudSnapshot } from '../game/GameState';
 import { requireElement } from './dom';
+import { experienceHudText, levelHudText } from './LevelUpOverlayView';
 
 export type { HudSnapshot };
 
 export function evadeHudText(evade: number): string {
-  return `EVA: ${evade}%`;
+  return `EVA: ${evade}`;
 }
 
 export class HudView {
@@ -12,6 +13,8 @@ export class HudView {
   private readonly goldEl: HTMLElement;
   private readonly attackEl: HTMLElement;
   private readonly evadeEl: HTMLElement;
+  private readonly levelEl: HTMLElement;
+  private readonly experienceEl: HTMLElement;
   private readonly statusEl: HTMLElement;
   private readonly healthTextEl: HTMLElement;
   private readonly healthBarEl: HTMLElement;
@@ -22,6 +25,8 @@ export class HudView {
     this.goldEl = requireElement(root, '#gold');
     this.attackEl = requireElement(root, '#attack');
     this.evadeEl = requireElement(root, '#evade');
+    this.levelEl = requireElement(root, '#level');
+    this.experienceEl = requireElement(root, '#experience');
     this.statusEl = requireElement(root, '#status');
     this.healthTextEl = requireElement(root, '#health-text');
     this.healthBarEl = requireElement(root, '#health-bar');
@@ -35,6 +40,11 @@ export class HudView {
     this.goldEl.textContent = `Gold: ${snapshot.gold}`;
     this.attackEl.textContent = `ATK: ${snapshot.attack}`;
     this.evadeEl.textContent = evadeHudText(snapshot.evade);
+    this.levelEl.textContent = levelHudText(snapshot.level);
+    this.experienceEl.textContent = experienceHudText(
+      snapshot.experience,
+      snapshot.nextLevelExperience,
+    );
     this.statusEl.textContent = snapshot.status;
     this.healthTextEl.textContent = `HP ${health} / ${maxHealth}`;
     this.healthBarEl.setAttribute('aria-valuemax', String(maxHealth));

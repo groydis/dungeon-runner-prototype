@@ -22,11 +22,13 @@ import {
 } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type Monster } from './Monster';
-import { type ShopOfferId } from './shop';
+import { type LevelUpChoice } from './levelUp';
+import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
 import { CameraController } from '../rendering/CameraController';
 import { SceneManager } from '../rendering/SceneManager';
 import { GameOverView } from '../ui/GameOverView';
 import { HudView } from '../ui/HudView';
+import { LevelUpOverlayView } from '../ui/LevelUpOverlayView';
 import { ShopOverlayView } from '../ui/ShopOverlayView';
 
 interface MoveAnimation {
@@ -64,6 +66,7 @@ export class Game {
   private readonly hud: HudView;
   private readonly gameOver: GameOverView;
   private readonly shop: ShopOverlayView;
+  private readonly levelUp: LevelUpOverlayView;
   private readonly resizeObserver: ResizeObserver;
 
   private animation: MoveAnimation | null = null;
@@ -89,10 +92,16 @@ export class Game {
     this.hud = new HudView();
     this.gameOver = new GameOverView();
     this.shop = new ShopOverlayView();
+    this.levelUp = new LevelUpOverlayView();
     this.gameOver.onRestart(() => this.restartRun());
-    this.shop.onHeal(() => this.buyShopOffer('heal'));
-    this.shop.onAttack(() => this.buyShopOffer('attack'));
+    for (const offerId of SHOP_OFFER_IDS) {
+      this.shop.onOffer(offerId, () => this.buyShopOffer(offerId));
+    }
     this.shop.onLeave(() => this.leaveShop());
+    this.levelUp.onChoice('vitality', () => this.chooseLevelUp('vitality'));
+    this.levelUp.onChoice('sharpened', () => this.chooseLevelUp('sharpened'));
+    this.levelUp.onChoice('armoured', () => this.chooseLevelUp('armoured'));
+    this.levelUp.onChoice('evasive', () => this.chooseLevelUp('evasive'));
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -116,6 +125,7 @@ export class Game {
     this.resizeObserver.disconnect();
     this.gameOver.dispose();
     this.shop.dispose();
+    this.levelUp.dispose();
     this.input.dispose();
     this.scene.dispose();
   }
@@ -145,6 +155,7 @@ export class Game {
       this.boardLocked ||
       this.state.runOver ||
       this.state.shopOpen ||
+      this.state.levelUpOpen ||
       !this.state.isForwardTile(tile.row, tile.col)
     ) {
       return;
@@ -362,6 +373,10 @@ export class Game {
       return;
     }
 
+    if (this.tryOpenLevelUp()) {
+      return;
+    }
+
     this.playNextPendingEvent();
   }
 
@@ -380,6 +395,9 @@ export class Game {
 
     this.scene.endDropSpawnFx();
     this.dropSpawnElapsed = null;
+    if (this.tryOpenLevelUp()) {
+      return;
+    }
     this.playNextPendingEvent();
   }
 
@@ -389,8 +407,14 @@ export class Game {
     if (this.state.runOver) {
       this.setBoardInteractive(false);
       this.shop.hide();
+      this.levelUp.hide();
       this.state.dismissOpenShop();
+      this.state.dismissLevelUp();
       this.gameOver.show(this.state.distance);
+      return;
+    }
+
+    if (this.tryOpenLevelUp()) {
       return;
     }
 
@@ -411,6 +435,7 @@ export class Game {
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();
+    this.levelUp.hide();
     this.state.reset();
     this.scene.bindWindow(this.state, { interactive: true });
     this.gameOver.hide();
@@ -424,6 +449,38 @@ export class Game {
     }
     this.state.buyShopOffer(offerId);
     this.updateHud();
+  }
+
+  private chooseLevelUp(choice: LevelUpChoice): void {
+    if (!this.state.levelUpOpen) {
+      return;
+    }
+
+    const result = this.state.chooseLevelUp(choice);
+    this.updateHud();
+    if (!result.success) {
+      return;
+    }
+
+    if (this.tryOpenLevelUp()) {
+      return;
+    }
+
+    this.levelUp.hide();
+    this.playNextPendingEvent();
+  }
+
+  private tryOpenLevelUp(): boolean {
+    if (this.state.runOver || !this.state.levelUpOpen) {
+      return false;
+    }
+    const view = this.state.getLevelUpView();
+    if (!view) {
+      return false;
+    }
+    this.levelUp.show(view);
+    this.setBoardInteractive(false);
+    return true;
   }
 
   private leaveShop(): void {

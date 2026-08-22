@@ -31,6 +31,13 @@ import {
   type EnemyStatsFactory,
 } from './definitions/enemies';
 import {
+  applyLevelUpChoice,
+  buildLevelUpView,
+  type LevelUpChoice,
+  type LevelUpResult,
+  type LevelUpView,
+} from './levelUp';
+import {
   type AvoidanceRoll,
   type EncounterEvent,
   combatDefeatText,
@@ -55,8 +62,11 @@ import {
   applyShopPurchase,
   buildShopView,
   createActiveShop,
+  createShopProgress,
   evaluateShopOffer,
+  shopStatSnapshot,
   type ShopOfferId,
+  type ShopProgress,
   type ShopPurchaseResult,
   type ShopView,
 } from './shop';
@@ -104,6 +114,9 @@ export interface TurnResolution {
 
 export interface CombatFinishResult {
   drop: EnemyDropResult | null;
+  experienceGained: number;
+  levelsReached: number[];
+  levelUp: LevelUpView | null;
 }
 
 export interface HudSnapshot {
@@ -111,6 +124,9 @@ export interface HudSnapshot {
   gold: number;
   attack: number;
   evade: number;
+  level: number;
+  experience: number;
+  nextLevelExperience: number | null;
   health: number;
   maxHealth: number;
   status: string;
@@ -135,6 +151,8 @@ export class GameState {
   private readonly traps = new Map<string, Trap>();
   private readonly recipes = new Map<number, LaneRecipe[]>();
   private activeShop: ActiveShop | null = null;
+  private shopProgress: ShopProgress = createShopProgress();
+  private readonly pendingLevelUps: number[] = [];
 
   private _distance = 0;
   private _status = '';
@@ -189,6 +207,10 @@ export class GameState {
     return this.activeShop !== null;
   }
 
+  get levelUpOpen(): boolean {
+    return this.pendingLevelUps.length > 0;
+  }
+
   getHudSnapshot(): HudSnapshot {
     const stats = this.player.stats;
     return {
@@ -196,6 +218,9 @@ export class GameState {
       gold: this.player.gold,
       attack: stats.attack,
       evade: this.player.evade,
+      level: this.player.level,
+      experience: this.player.experience,
+      nextLevelExperience: this.player.nextLevelExperience,
       health: stats.health,
       maxHealth: stats.maxHealth,
       status: this._status,
@@ -271,6 +296,9 @@ export class GameState {
     if (this.activeShop) {
       throw new Error('Cannot move while a merchant shop is open');
     }
+    if (this.levelUpOpen) {
+      throw new Error('Cannot move while a level-up choice is pending');
+    }
     if (!this.isValidLane(toCol)) {
       throw new Error(`Invalid lane: ${toCol}`);
     }
@@ -298,7 +326,8 @@ export class GameState {
     return buildShopView(
       this.activeShop?.merchant ?? null,
       this.player.gold,
-      this.player.stats,
+      shopStatSnapshot(this.player),
+      this.shopProgress,
     );
   }
 
@@ -307,7 +336,8 @@ export class GameState {
       this.activeShop?.merchant ?? null,
       offerId,
       this.player.gold,
-      this.player.stats,
+      shopStatSnapshot(this.player),
+      this.shopProgress,
     ).available;
   }
 
@@ -320,8 +350,10 @@ export class GameState {
         reason: 'noShop',
         goldRemaining: this.player.gold,
         goldSpent: 0,
-        healthRestored: 0,
+        maxHealthGained: 0,
         attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
         status: 'There is no merchant here.',
       };
     }
@@ -330,7 +362,8 @@ export class GameState {
       merchant,
       offerId,
       this.player.gold,
-      this.player.stats,
+      shopStatSnapshot(this.player),
+      this.shopProgress,
     );
     if (!result.success) {
       this._status = result.status;
@@ -338,8 +371,10 @@ export class GameState {
     }
 
     this.player.trySpendGold(result.goldSpent);
-    this.player.heal(result.healthRestored);
+    this.player.increaseMaxHealth(result.maxHealthGained);
     this.player.increaseAttack(result.attackGained);
+    this.player.increaseDefence(result.defenceGained);
+    this.player.increaseEvade(result.evadeGained);
     this._status = result.status;
     return result;
   }
@@ -396,9 +431,13 @@ export class GameState {
     this.player.applyHealth(result.playerHealthAfter);
 
     if (result.winner === 'player') {
+      const awardRewards = !monster.encounterResolved && monster.defeated;
       this.removeMonster(monster);
-      const drop =
-        monster.defeated ? this.trySpawnDefeatDrop(monster) : null;
+      const drop = awardRewards ? this.trySpawnDefeatDrop(monster) : null;
+      const xpGain = awardRewards
+        ? this.player.addExperience(monster.experience)
+        : { gained: 0, levelsReached: [] as number[] };
+      this.pendingLevelUps.push(...xpGain.levelsReached);
       this._status = combatVictoryText(result.monsterName);
       if (drop) {
         this._status +=
@@ -406,13 +445,61 @@ export class GameState {
             ? ` It drops ${GOLD_AMOUNT} gold.`
             : ' It drops a potion.';
       }
-      return { drop };
+      return {
+        drop,
+        experienceGained: xpGain.gained,
+        levelsReached: xpGain.levelsReached,
+        levelUp: this.getLevelUpView(),
+      };
     }
 
     this.player.applyHealth(0);
     this._runOver = true;
     this._status = combatDefeatText(result.monsterName);
-    return { drop: null };
+    return {
+      drop: null,
+      experienceGained: 0,
+      levelsReached: [],
+      levelUp: null,
+    };
+  }
+
+  getLevelUpView(): LevelUpView | null {
+    const level = this.pendingLevelUps[0];
+    if (level === undefined) {
+      return null;
+    }
+    return buildLevelUpView(level, this.player.experience);
+  }
+
+  chooseLevelUp(choice: LevelUpChoice): LevelUpResult {
+    if (this.pendingLevelUps.length === 0) {
+      return {
+        success: false,
+        reason: 'noLevelUp',
+        maxHealthGained: 0,
+        attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
+        pendingRemaining: 0,
+        status: 'There is no level-up to claim.',
+      };
+    }
+
+    this.pendingLevelUps.shift();
+    const applied = applyLevelUpChoice(this.player, choice);
+    this._status = applied.status;
+    return {
+      success: true,
+      choice,
+      ...applied,
+      pendingRemaining: this.pendingLevelUps.length,
+    };
+  }
+
+  /** Close pending level-ups without applying a reward (death / restart). */
+  dismissLevelUp(): void {
+    this.pendingLevelUps.length = 0;
   }
 
   reset(): void {
@@ -425,6 +512,8 @@ export class GameState {
     this.merchants.clear();
     this.traps.clear();
     this.activeShop = null;
+    this.shopProgress = createShopProgress();
+    this.pendingLevelUps.length = 0;
     this.recipes.clear();
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();

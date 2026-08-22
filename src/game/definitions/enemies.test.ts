@@ -13,6 +13,7 @@ describe('enemy definitions', () => {
       name: 'Crypt Guard',
       startingStats: { maxHealth: 12, health: 12, attack: 4, defence: 1 },
       perception: 5,
+      experience: 2,
       renderKey: 'cryptGuard',
       dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
@@ -21,9 +22,19 @@ describe('enemy definitions', () => {
       name: 'Bone Brute',
       startingStats: { maxHealth: 20, health: 20, attack: 6, defence: 1 },
       perception: 10,
+      experience: 4,
       renderKey: 'boneBrute',
       dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
+  });
+
+  it('awards 1 / 2 / 4 XP on Cave Rat, Crypt Guard, and Bone Brute', () => {
+    expect(ENEMY_DEFINITIONS.caveRat.experience).toBe(1);
+    expect(ENEMY_DEFINITIONS.cryptGuard.experience).toBe(2);
+    expect(ENEMY_DEFINITIONS.boneBrute.experience).toBe(4);
+    expect(createMonster('xp-rat', 'caveRat', 4, 1).experience).toBe(1);
+    expect(createMonster('xp-guard', 'cryptGuard', 4, 1).experience).toBe(2);
+    expect(createMonster('xp-brute', 'boneBrute', 4, 1).experience).toBe(4);
   });
 
   it('gives each monster an independent mutable stats clone', () => {

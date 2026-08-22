@@ -142,7 +142,7 @@ export function findAlignedMonsterEncounters(
 export function encounterStartText(event: EncounterEvent): string {
   const { name } = event.monster;
   const chanceSuffix =
-    event.evadeChance === undefined ? '' : ` Evade chance: ${event.evadeChance}%.`;
+    event.evadeChance === undefined ? '' : ` Evade chance: ${event.evadeChance}.`;
   if (event.kind === 'evade') {
     return `You slip past the ${name}.${chanceSuffix}`;
   }

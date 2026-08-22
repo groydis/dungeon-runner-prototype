@@ -28,10 +28,6 @@ export const EVADE_CHANCE_MAX = 85;
 
 /** First shop at this row, then every N rows: 14, 28, 42, … */
 export const SHOP_ROW_INTERVAL = 14;
-export const SHOP_HEAL_COST = 1;
-export const SHOP_HEAL_AMOUNT = 5;
-export const SHOP_ATTACK_COST = 3;
-export const SHOP_ATTACK_BONUS = 1;
 export const MERCHANT_LEAVE_FX_SEC = 0.36;
 
 /** Demo Cave Rat after the safe opening, centre lane, for front-on / side-pass tests. */

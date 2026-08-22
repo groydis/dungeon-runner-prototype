@@ -32,6 +32,7 @@ export interface EnemyDefinition {
   startingStats: CombatStats;
   /** Percent subtracted from player Evade on a side pass. */
   perception: number;
+  experience: number;
   renderKey: string;
   dropTable: readonly EnemyDropTableEntry[];
 }
@@ -52,6 +53,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 0,
     },
     perception: 0,
+    experience: 1,
     renderKey: 'caveRat',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
@@ -65,6 +67,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 1,
     },
     perception: 5,
+    experience: 2,
     renderKey: 'cryptGuard',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
@@ -78,6 +81,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
       defence: 1,
     },
     perception: 10,
+    experience: 4,
     renderKey: 'boneBrute',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },

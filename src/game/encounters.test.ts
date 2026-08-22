@@ -98,7 +98,7 @@ describe('evade chance', () => {
     const monster = rat(5, 2);
     const [evade] = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => true);
     expect(encounterStartText(evade!)).toBe(
-      'You slip past the Cave Rat. Evade chance: 1%.',
+      'You slip past the Cave Rat. Evade chance: 1.',
     );
   });
 

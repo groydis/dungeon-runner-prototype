@@ -66,10 +66,26 @@ body {
 #distance,
 #gold,
 #attack,
-#evade {
+#evade,
+#level,
+#experience {
   margin: 6px 0 0;
   color: var(--hud-accent);
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
+}
+
+.hud-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.1rem;
+}
+
+#level {
+  color: #9ecbff;
+}
+
+#experience {
+  color: #d4c27a;
 }
 
 .hud-resources {
@@ -141,6 +157,7 @@ body {
 }
 
 .shop,
+.level-up,
 .game-over {
   position: absolute;
   inset: 0;
@@ -157,16 +174,22 @@ body {
   z-index: 2;
 }
 
-.game-over {
+.level-up {
   z-index: 3;
 }
 
+.game-over {
+  z-index: 4;
+}
+
 .shop[hidden],
+.level-up[hidden],
 .game-over[hidden] {
   display: none;
 }
 
 .shop-card,
+.level-up-card,
 .game-over-card {
   width: min(22rem, 100%);
   padding: 28px 24px;
@@ -177,7 +200,8 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-.shop-card {
+.shop-card,
+.level-up-card {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -185,6 +209,7 @@ body {
 }
 
 .shop-card h2,
+.level-up-card h2,
 .game-over-card h2 {
   margin: 0;
   letter-spacing: 0.08em;
@@ -196,14 +221,28 @@ body {
   font-size: clamp(1.8rem, 7vw, 2.4rem);
 }
 
-#shop-gold {
+#shop-gold,
+#level-up-level,
+#level-up-xp {
   margin: 0;
-  color: #f0d27a;
   text-align: center;
   font-size: 1.05rem;
 }
 
+#shop-gold {
+  color: #f0d27a;
+}
+
+#level-up-level {
+  color: #9ecbff;
+}
+
+#level-up-xp {
+  color: #d4c27a;
+}
+
 .shop-offer,
+.level-up-choice,
 #shop-leave {
   appearance: none;
   display: flex;
@@ -222,13 +261,15 @@ body {
   cursor: pointer;
 }
 
-.shop-offer-title {
+.shop-offer-title,
+.level-up-choice-title {
   color: #d8ccff;
   font-size: 1rem;
 }
 
 .shop-offer-desc,
-.shop-offer-reason {
+.shop-offer-reason,
+.level-up-choice-desc {
   color: var(--hud-muted);
   font-size: 0.9rem;
 }
@@ -243,6 +284,7 @@ body {
 }
 
 .shop-offer:focus-visible,
+.level-up-choice:focus-visible,
 #shop-leave:focus-visible {
   outline: 2px solid #c9b6ff;
   outline-offset: 3px;
