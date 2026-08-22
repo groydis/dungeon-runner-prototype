@@ -1,3 +1,5 @@
+import { ENEMY_DEFINITIONS } from './definitions/enemies';
+
 export interface CombatStats {
   maxHealth: number;
   health: number;
@@ -24,12 +26,7 @@ export function createPlayerStats(): CombatStats {
 }
 
 export function createCaveRatStats(): CombatStats {
-  return createCombatStats({
-    maxHealth: 8,
-    health: 8,
-    attack: 3,
-    defence: 0,
-  });
+  return createCombatStats(ENEMY_DEFINITIONS.caveRat.startingStats);
 }
 
 /** Development helper: `?fatal=1` gives the demo rat enough attack to kill. */
@@ -39,10 +36,8 @@ export function caveRatStatsFromSearch(search: string): CombatStats {
   );
   if (params.get('fatal') === '1') {
     return createCombatStats({
-      maxHealth: 8,
-      health: 8,
+      ...ENEMY_DEFINITIONS.caveRat.startingStats,
       attack: 99,
-      defence: 0,
     });
   }
   return createCaveRatStats();

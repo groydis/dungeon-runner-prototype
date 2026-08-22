@@ -91,15 +91,15 @@ Selection uses pointer events and a Three.js raycaster against invisible hit pla
 src/
   main.ts                 Entry point: canvas + game loop bootstrap
   game/
-    Game.ts               Orchestration, animation, HUD, shop overlay, restart
-    GameState.ts          Turn state, health, gold, entities, pickups, shop
+    Game.ts               Animation, input, and view/render orchestration
+    GameState.ts          Single-run aggregate and turn resolution
     Grid.ts               Logical 3-wide sliding tile window
     Tile.ts               Cell coordinates + content type
-    Monster.ts            Monster entity plus independent combat stats
+    Monster.ts            Run-specific enemy instance
     Collectible.ts        Gold and potion entities
-    Merchant.ts           Shop entity and stable merchant IDs
+    Merchant.ts           Shop entity, used/purchased state
     shop.ts               Offers, eligibility, gold spend, and shop views
-    Player.ts             Logical lane / row, gold, and combat stats
+    Player.ts             Position, gold, and run-scoped combat stats
     Combatant.ts          Combat stat types and starting values
     combat.ts             Pure automatic-combat resolver and log
     encounters.ts         Cardinal-plus rules and avoidance rolls
@@ -107,6 +107,12 @@ src/
     random.ts             Seeded RNG for generation only
     InputController.ts    Pointer + raycast picking
     config.ts             Shared grid and timing constants
+    definitions/
+      enemies.ts          Static Cave Rat definition
+  ui/
+    HudView.ts            Distance, gold, attack, HP, status
+    GameOverView.ts       Death overlay and Restart Run
+    ShopOverlayView.ts    Merchant overlay
   rendering/
     SceneManager.ts       Scene, lights, recycled row meshes, hit FX
     CameraController.ts   Elevated follow camera
@@ -115,7 +121,30 @@ src/
 public/                   Static assets
 ```
 
-Game rules live under `src/game`. Meshes, cameras, and materials live under `src/rendering`. Rendering plays combat-log entries; it does not calculate damage or decide winners.
+## Architecture
+
+This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
+
+- **GameState** is the single-run aggregate. It owns the grid, entities, and shop session, and exposes high-level actions such as `resolveCompletedMove()`, `buyShopOffer()`, `createCombatResult()`, and `finishCombat()`.
+- **Domain objects** (`Player`, `Monster`, `Collectible`, `Merchant`) own their own state transitions: movement, gold, healing, damage, collection, and Merchant purchases.
+- **Pure rule modules** (`combat.ts`, `encounters.ts`, `rowGeneration.ts`, `shop.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
+- **Game.ts** orchestrates animation, input lock, and combat/shop playback. It requests domain outcomes and plays them. It does not calculate damage, shop prices, or eligibility.
+- **UI views** under `src/ui` update HTML only. They render `ShopView` / HUD snapshots and do not import Three.js or mutate `GameState` internals.
+- **SceneManager** remains rendering-only: meshes, camera-adjacent layout, and visual FX. It does not decide purchases, combat, or row content.
+- Static enemy data lives in `src/game/definitions/enemies.ts`. A Monster instance holds run state plus that definition. There is no enemy inheritance tree.
+
+Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
+
+## Tests
+
+```bash
+npm test
+npm run test:watch
+```
+
+Unit tests cover combat, encounters, seeded row generation, player gold/healing, and Merchant purchases. They use injected RNG, avoidance rolls, and stats. They do not exercise WebGL or browser animation.
+
+`build` type-checks with `tsc --noEmit`, then bundles with Vite.
 
 ## Tile and grid model
 
@@ -142,15 +171,16 @@ World layout (rendering only):
    - player X interpolates to the chosen lane
    - player Y hops once
    - every pooled row shifts by one tile pitch toward the camera
-3. When the animation finishes, `GameState.commitMove()` increments row, lane, and distance, then generates the next far row.
+3. When the animation finishes, `GameState.resolveCompletedMove()` commits the legal step, prepares/prunes rows, and returns the game-side result.
 4. `SceneManager` rebinds only the row that just left the bottom of the screen and assigns it to the new far index. Other row meshes keep their logical rows.
 5. The player mesh stays in the lower part of the frame; the camera is mostly static, with a small nudge on each step.
 
-After `commitMove()`, resolution order is:
+`resolveCompletedMove()` keeps this order:
 
-1. `resolveLandedPickup()` — gold or potion on the occupied tile
-2. `openShopForCurrentTile()` — landing on a Merchant opens the shop and locks movement
-3. `resolveMonsterEncountersAfterMove()` — cardinal-plus combat / evade
+1. Commit the move and generate/prune rows
+2. Resolve a landed gold or potion pickup
+3. Open a Merchant if the landed tile is a shop
+4. Collect eligible cardinal-plus encounters (combat is not played back here)
 
 A tile never holds loot, a shop, and a monster together. Shop rows are otherwise empty, so a Merchant and a fight cannot share a step. If both a pickup and an encounter happen in one step (loot in one lane, rat beside it), the pickup is applied first; an encounter then overwrites the status line.
 
@@ -223,7 +253,7 @@ Monsters are game entities with a stable `id`, `name`, `row`, `col`, `encounterR
        [ x ]
 ```
 
-Diagonals do nothing. After each successful step, `resolveMonsterEncountersAfterMove()` finds eligible monsters. Events are unchanged:
+Diagonals do nothing. After each successful step, `resolveCompletedMove()` finds eligible monsters. Events are unchanged:
 
 ```ts
 type CombatApproach = 'frontOn' | 'surprise';

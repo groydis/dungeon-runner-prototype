@@ -1,11 +1,31 @@
 export type CollectibleKind = 'gold' | 'potion';
 
-export interface Collectible {
-  id: string;
-  kind: CollectibleKind;
-  row: number;
-  col: number;
-  collected: boolean;
+export class Collectible {
+  readonly id: string;
+  readonly kind: CollectibleKind;
+  readonly row: number;
+  readonly col: number;
+  private _collected = false;
+
+  constructor(id: string, kind: CollectibleKind, row: number, col: number) {
+    this.id = id;
+    this.kind = kind;
+    this.row = row;
+    this.col = col;
+  }
+
+  get collected(): boolean {
+    return this._collected;
+  }
+
+  /** Marks the item collected. Returns false if it was already taken. */
+  collect(): boolean {
+    if (this._collected) {
+      return false;
+    }
+    this._collected = true;
+    return true;
+  }
 }
 
 export function createCollectible(
@@ -14,13 +34,7 @@ export function createCollectible(
   row: number,
   col: number,
 ): Collectible {
-  return {
-    id,
-    kind,
-    row,
-    col,
-    collected: false,
-  };
+  return new Collectible(id, kind, row, col);
 }
 
 export function collectibleId(kind: CollectibleKind, row: number, col: number): string {

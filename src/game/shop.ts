@@ -4,10 +4,10 @@ import {
   SHOP_HEAL_AMOUNT,
   SHOP_HEAL_COST,
 } from './config';
-import { type Merchant } from './Merchant';
+import { type Merchant, type MerchantOfferId } from './Merchant';
 import { type CombatStats } from './Combatant';
 
-export type ShopOfferId = 'heal' | 'attack';
+export type ShopOfferId = MerchantOfferId;
 
 export type ShopUnavailableReason =
   | 'noShop'
@@ -15,16 +15,8 @@ export type ShopUnavailableReason =
   | 'unaffordable'
   | 'alreadyFull';
 
-export interface ShopOfferState {
-  id: ShopOfferId;
-  purchased: boolean;
-}
-
 export interface ActiveShop {
-  merchantId: string;
-  row: number;
-  col: number;
-  offers: ShopOfferState[];
+  merchant: Merchant;
 }
 
 export interface ShopOfferView {
@@ -47,6 +39,7 @@ export interface ShopPurchaseResult {
   offerId?: ShopOfferId;
   reason?: ShopUnavailableReason;
   goldRemaining: number;
+  goldSpent: number;
   healthRestored: number;
   attackGained: number;
   status: string;
@@ -69,29 +62,20 @@ export const SHOP_OFFER_CATALOG: Record<
 };
 
 export function createActiveShop(merchant: Merchant): ActiveShop {
-  return {
-    merchantId: merchant.id,
-    row: merchant.row,
-    col: merchant.col,
-    offers: [
-      { id: 'heal', purchased: false },
-      { id: 'attack', purchased: false },
-    ],
-  };
+  return { merchant };
 }
 
 export function evaluateShopOffer(
-  shop: ActiveShop | null,
+  merchant: Merchant | null,
   offerId: ShopOfferId,
   gold: number,
   stats: CombatStats,
 ): { available: boolean; reason?: ShopUnavailableReason } {
-  if (!shop) {
+  if (!merchant) {
     return { available: false, reason: 'noShop' };
   }
 
-  const offer = shop.offers.find((entry) => entry.id === offerId);
-  if (!offer || offer.purchased) {
+  if (merchant.hasPurchased(offerId)) {
     return { available: false, reason: 'alreadyPurchased' };
   }
 
@@ -108,11 +92,11 @@ export function evaluateShopOffer(
 }
 
 export function buildShopView(
-  shop: ActiveShop | null,
+  merchant: Merchant | null,
   gold: number,
   stats: CombatStats,
 ): ShopView | null {
-  if (!shop) {
+  if (!merchant) {
     return null;
   }
 
@@ -120,7 +104,7 @@ export function buildShopView(
     gold,
     offers: (['heal', 'attack'] as const).map((id) => {
       const catalog = SHOP_OFFER_CATALOG[id];
-      const evaluation = evaluateShopOffer(shop, id, gold, stats);
+      const evaluation = evaluateShopOffer(merchant, id, gold, stats);
       return {
         id,
         title: catalog.title,
@@ -150,18 +134,19 @@ export function unavailableReasonText(reason: ShopUnavailableReason): string {
 }
 
 export function applyShopPurchase(
-  shop: ActiveShop,
+  merchant: Merchant,
   offerId: ShopOfferId,
   gold: number,
   stats: CombatStats,
 ): ShopPurchaseResult {
-  const evaluation = evaluateShopOffer(shop, offerId, gold, stats);
+  const evaluation = evaluateShopOffer(merchant, offerId, gold, stats);
   if (!evaluation.available) {
     return {
       success: false,
       offerId,
       reason: evaluation.reason,
       goldRemaining: gold,
+      goldSpent: 0,
       healthRestored: 0,
       attackGained: 0,
       status: unavailableReasonText(evaluation.reason ?? 'noShop'),
@@ -169,11 +154,7 @@ export function applyShopPurchase(
   }
 
   const catalog = SHOP_OFFER_CATALOG[offerId];
-  const goldRemaining = gold - catalog.cost;
-  const offer = shop.offers.find((entry) => entry.id === offerId);
-  if (offer) {
-    offer.purchased = true;
-  }
+  merchant.markPurchased(offerId);
 
   if (offerId === 'heal') {
     const missing = stats.maxHealth - stats.health;
@@ -181,7 +162,8 @@ export function applyShopPurchase(
     return {
       success: true,
       offerId,
-      goldRemaining,
+      goldRemaining: gold - catalog.cost,
+      goldSpent: catalog.cost,
       healthRestored: restored,
       attackGained: 0,
       status: `You buy field dressing and restore ${restored} HP.`,
@@ -191,7 +173,8 @@ export function applyShopPurchase(
   return {
     success: true,
     offerId,
-    goldRemaining,
+    goldRemaining: gold - catalog.cost,
+    goldSpent: catalog.cost,
     healthRestored: 0,
     attackGained: SHOP_ATTACK_BONUS,
     status: `You sharpen your weapon. Attack is now ${stats.attack + SHOP_ATTACK_BONUS}.`,

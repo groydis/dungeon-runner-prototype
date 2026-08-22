@@ -8,6 +8,7 @@ import {
 import {
   type CombatResult,
   type CombatLogEntry,
+  resolveAutomaticCombat,
 } from './combat';
 import { type CombatStats, createCaveRatStats } from './Combatant';
 import {
@@ -58,6 +59,12 @@ export interface PickupResult {
   goldGained: number;
   healthRestored: number;
   alreadyFull: boolean;
+}
+
+export interface TurnResolution {
+  pickup: PickupResult | null;
+  shop: ShopView | null;
+  encounters: EncounterEvent[];
 }
 
 export interface GameStateOptions {
@@ -113,7 +120,151 @@ export class GameState {
     return row === this.player.row + 1 && this.isValidLane(col);
   }
 
-  prepareAhead(): void {
+  /**
+   * Game-side consequences of a finished move animation.
+   * Combat is not played back here; callers still apply the ordered log.
+   */
+  resolveCompletedMove(toCol: number): TurnResolution {
+    this.commitMove(toCol);
+    const pickup = this.resolveLandedPickup();
+    this.openShopForCurrentTile();
+    const encounters = this.resolveMonsterEncountersAfterMove();
+    return {
+      pickup,
+      shop: this.getShopView(),
+      encounters,
+    };
+  }
+
+  getShopView(): ShopView | null {
+    return buildShopView(
+      this.activeShop?.merchant ?? null,
+      this.player.gold,
+      this.player.stats,
+    );
+  }
+
+  canBuyShopOffer(offerId: ShopOfferId): boolean {
+    return evaluateShopOffer(
+      this.activeShop?.merchant ?? null,
+      offerId,
+      this.player.gold,
+      this.player.stats,
+    ).available;
+  }
+
+  buyShopOffer(offerId: ShopOfferId): ShopPurchaseResult {
+    const merchant = this.activeShop?.merchant;
+    if (!merchant) {
+      return {
+        success: false,
+        offerId,
+        reason: 'noShop',
+        goldRemaining: this.player.gold,
+        goldSpent: 0,
+        healthRestored: 0,
+        attackGained: 0,
+        status: 'There is no merchant here.',
+      };
+    }
+
+    const result = applyShopPurchase(
+      merchant,
+      offerId,
+      this.player.gold,
+      this.player.stats,
+    );
+    if (!result.success) {
+      this.status = result.status;
+      return result;
+    }
+
+    this.player.trySpendGold(result.goldSpent);
+    this.player.heal(result.healthRestored);
+    this.player.increaseAttack(result.attackGained);
+    this.status = result.status;
+    return result;
+  }
+
+  leaveShop(): { row: number; col: number } | null {
+    const shop = this.activeShop;
+    if (!shop) {
+      return null;
+    }
+
+    const { row, col, id } = shop.merchant;
+    shop.merchant.markUsed();
+    const tile = this.grid.getTile(row, col);
+    if (tile?.content.id === id) {
+      tile.content = { type: 'empty' };
+    }
+    this.activeShop = null;
+    this.status = 'You leave the merchant behind.';
+    return { row, col };
+  }
+
+  /** Close an open shop without consuming the merchant (death / restart). */
+  dismissOpenShop(): void {
+    this.activeShop = null;
+  }
+
+  applyEvade(monster: Monster): void {
+    this.status = encounterStartText({ kind: 'evade', monster });
+    this.removeMonster(monster);
+  }
+
+  createCombatResult(event: EncounterEvent): CombatResult {
+    if (event.kind !== 'combat') {
+      throw new Error('Cannot create a combat result for an evade event');
+    }
+
+    return resolveAutomaticCombat(
+      this.player.stats,
+      event.monster.stats,
+      event.approach,
+      { id: event.monster.id, name: event.monster.name },
+    );
+  }
+
+  applyCombatLogEntry(entry: CombatLogEntry, monster: Monster): void {
+    if (entry.target === 'player') {
+      this.player.applyHealth(entry.targetHealthAfter);
+      return;
+    }
+    monster.applyHealth(entry.targetHealthAfter);
+  }
+
+  finishCombat(result: CombatResult, monster: Monster): void {
+    this.player.applyHealth(result.playerHealthAfter);
+
+    if (result.winner === 'player') {
+      this.status = combatVictoryText(result.monsterName);
+      this.removeMonster(monster);
+      return;
+    }
+
+    this.player.applyHealth(0);
+    this.runOver = true;
+    this.status = combatDefeatText(result.monsterName);
+  }
+
+  reset(): void {
+    this.player.reset();
+    this.distance = 0;
+    this.status = '';
+    this.isAnimating = false;
+    this.runOver = false;
+    this.monsters.clear();
+    this.collectibles.clear();
+    this.merchants.clear();
+    this.activeShop = null;
+    this.recipes.clear();
+    this.rng = this.createRng();
+    this.grid.clear();
+    this.populateInitialRows();
+  }
+
+  private prepareAhead(): void {
     if (this.runOver) {
       return;
     }
@@ -127,8 +278,7 @@ export class GameState {
     this.pruneEntitiesBelow(minRow);
   }
 
-  /** Commits a one-row advance. Pickups and encounters resolve after this. */
-  commitMove(toCol: number): MoveResult {
+  private commitMove(toCol: number): MoveResult {
     if (this.runOver) {
       throw new Error('Cannot move after the run is over');
     }
@@ -140,8 +290,7 @@ export class GameState {
     const fromRow = this.player.row;
     const toRow = fromRow + 1;
 
-    this.player.col = toCol;
-    this.player.row = toRow;
+    this.player.moveTo(toRow, toCol);
     this.distance += 1;
 
     this.prepareAhead();
@@ -165,7 +314,7 @@ export class GameState {
    * cardinal-plus encounters. A tile never holds loot, a shop, and a
    * monster together.
    */
-  resolveLandedPickup(): PickupResult | null {
+  private resolveLandedPickup(): PickupResult | null {
     const tile = this.grid.getTile(this.player.row, this.player.col);
     if (!tile || (tile.content.type !== 'gold' && tile.content.type !== 'potion')) {
       return null;
@@ -174,16 +323,15 @@ export class GameState {
     const collectible = tile.content.id
       ? this.collectibles.get(tile.content.id)
       : undefined;
-    if (!collectible || collectible.collected) {
+    if (!collectible || !collectible.collect()) {
       tile.content = { type: 'empty' };
       return null;
     }
 
-    collectible.collected = true;
     tile.content = { type: 'empty' };
 
     if (collectible.kind === 'gold') {
-      this.player.gold += GOLD_AMOUNT;
+      this.player.addGold(GOLD_AMOUNT);
       this.status = `You found ${GOLD_AMOUNT} gold.`;
       return {
         kind: 'gold',
@@ -196,9 +344,7 @@ export class GameState {
       };
     }
 
-    const missing = this.player.stats.maxHealth - this.player.stats.health;
-    const restored = Math.min(POTION_HEAL, Math.max(0, missing));
-    this.player.stats.health += restored;
+    const restored = this.player.heal(POTION_HEAL);
     this.status =
       restored > 0
         ? `You drink a potion and restore ${restored} HP.`
@@ -219,7 +365,7 @@ export class GameState {
    * After the player has advanced and any pickup is done, find monsters
    * in the cardinal plus. Leaves pickup status untouched when nothing engages.
    */
-  resolveMonsterEncountersAfterMove(): EncounterEvent[] {
+  private resolveMonsterEncountersAfterMove(): EncounterEvent[] {
     if (this.runOver) {
       return [];
     }
@@ -239,7 +385,7 @@ export class GameState {
    * Shop opens after pickups and before encounters.
    * Shop rows have no other content, so encounters should not fire here.
    */
-  openShopForCurrentTile(): boolean {
+  private openShopForCurrentTile(): boolean {
     if (this.runOver || this.activeShop) {
       return false;
     }
@@ -260,119 +406,8 @@ export class GameState {
     return true;
   }
 
-  getShopView(): ShopView | null {
-    return buildShopView(this.activeShop, this.player.gold, this.player.stats);
-  }
-
-  canBuyShopOffer(offerId: ShopOfferId): boolean {
-    return evaluateShopOffer(
-      this.activeShop,
-      offerId,
-      this.player.gold,
-      this.player.stats,
-    ).available;
-  }
-
-  buyShopOffer(offerId: ShopOfferId): ShopPurchaseResult {
-    if (!this.activeShop) {
-      return {
-        success: false,
-        offerId,
-        reason: 'noShop',
-        goldRemaining: this.player.gold,
-        healthRestored: 0,
-        attackGained: 0,
-        status: 'There is no merchant here.',
-      };
-    }
-
-    const result = applyShopPurchase(
-      this.activeShop,
-      offerId,
-      this.player.gold,
-      this.player.stats,
-    );
-    if (!result.success) {
-      this.status = result.status;
-      return result;
-    }
-
-    this.player.gold = result.goldRemaining;
-    this.player.stats.health += result.healthRestored;
-    this.player.stats.attack += result.attackGained;
-    this.status = result.status;
-    return result;
-  }
-
-  leaveShop(): boolean {
-    const shop = this.activeShop;
-    if (!shop) {
-      return false;
-    }
-
-    const merchant = this.merchants.get(shop.merchantId);
-    if (merchant) {
-      merchant.used = true;
-    }
-    const tile = this.grid.getTile(shop.row, shop.col);
-    if (tile?.content.id === shop.merchantId) {
-      tile.content = { type: 'empty' };
-    }
-    this.activeShop = null;
-    this.status = 'You leave the merchant behind.';
-    return true;
-  }
-
-  /** Close an open shop without consuming the merchant (death / restart). */
-  dismissOpenShop(): void {
-    this.activeShop = null;
-  }
-
-  applyEvade(monster: Monster): void {
-    this.status = encounterStartText({ kind: 'evade', monster });
-    this.removeMonster(monster);
-  }
-
-  applyCombatLogEntry(entry: CombatLogEntry, monster: Monster): void {
-    if (entry.target === 'player') {
-      this.player.stats.health = entry.targetHealthAfter;
-      return;
-    }
-    monster.stats.health = entry.targetHealthAfter;
-  }
-
-  finishCombat(result: CombatResult, monster: Monster): void {
-    this.player.stats.health = result.playerHealthAfter;
-
-    if (result.winner === 'player') {
-      this.status = combatVictoryText(result.monsterName);
-      this.removeMonster(monster);
-      return;
-    }
-
-    this.player.stats.health = 0;
-    this.runOver = true;
-    this.status = combatDefeatText(result.monsterName);
-  }
-
-  reset(): void {
-    this.player.reset();
-    this.distance = 0;
-    this.status = '';
-    this.isAnimating = false;
-    this.runOver = false;
-    this.monsters.clear();
-    this.collectibles.clear();
-    this.merchants.clear();
-    this.activeShop = null;
-    this.recipes.clear();
-    this.rng = this.createRng();
-    this.grid.clear();
-    this.populateInitialRows();
-  }
-
   private removeMonster(monster: Monster): void {
-    monster.encounterResolved = true;
+    monster.resolveEncounter();
     const tile = this.grid.getTile(monster.row, monster.col);
     if (tile?.content.id === monster.id) {
       tile.content = { type: 'empty' };
@@ -429,7 +464,7 @@ export class GameState {
           lane.entityId,
           createMonster(
             lane.entityId,
-            'Cave Rat',
+            'caveRat',
             row,
             col,
             this.createCaveRatStats(),
