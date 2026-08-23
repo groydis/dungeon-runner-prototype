@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildClassSelectionView,
-  classStatLine,
   getPlayerClassDefinition,
   PLAYER_CLASS_IDS,
 } from '../game/definitions/classes';
@@ -23,7 +22,7 @@ describe('class HUD text', () => {
 });
 
 describe('class-selection overlay', () => {
-  it('renders all six classes with flavour, stats, and accessible Select labels', () => {
+  it('renders one class at a time with its flavour, starting stats, and position', () => {
     const root = createClassSelectRoot();
     const overlay = new ClassSelectionView(root);
     const view = buildClassSelectionView();
@@ -31,23 +30,68 @@ describe('class-selection overlay', () => {
 
     expect(root.element('class-select').hidden).toBe(false);
     expect(view.classes.map((option) => option.id)).toEqual([...PLAYER_CLASS_IDS]);
+    const rogue = view.classes[0];
+    expect(root.text('class-current-name')).toBe('Rogue');
+    expect(root.text('class-current-desc')).toBe(rogue.description);
+    expect(root.text('class-carousel-position')).toBe('1 / 6');
+    expect(root.text('class-stat-health')).toBe('18');
+    expect(root.text('class-stat-attack')).toBe('5');
+    expect(root.text('class-stat-defence')).toBe('1');
+    expect(root.text('class-stat-evade')).toBe('6');
+    expect(root.text('class-select-current')).toBe('BEGIN AS ROGUE');
+    expect(root.button('class-select-current').disabled).toBe(false);
+    expect(root.button('class-select-current').getAttribute('aria-label')).toBe(
+      classSelectAriaLabel(rogue),
+    );
+    overlay.dispose();
+  });
 
-    for (const option of view.classes) {
-      const definition = getPlayerClassDefinition(option.id);
-      expect(root.text(`class-${option.id}-name`)).toBe(definition.name);
-      expect(root.text(`class-${option.id}-desc`)).toBe(definition.description);
-      expect(root.text(`class-${option.id}-stats`)).toBe(classStatLine(option));
-      expect(root.text(`class-${option.id}-stats`)).toBe(
-        `HP ${definition.startingStats.maxHealth} · ATK ${definition.startingStats.attack} · DEF ${definition.startingStats.defence} · EVA ${definition.startingEvade}`,
-      );
-      expect(root.button(`class-select-${option.id}`).disabled).toBe(false);
-      expect(root.button(`class-select-${option.id}`).getAttribute('aria-label')).toBe(
-        classSelectAriaLabel(option),
-      );
-      expect(root.button(`class-select-${option.id}`).getAttribute('aria-label')).toContain(
-        `Select ${definition.name}`,
-      );
-    }
+  it('cycles with arrow controls, wraps, and reports the preview class', () => {
+    const root = createClassSelectRoot();
+    const overlay = new ClassSelectionView(root);
+    const changes: string[] = [];
+    overlay.onChange((classId) => changes.push(classId));
+    overlay.show(buildClassSelectionView());
+
+    root.button('class-next').click();
+    expect(root.text('class-current-name')).toBe('Ranger');
+    expect(root.text('class-carousel-position')).toBe('2 / 6');
+    expect(overlay.selectedClassId).toBe('ranger');
+
+    root.button('class-previous').click();
+    root.button('class-previous').click();
+    expect(root.text('class-current-name')).toBe('Lorekeeper');
+    expect(root.text('class-carousel-position')).toBe('6 / 6');
+    expect(changes).toEqual(['rogue', 'ranger', 'rogue', 'lorekeeper']);
+    overlay.dispose();
+  });
+
+  it('supports keyboard and swipe navigation, then selects the visible class', () => {
+    const root = createClassSelectRoot();
+    const overlay = new ClassSelectionView(root);
+    let selected = '';
+    overlay.onSelect('mage', () => {
+      selected = 'mage';
+    });
+    overlay.show(buildClassSelectionView());
+
+    root.element('class-select').dispatchEvent({
+      type: 'keydown',
+      key: 'ArrowRight',
+      preventDefault() {},
+    } as KeyboardEvent);
+    root.element('class-carousel').dispatchEvent({
+      type: 'pointerdown',
+      clientX: 260,
+    } as PointerEvent);
+    root.element('class-carousel').dispatchEvent({
+      type: 'pointerup',
+      clientX: 160,
+    } as PointerEvent);
+
+    expect(root.text('class-current-name')).toBe('Mage');
+    root.button('class-select-current').click();
+    expect(selected).toBe('mage');
     overlay.dispose();
   });
 
@@ -134,12 +178,22 @@ function createClassSelectRoot(): ParentNode & {
   element(id: string): FakeElement;
 } {
   const nodes = new Map<string, FakeElement>();
-  nodes.set('class-select', new FakeElement());
-  for (const id of PLAYER_CLASS_IDS) {
-    nodes.set(`class-select-${id}`, new FakeElement());
-    nodes.set(`class-${id}-name`, new FakeElement());
-    nodes.set(`class-${id}-desc`, new FakeElement());
-    nodes.set(`class-${id}-stats`, new FakeElement());
+  const ids = [
+    'class-select',
+    'class-carousel',
+    'class-current-name',
+    'class-current-desc',
+    'class-carousel-position',
+    'class-stat-health',
+    'class-stat-attack',
+    'class-stat-defence',
+    'class-stat-evade',
+    'class-previous',
+    'class-next',
+    'class-select-current',
+  ];
+  for (const id of ids) {
+    nodes.set(id, new FakeElement());
   }
   return fakeRoot(nodes);
 }

@@ -1,11 +1,12 @@
 import {
-  PLAYER_CLASS_IDS,
   classStatLine,
   type ClassOptionView,
   type ClassSelectionView as ClassSelectionSnapshot,
   type PlayerClassId,
 } from '../game/definitions/classes';
 import { requireElement } from './dom';
+
+const SWIPE_THRESHOLD_PX = 42;
 
 export function classHudText(className: string): string {
   return className ? `CLASS: ${className}` : 'CLASS: —';
@@ -15,60 +16,74 @@ export function classSelectAriaLabel(option: ClassOptionView): string {
   return `Select ${option.name}. ${option.description} ${classStatLine(option)}`;
 }
 
+/** Full-screen, one-class-at-a-time carousel. Three.js preview remains rendering-owned. */
 export class ClassSelectionView {
   private readonly overlayEl: HTMLElement;
-  private readonly buttons: Record<PlayerClassId, HTMLButtonElement>;
-  private readonly names: Record<PlayerClassId, HTMLElement>;
-  private readonly descs: Record<PlayerClassId, HTMLElement>;
-  private readonly stats: Record<PlayerClassId, HTMLElement>;
+  private readonly carouselEl: HTMLElement;
+  private readonly nameEl: HTMLElement;
+  private readonly descriptionEl: HTMLElement;
+  private readonly positionEl: HTMLElement;
+  private readonly healthEl: HTMLElement;
+  private readonly attackEl: HTMLElement;
+  private readonly defenceEl: HTMLElement;
+  private readonly evadeEl: HTMLElement;
+  private readonly previousButton: HTMLButtonElement;
+  private readonly nextButton: HTMLButtonElement;
+  private readonly selectButton: HTMLButtonElement;
   private readonly handlers: Partial<Record<PlayerClassId, () => void>> = {};
+  private classes: ClassOptionView[] = [];
+  private currentIndex = 0;
+  private pointerStartX: number | null = null;
+  private changeHandler: ((classId: PlayerClassId) => void) | null = null;
 
   constructor(root: ParentNode = document) {
     this.overlayEl = requireElement(root, '#class-select');
-    this.buttons = {
-      rogue: requireElement(root, '#class-select-rogue') as HTMLButtonElement,
-      ranger: requireElement(root, '#class-select-ranger') as HTMLButtonElement,
-      mage: requireElement(root, '#class-select-mage') as HTMLButtonElement,
-      knight: requireElement(root, '#class-select-knight') as HTMLButtonElement,
-      barbarian: requireElement(root, '#class-select-barbarian') as HTMLButtonElement,
-      lorekeeper: requireElement(root, '#class-select-lorekeeper') as HTMLButtonElement,
-    };
-    this.names = {
-      rogue: requireElement(root, '#class-rogue-name'),
-      ranger: requireElement(root, '#class-ranger-name'),
-      mage: requireElement(root, '#class-mage-name'),
-      knight: requireElement(root, '#class-knight-name'),
-      barbarian: requireElement(root, '#class-barbarian-name'),
-      lorekeeper: requireElement(root, '#class-lorekeeper-name'),
-    };
-    this.descs = {
-      rogue: requireElement(root, '#class-rogue-desc'),
-      ranger: requireElement(root, '#class-ranger-desc'),
-      mage: requireElement(root, '#class-mage-desc'),
-      knight: requireElement(root, '#class-knight-desc'),
-      barbarian: requireElement(root, '#class-barbarian-desc'),
-      lorekeeper: requireElement(root, '#class-lorekeeper-desc'),
-    };
-    this.stats = {
-      rogue: requireElement(root, '#class-rogue-stats'),
-      ranger: requireElement(root, '#class-ranger-stats'),
-      mage: requireElement(root, '#class-mage-stats'),
-      knight: requireElement(root, '#class-knight-stats'),
-      barbarian: requireElement(root, '#class-barbarian-stats'),
-      lorekeeper: requireElement(root, '#class-lorekeeper-stats'),
-    };
+    this.carouselEl = requireElement(root, '#class-carousel');
+    this.nameEl = requireElement(root, '#class-current-name');
+    this.descriptionEl = requireElement(root, '#class-current-desc');
+    this.positionEl = requireElement(root, '#class-carousel-position');
+    this.healthEl = requireElement(root, '#class-stat-health');
+    this.attackEl = requireElement(root, '#class-stat-attack');
+    this.defenceEl = requireElement(root, '#class-stat-defence');
+    this.evadeEl = requireElement(root, '#class-stat-evade');
+    this.previousButton = requireElement(
+      root,
+      '#class-previous',
+    ) as HTMLButtonElement;
+    this.nextButton = requireElement(root, '#class-next') as HTMLButtonElement;
+    this.selectButton = requireElement(
+      root,
+      '#class-select-current',
+    ) as HTMLButtonElement;
+
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
+    this.overlayEl.addEventListener('keydown', this.handleKeyDown);
+    this.carouselEl.addEventListener('pointerdown', this.handleSwipeStart);
+    this.carouselEl.addEventListener('pointerup', this.handleSwipeEnd);
+    this.carouselEl.addEventListener('pointercancel', this.cancelSwipe);
+    this.previousButton.addEventListener('click', this.showPrevious);
+    this.nextButton.addEventListener('click', this.showNext);
+    this.selectButton.addEventListener('click', this.selectCurrent);
   }
 
   onSelect(classId: PlayerClassId, handler: () => void): void {
-    this.detach(classId);
     this.handlers[classId] = handler;
-    this.buttons[classId].addEventListener('click', handler);
+  }
+
+  onChange(handler: (classId: PlayerClassId) => void): void {
+    this.changeHandler = handler;
+    const current = this.currentOption;
+    if (current) {
+      handler(current.id);
+    }
   }
 
   show(view: ClassSelectionSnapshot): void {
-    this.render(view);
+    this.classes = [...view.classes];
+    this.currentIndex = 0;
+    this.renderCurrent();
     this.overlayEl.hidden = false;
+    this.notifyChange();
   }
 
   hide(): void {
@@ -79,35 +94,114 @@ export class ClassSelectionView {
     return Boolean(this.overlayEl.hidden);
   }
 
+  get selectedClassId(): PlayerClassId | null {
+    return this.currentOption?.id ?? null;
+  }
+
   render(view: ClassSelectionSnapshot): void {
-    for (const option of view.classes) {
-      this.renderOption(option);
-    }
+    const selectedId = this.currentOption?.id;
+    this.classes = [...view.classes];
+    const selectedIndex = selectedId
+      ? this.classes.findIndex((option) => option.id === selectedId)
+      : -1;
+    this.currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    this.renderCurrent();
   }
 
   dispose(): void {
-    for (const id of PLAYER_CLASS_IDS) {
-      this.detach(id);
-    }
     this.overlayEl.removeEventListener('pointerdown', this.blockPointer);
+    this.overlayEl.removeEventListener('keydown', this.handleKeyDown);
+    this.carouselEl.removeEventListener('pointerdown', this.handleSwipeStart);
+    this.carouselEl.removeEventListener('pointerup', this.handleSwipeEnd);
+    this.carouselEl.removeEventListener('pointercancel', this.cancelSwipe);
+    this.previousButton.removeEventListener('click', this.showPrevious);
+    this.nextButton.removeEventListener('click', this.showNext);
+    this.selectButton.removeEventListener('click', this.selectCurrent);
+    this.changeHandler = null;
   }
 
-  private renderOption(option: ClassOptionView): void {
-    this.names[option.id].textContent = option.name;
-    this.descs[option.id].textContent = option.description;
-    this.stats[option.id].textContent = classStatLine(option);
-    this.buttons[option.id].disabled = false;
-    this.buttons[option.id].setAttribute('aria-label', classSelectAriaLabel(option));
+  private get currentOption(): ClassOptionView | undefined {
+    return this.classes[this.currentIndex];
   }
 
-  private detach(classId: PlayerClassId): void {
-    const handler = this.handlers[classId];
-    if (!handler) {
+  private renderCurrent(): void {
+    const option = this.currentOption;
+    if (!option) {
       return;
     }
-    this.buttons[classId].removeEventListener('click', handler);
-    delete this.handlers[classId];
+    this.nameEl.textContent = option.name;
+    this.descriptionEl.textContent = option.description;
+    this.positionEl.textContent = `${this.currentIndex + 1} / ${this.classes.length}`;
+    this.healthEl.textContent = String(option.maxHealth);
+    this.attackEl.textContent = String(option.attack);
+    this.defenceEl.textContent = String(option.defence);
+    this.evadeEl.textContent = String(option.evade);
+    this.selectButton.textContent = `BEGIN AS ${option.name.toUpperCase()}`;
+    this.selectButton.disabled = false;
+    this.selectButton.setAttribute('aria-label', classSelectAriaLabel(option));
   }
+
+  private step(delta: number): void {
+    if (this.classes.length === 0) {
+      return;
+    }
+    this.currentIndex =
+      (this.currentIndex + delta + this.classes.length) % this.classes.length;
+    this.renderCurrent();
+    this.notifyChange();
+  }
+
+  private notifyChange(): void {
+    const current = this.currentOption;
+    if (current) {
+      this.changeHandler?.(current.id);
+    }
+  }
+
+  private readonly showPrevious = (): void => {
+    this.step(-1);
+  };
+
+  private readonly showNext = (): void => {
+    this.step(1);
+  };
+
+  private readonly selectCurrent = (): void => {
+    const current = this.currentOption;
+    if (current) {
+      this.handlers[current.id]?.();
+    }
+  };
+
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this.step(-1);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.step(1);
+    }
+  };
+
+  private readonly handleSwipeStart = (event: PointerEvent): void => {
+    this.pointerStartX = event.clientX;
+  };
+
+  private readonly handleSwipeEnd = (event: PointerEvent): void => {
+    if (this.pointerStartX === null) {
+      return;
+    }
+    const delta = event.clientX - this.pointerStartX;
+    this.pointerStartX = null;
+    if (Math.abs(delta) < SWIPE_THRESHOLD_PX) {
+      return;
+    }
+    this.step(delta < 0 ? 1 : -1);
+  };
+
+  private readonly cancelSwipe = (): void => {
+    this.pointerStartX = null;
+  };
 
   private readonly blockPointer = (event: PointerEvent): void => {
     event.stopPropagation();

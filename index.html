@@ -96,14 +96,20 @@
                 class="shop-special-offer"
                 aria-label="Class equipment"
               >
-                <span class="shop-special-heading">
-                  <span id="shop-special-class" class="shop-special-class">RANGER ONLY</span>
-                  <span id="shop-special-cost" class="shop-offer-cost">6 G</span>
+                <span class="shop-special-copy">
+                  <span class="shop-special-heading">
+                    <span id="shop-special-class" class="shop-special-class">RANGER ONLY</span>
+                    <span id="shop-special-cost" class="shop-offer-cost">6 G</span>
+                  </span>
+                  <span id="shop-special-title" class="shop-special-title">Moonpiercer Bow</span>
+                  <span id="shop-special-desc" class="shop-special-desc">An ornate bow balanced for a sure release.</span>
+                  <span id="shop-special-stats" class="shop-special-stats">+2 ATK · +1 EVA</span>
+                  <span id="shop-special-reason" class="shop-special-reason"></span>
                 </span>
-                <span id="shop-special-title" class="shop-special-title">Moonpiercer Bow</span>
-                <span id="shop-special-desc" class="shop-special-desc">An ornate bow balanced for a sure release.</span>
-                <span id="shop-special-stats" class="shop-special-stats">+2 ATK · +1 EVA</span>
-                <span id="shop-special-reason" class="shop-special-reason"></span>
+                <span class="shop-special-preview-stage" aria-hidden="true">
+                  <canvas id="shop-special-preview"></canvas>
+                  <span class="shop-special-preview-loading">ITEM</span>
+                </span>
               </button>
               <p id="shop-inventory-title" class="shop-section-title">RUN UPGRADES</p>
               <div class="shop-offers-grid">
@@ -193,71 +199,48 @@
         id="class-select"
         class="class-select"
         role="dialog"
-        aria-labelledby="class-select-title"
+        aria-labelledby="class-current-name"
         aria-modal="true"
       >
         <div class="class-select-card">
-          <h2 id="class-select-title">CHOOSE YOUR CLASS</h2>
-          <button
-            type="button"
-            id="class-select-rogue"
-            class="class-option"
-            aria-label="Select Rogue"
-          >
-            <span id="class-rogue-name" class="class-option-name">Rogue</span>
-            <span id="class-rogue-desc" class="class-option-desc">Nimble survivor with the best chance to slip past threats.</span>
-            <span id="class-rogue-stats" class="class-option-stats">HP 18 · ATK 5 · DEF 1 · EVA 6</span>
-          </button>
-          <button
-            type="button"
-            id="class-select-ranger"
-            class="class-option"
-            aria-label="Select Ranger"
-          >
-            <span id="class-ranger-name" class="class-option-name">Ranger</span>
-            <span id="class-ranger-desc" class="class-option-desc">Flexible fighter with reliable early damage.</span>
-            <span id="class-ranger-stats" class="class-option-stats">HP 20 · ATK 6 · DEF 1 · EVA 3</span>
-          </button>
-          <button
-            type="button"
-            id="class-select-mage"
-            class="class-option"
-            aria-label="Select Mage"
-          >
-            <span id="class-mage-name" class="class-option-name">Mage</span>
-            <span id="class-mage-desc" class="class-option-desc">Fragile but devastating without needing magic abilities yet.</span>
-            <span id="class-mage-stats" class="class-option-stats">HP 16 · ATK 8 · DEF 0 · EVA 2</span>
-          </button>
-          <button
-            type="button"
-            id="class-select-knight"
-            class="class-option"
-            aria-label="Select Knight"
-          >
-            <span id="class-knight-name" class="class-option-name">Knight</span>
-            <span id="class-knight-desc" class="class-option-desc">Armoured and dependable under sustained damage.</span>
-            <span id="class-knight-stats" class="class-option-stats">HP 26 · ATK 4 · DEF 3 · EVA 0</span>
-          </button>
-          <button
-            type="button"
-            id="class-select-barbarian"
-            class="class-option"
-            aria-label="Select Barbarian"
-          >
-            <span id="class-barbarian-name" class="class-option-name">Barbarian</span>
-            <span id="class-barbarian-desc" class="class-option-desc">Huge health and damage, with no defensive tricks.</span>
-            <span id="class-barbarian-stats" class="class-option-stats">HP 28 · ATK 7 · DEF 0 · EVA 0</span>
-          </button>
-          <button
-            type="button"
-            id="class-select-lorekeeper"
-            class="class-option"
-            aria-label="Select Lorekeeper"
-          >
-            <span id="class-lorekeeper-name" class="class-option-name">Lorekeeper</span>
-            <span id="class-lorekeeper-desc" class="class-option-desc">A seasoned scholar balancing resilience, armour, and magic.</span>
-            <span id="class-lorekeeper-stats" class="class-option-stats">HP 22 · ATK 5 · DEF 2 · EVA 2</span>
-          </button>
+          <header class="class-select-header">
+            <p class="class-select-kicker">CHOOSE YOUR CLASS</p>
+            <h2 id="class-current-name" aria-live="polite">Rogue</h2>
+            <p id="class-carousel-position" class="class-carousel-position">1 / 6</p>
+          </header>
+          <div id="class-carousel" class="class-carousel">
+            <button
+              type="button"
+              id="class-previous"
+              class="class-carousel-control"
+              aria-label="Previous class"
+            >
+              <span aria-hidden="true">&#x2039;</span>
+            </button>
+            <div class="class-preview-stage">
+              <canvas id="class-model-preview" aria-hidden="true"></canvas>
+              <span class="class-preview-loading" aria-hidden="true">ADVENTURER</span>
+            </div>
+            <button
+              type="button"
+              id="class-next"
+              class="class-carousel-control"
+              aria-label="Next class"
+            >
+              <span aria-hidden="true">&#x203A;</span>
+            </button>
+          </div>
+          <section class="class-select-details" aria-live="polite">
+            <p id="class-current-desc" class="class-current-desc">Nimble survivor with the best chance to slip past threats.</p>
+            <div id="class-current-stats" class="class-current-stats" aria-label="Starting stats">
+              <span><small>HEALTH</small><strong id="class-stat-health">18</strong></span>
+              <span><small>ATTACK</small><strong id="class-stat-attack">5</strong></span>
+              <span><small>DEFENCE</small><strong id="class-stat-defence">1</strong></span>
+              <span><small>EVADE</small><strong id="class-stat-evade">6</strong></span>
+            </div>
+            <button type="button" id="class-select-current">BEGIN AS ROGUE</button>
+            <p class="class-swipe-hint">SWIPE OR USE THE ARROWS</p>
+          </section>
         </div>
       </div>
     </div>

@@ -27,6 +27,8 @@ import { InputController, type TilePick } from './InputController';
 import { type LevelUpChoice } from './levelUp';
 import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
 import { CameraController } from '../rendering/CameraController';
+import { ClassSelectionPreview } from '../rendering/ClassSelectionPreview';
+import { EquipmentShopPreview } from '../rendering/EquipmentShopPreview';
 import { MerchantShopPreview } from '../rendering/MerchantShopPreview';
 import { SceneManager } from '../rendering/SceneManager';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
@@ -72,8 +74,10 @@ export class Game {
   private readonly gameOver: GameOverView;
   private readonly shop: ShopOverlayView;
   private readonly merchantShopPreview: MerchantShopPreview;
+  private readonly equipmentShopPreview: EquipmentShopPreview;
   private readonly levelUp: LevelUpOverlayView;
   private readonly classSelect: ClassSelectionView;
+  private readonly classSelectionPreview: ClassSelectionPreview;
   private readonly resizeObserver: ResizeObserver;
 
   private animation: MoveAnimation | null = null;
@@ -107,8 +111,25 @@ export class Game {
       throw new Error('Missing required element: #shop-merchant-preview');
     }
     this.merchantShopPreview = new MerchantShopPreview(merchantPreviewCanvas);
+    const equipmentPreviewCanvas =
+      document.querySelector<HTMLCanvasElement>('#shop-special-preview');
+    if (!equipmentPreviewCanvas) {
+      throw new Error('Missing required element: #shop-special-preview');
+    }
+    this.equipmentShopPreview = new EquipmentShopPreview(
+      equipmentPreviewCanvas,
+    );
     this.levelUp = new LevelUpOverlayView();
+    const classPreviewCanvas =
+      document.querySelector<HTMLCanvasElement>('#class-model-preview');
+    if (!classPreviewCanvas) {
+      throw new Error('Missing required element: #class-model-preview');
+    }
+    this.classSelectionPreview = new ClassSelectionPreview(classPreviewCanvas);
     this.classSelect = new ClassSelectionView();
+    this.classSelect.onChange((classId) => {
+      this.classSelectionPreview.setClassId(classId);
+    });
     this.gameOver.onRestart(() => this.returnToClassSelection());
     for (const classId of PLAYER_CLASS_IDS) {
       this.classSelect.onSelect(classId, () => this.selectClass(classId));
@@ -127,6 +148,7 @@ export class Game {
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
 
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
+    this.classSelectionPreview.setVisible(true);
     this.classSelect.show(this.state.getClassSelectionView());
     this.setBoardInteractive(false);
     this.handleResize();
@@ -148,8 +170,10 @@ export class Game {
     this.gameOver.dispose();
     this.shop.dispose();
     this.merchantShopPreview.dispose();
+    this.equipmentShopPreview.dispose();
     this.levelUp.dispose();
     this.classSelect.dispose();
+    this.classSelectionPreview.dispose();
     this.input.dispose();
     this.scene.dispose();
   }
@@ -172,6 +196,10 @@ export class Game {
     this.scene.render(this.camera.camera);
     this.merchantShopPreview.update(dt);
     this.merchantShopPreview.render();
+    this.equipmentShopPreview.update(dt);
+    this.equipmentShopPreview.render();
+    this.classSelectionPreview.update(dt);
+    this.classSelectionPreview.render();
 
     requestAnimationFrame(this.loop);
   };
@@ -482,6 +510,7 @@ export class Game {
       this.setBoardInteractive(false);
       this.shop.hide();
       this.merchantShopPreview.setVisible(false);
+      this.equipmentShopPreview.setClassId(null);
       this.levelUp.hide();
       this.state.dismissOpenShop();
       this.state.dismissLevelUp();
@@ -509,6 +538,7 @@ export class Game {
   private selectClass(classId: PlayerClassId): void {
     this.state.selectClass(classId);
     this.classSelect.hide();
+    this.classSelectionPreview.setVisible(false);
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: true });
     this.setBoardInteractive(true);
     this.updateHud();
@@ -525,10 +555,12 @@ export class Game {
     this.scene.clearTransientFx();
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
+    this.equipmentShopPreview.setClassId(null);
     this.levelUp.hide();
     this.gameOver.hide();
     this.state.clearSelectedClass();
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
+    this.classSelectionPreview.setVisible(true);
     this.classSelect.show(this.state.getClassSelectionView());
     this.setBoardInteractive(false);
     this.updateHud();
@@ -600,6 +632,7 @@ export class Game {
 
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
+    this.equipmentShopPreview.setClassId(null);
     this.scene.beginMerchantLeaveFx(left.row, left.col);
     this.setBoardInteractive(true);
     this.updateHud();
@@ -635,6 +668,9 @@ export class Game {
       this.state.hasSpecialEquipment,
     );
     this.merchantShopPreview.setVisible(shopView !== null);
+    this.equipmentShopPreview.setClassId(
+      shopView?.specialOffer?.classId ?? null,
+    );
     if (shopView) {
       this.shop.render(shopView);
     }
