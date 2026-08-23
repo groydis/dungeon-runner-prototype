@@ -131,6 +131,7 @@ src/
     GameState.ts          Single-run aggregate and public rule boundary
     ShopSession.ts        Run-owned Merchant visit, prices, and special ownership
     presentationPhase.ts  Game.ts board-interactivity and overlay phase
+    turnResults.ts        Move, trap, turn, and combat-finish result contracts
     RunWorld.ts           Grid, recipes, entities, and board snapshots
     BoardSnapshot.ts      Immutable board/read models for rendering
     Grid.ts               Logical 3-wide sliding tile window
@@ -188,7 +189,7 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visit, upgrade price tracks, and one-time special-equipment ownership live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress.
+- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visit, upgrade price tracks, and one-time special-equipment ownership live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress. Move, trap, turn, and combat-finish result contracts live in `turnResults.ts` so presentation code can type those payloads without importing `GameState`. `GameState` still re-exports them.
 - **RunWorld** is private to GameState. It owns the mutable board: Grid, recipes, entity maps, tile materialisation, prepare/prune, lookups, alarm movement, world reset, and snapshot construction.
 - **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster. Enemy snapshots carry a definition-layer `EnemyRenderKey`, not an unconstrained string.
 - **Game.ts** owns overlay order, animation, and input-lock state through an explicit presentation phase. Only `idle` enables board highlights and raycast input; class selection, movement, trap, encounter, combat, drop FX, shop, level-up, and game-over all lock the board. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens. Restart and dispose bump a generation token so a stale class-preload cannot reopen the board.

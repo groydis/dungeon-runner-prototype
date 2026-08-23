@@ -1,7 +1,7 @@
 import { type CombatResult } from './combat';
 import { type EncounterEvent } from './encounters';
 import { type EncounterMonsterView } from './BoardSnapshot';
-import { type TrapResolution } from './GameState';
+import { type TrapResolution } from './turnResults';
 
 export interface MoveAnimation {
   fromCol: number;

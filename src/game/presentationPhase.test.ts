@@ -5,6 +5,7 @@ import {
   locksBoard,
 } from './presentationPhase';
 import gameSource from './Game.ts?raw';
+import phaseSource from './presentationPhase.ts?raw';
 
 describe('presentation phase helpers', () => {
   it('enables board interaction only while idle', () => {
@@ -31,5 +32,7 @@ describe('presentation phase helpers', () => {
     expect(gameSource).not.toMatch(/private boardLocked/);
     expect(gameSource).not.toMatch(/private animation:/);
     expect(gameSource).not.toMatch(/private combatPlayback/);
+    expect(phaseSource).toMatch(/from ['"]\.\/turnResults['"]/);
+    expect(phaseSource).not.toMatch(/from ['"]\.\/GameState['"]/);
   });
 });

@@ -7,7 +7,6 @@ import {
   type BoardSnapshot,
   type CollectibleSnapshot,
   type EncounterTarget,
-  type EnemyMoveResult,
   type MonsterSnapshot,
   type PickupResult,
   type PlayerSnapshot,
@@ -72,7 +71,12 @@ import {
   type ShopPurchaseResult,
   type ShopView,
 } from './shop';
-import { type TrapKind } from './Trap';
+import {
+  type CombatFinishResult,
+  type MoveResult,
+  type TrapResolution,
+  type TurnResolution,
+} from './turnResults';
 
 export type {
   BoardSnapshot,
@@ -87,34 +91,12 @@ export type {
   TrapSnapshot,
 } from './BoardSnapshot';
 
-export interface MoveResult {
-  fromCol: number;
-  toCol: number;
-  fromRow: number;
-  toRow: number;
-  destination: TileSnapshot;
-}
-
-export interface TrapResolution {
-  trapId: string;
-  kind: TrapKind;
-  enemyMove?: EnemyMoveResult;
-  message: string;
-}
-
-export interface TurnResolution {
-  pickup: PickupResult | null;
-  shop: ShopView | null;
-  trap: TrapResolution | null;
-  encounters: EncounterEvent[];
-}
-
-export interface CombatFinishResult {
-  drop: EnemyDropResult | null;
-  experienceGained: number;
-  levelsReached: number[];
-  levelUp: LevelUpView | null;
-}
+export type {
+  CombatFinishResult,
+  MoveResult,
+  TrapResolution,
+  TurnResolution,
+} from './turnResults';
 
 export interface HudSnapshot {
   className: string;
