@@ -92,6 +92,19 @@ class texture. The common editable source is
 | `sword_2handed_color.glb` | Active Barbarian Sharpened tier 2+ |
 | `wand.glb` | Active Mage Sharpened tier 1+ |
 
+## Collectibles
+
+Each potion target was exported from the matching `.gltf` and `.bin` under
+`KayKit Adventurers 2.0/Assets/gltf/`, embedding the referenced
+`druid_texture.png`. The editable source remains in the purchased KayKit
+library.
+
+| Target under `items/kaykit/` | Runtime status |
+|---|---|
+| `potion_small_red.glb` | Active pooled health pickup |
+| `potion_medium_red.glb` | Reserved future healing tier; not loaded |
+| `potion_large_red.glb` | Reserved future healing tier; not loaded |
+
 ## Deliberately not retained
 
 The runtime copies of `Engineer.glb`, `engineer_Wrench.glb`, `smokebomb.glb`,

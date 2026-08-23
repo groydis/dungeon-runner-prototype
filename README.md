@@ -12,6 +12,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 
 - Floor tiles use a rotated KayKit geometric-stone GLB, with a wood floor for Merchant tiles and an animated KayKit spike assembly for Alarm/Trip tiles. Pooled dark-box and rune meshes remain loading/failure fallbacks.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
+- Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium and large red variants are retained for future healing tiers but are not loaded.
 - Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
@@ -145,6 +146,7 @@ src/
     enemyAssets.ts        KayKit Skeleton enemy GLB URLs and per-model fits
     rigMediumAnimations.ts Shared Rig_Medium clip loader/cache
     environmentAssets.ts  KayKit dungeon-floor GLBs and deterministic variants
+    potionAssets.ts       Active and reserved KayKit health-potion GLBs
     reservedKaykitAssets.ts Lazy URLs for retained future characters/equipment
     CameraController.ts   Elevated follow camera
   styles/
@@ -169,6 +171,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. General, basic movement, melee, and skeleton clips share one cache. Ranger, Mage, Skeleton Mage, and Necromancer lazily add the ranged bundle. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
+- **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
 - **Dungeon floors** use self-contained KayKit GLBs over pooled box fallbacks. The large geometric stone tile is the normal floor and receives deterministic quarter-turn rotations to break up repetition without adding pooled models. Merchant tiles use the large wood floor, and Alarm/Trip tiles use a separately loaded spike assembly whose named spike node rises during the trigger effect. These choices remain presentation-only and do not affect generation or saved game state.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.

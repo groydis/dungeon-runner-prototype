@@ -81,6 +81,11 @@ import {
   type PlayerClipMap,
 } from './playerAssets';
 import {
+  ACTIVE_POTION_MODEL_SIZE,
+  fitPotionModel,
+  loadPotionTemplate,
+} from './potionAssets';
+import {
   NO_EQUIPMENT_UPGRADES,
   PLAYER_WEAPON_MOUNT_NAME,
   loadPlayerEquipmentTemplate,
@@ -400,6 +405,7 @@ export class SceneManager {
     this.buildRowPool();
     void this.installDungeonFloorModels();
     void this.installDungeonTrapModels();
+    void this.installPotionModels();
     const player = this.createPlayer();
     this.playerMesh = player.group;
     this.playerBody = player.body;
@@ -698,9 +704,8 @@ export class SceneManager {
     mesh.visible = true;
     mesh.scale.setScalar(0.15);
     mesh.position.y = baseY + 0.28;
-    const material = mesh.material as MeshStandardMaterial;
-    material.opacity = 0.2;
-    material.emissiveIntensity = 1.2;
+    this.setCollectibleOpacity(mesh, 0.2);
+    this.setCollectibleEmissive(mesh, 1.2);
     this.dropSpawnFx = {
       kind: drop.kind,
       mesh,
@@ -717,17 +722,18 @@ export class SceneManager {
     fx.mesh.visible = true;
     fx.mesh.scale.setScalar(0.15 + bounce * 0.95);
     fx.mesh.position.y = fx.baseY + (1 - bounce) * 0.28;
-    const material = fx.mesh.material as MeshStandardMaterial;
-    material.opacity = 0.2 + bounce * 0.8;
-    material.emissiveIntensity = 1.2 - bounce * 0.6;
+    this.setCollectibleOpacity(fx.mesh, 0.2 + bounce * 0.8);
+    this.setCollectibleEmissive(fx.mesh, 1.2 - bounce * 0.6);
   }
 
   endDropSpawnFx(): void {
     const fx = this.dropSpawnFx;
     if (fx) {
-      const material = fx.mesh.material as MeshStandardMaterial;
-      material.opacity = 1;
-      material.emissiveIntensity = fx.kind === 'gold' ? 0.55 : 0.4;
+      this.setCollectibleOpacity(fx.mesh, 1);
+      this.setCollectibleEmissive(
+        fx.mesh,
+        fx.kind === 'gold' ? 0.55 : 0.4,
+      );
       fx.mesh.scale.setScalar(1);
       fx.mesh.position.y = fx.baseY;
     }
@@ -1206,6 +1212,24 @@ export class SceneManager {
     }
   }
 
+  private async installPotionModels(): Promise<void> {
+    try {
+      const template = await loadPotionTemplate(ACTIVE_POTION_MODEL_SIZE);
+      for (const view of this.rowViews) {
+        for (const potion of view.potions) {
+          const model = template.clone(true);
+          cloneMeshMaterials(model);
+          fitPotionModel(model);
+          model.name = 'kaykitPotion-small-red';
+          potion.add(model);
+          (potion.material as MeshStandardMaterial).visible = false;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit potion model', error);
+    }
+  }
+
   private applyDungeonFloorVariant(
     view: RowView,
     col: number,
@@ -1339,8 +1363,40 @@ export class SceneManager {
     mesh.position.set(laneWorldX(col), baseY, 0);
     mesh.scale.setScalar(1);
     mesh.rotation.set(tiltX, 0, 0);
-    const material = mesh.material as MeshStandardMaterial;
-    material.opacity = 1;
+    this.setCollectibleOpacity(mesh, 1);
+  }
+
+  private setCollectibleOpacity(root: Object3D, opacity: number): void {
+    root.traverse((child) => {
+      if (!('isMesh' in child) || !child.isMesh) {
+        return;
+      }
+      const mesh = child as Mesh;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        material.transparent = opacity < 1 || material.transparent;
+        material.opacity = opacity;
+      }
+    });
+  }
+
+  private setCollectibleEmissive(root: Object3D, intensity: number): void {
+    root.traverse((child) => {
+      if (!('isMesh' in child) || !child.isMesh) {
+        return;
+      }
+      const mesh = child as Mesh;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        if (material instanceof MeshStandardMaterial) {
+          material.emissiveIntensity = intensity;
+        }
+      }
+    });
   }
 
   private updateCollectibleIdle(elapsedSec: number): void {
@@ -1376,25 +1432,27 @@ export class SceneManager {
     const remaining: CollectFx[] = [];
     for (const fx of this.collectFx) {
       const t = Math.min(1, (elapsedSec - fx.startedAt) / COLLECT_FX_SEC);
-      const material = fx.mesh.material as MeshStandardMaterial;
       if (fx.kind === 'gold') {
         fx.mesh.position.y = fx.baseY + t * 0.55;
         fx.mesh.scale.setScalar(1 + t * 0.45);
         fx.mesh.rotation.y += 0.18;
-        material.opacity = 1 - t;
+        this.setCollectibleOpacity(fx.mesh, 1 - t);
       } else {
         fx.mesh.position.y = fx.baseY + t * 0.28;
         fx.mesh.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.35);
-        material.emissiveIntensity = 0.4 + (1 - t) * 0.8;
-        material.opacity = 1 - t;
+        this.setCollectibleEmissive(fx.mesh, 0.4 + (1 - t) * 0.8);
+        this.setCollectibleOpacity(fx.mesh, 1 - t);
       }
       if (t < 1) {
         remaining.push(fx);
         continue;
       }
       fx.mesh.visible = false;
-      material.opacity = 1;
-      material.emissiveIntensity = fx.kind === 'gold' ? 0.55 : 0.4;
+      this.setCollectibleOpacity(fx.mesh, 1);
+      this.setCollectibleEmissive(
+        fx.mesh,
+        fx.kind === 'gold' ? 0.55 : 0.4,
+      );
       fx.mesh.scale.setScalar(1);
     }
     this.collectFx = remaining;
