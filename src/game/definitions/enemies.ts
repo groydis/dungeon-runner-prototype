@@ -3,7 +3,7 @@ import { deepFreeze, type DeepReadonly } from '../freeze';
 import { pickWeighted, type Rng } from '../random';
 
 export type EnemyType =
-  | 'caveRat'
+  | 'skeletonMinion'
   | 'cryptGuard'
   | 'boneBrute'
   | 'skeletonMage'
@@ -54,87 +54,87 @@ export interface EnemyDefinition {
 
 export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
 
-/** Testing-only Cave Rat attack used by `?fatal=1`. */
-export const FATAL_CAVE_RAT_ATTACK = 99;
+/** Testing-only Skeleton Minion attack used by `?fatal=1`. */
+export const FATAL_SKELETON_MINION_ATTACK = 99;
 
 export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>> =
   deepFreeze({
-  caveRat: {
-    type: 'caveRat',
-    name: 'Cave Rat',
-    startingStats: {
-      maxHealth: 8,
-      health: 8,
-      attack: 3,
-      defence: 0,
+    skeletonMinion: {
+      type: 'skeletonMinion',
+      name: 'Skeleton Minion',
+      startingStats: {
+        maxHealth: 8,
+        health: 8,
+        attack: 3,
+        defence: 0,
+      },
+      perception: 0,
+      experience: 1,
+      elite: false,
+      renderKey: 'skeletonMinion',
+      dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
-    perception: 0,
-    experience: 1,
-    elite: false,
-    renderKey: 'caveRat',
-    dropTable: DEFAULT_ENEMY_DROP_TABLE,
-  },
-  cryptGuard: {
-    type: 'cryptGuard',
-    name: 'Crypt Guard',
-    startingStats: {
-      maxHealth: 12,
-      health: 12,
-      attack: 4,
-      defence: 1,
+    cryptGuard: {
+      type: 'cryptGuard',
+      name: 'Crypt Guard',
+      startingStats: {
+        maxHealth: 12,
+        health: 12,
+        attack: 4,
+        defence: 1,
+      },
+      perception: 5,
+      experience: 2,
+      elite: false,
+      renderKey: 'cryptGuard',
+      dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
-    perception: 5,
-    experience: 2,
-    elite: false,
-    renderKey: 'cryptGuard',
-    dropTable: DEFAULT_ENEMY_DROP_TABLE,
-  },
-  boneBrute: {
-    type: 'boneBrute',
-    name: 'Bone Brute',
-    startingStats: {
-      maxHealth: 20,
-      health: 20,
-      attack: 6,
-      defence: 1,
+    boneBrute: {
+      type: 'boneBrute',
+      name: 'Bone Brute',
+      startingStats: {
+        maxHealth: 20,
+        health: 20,
+        attack: 6,
+        defence: 1,
+      },
+      perception: 10,
+      experience: 4,
+      elite: false,
+      renderKey: 'boneBrute',
+      dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
-    perception: 10,
-    experience: 4,
-    elite: false,
-    renderKey: 'boneBrute',
-    dropTable: DEFAULT_ENEMY_DROP_TABLE,
-  },
-  skeletonMage: {
-    type: 'skeletonMage',
-    name: 'Skeleton Mage',
-    startingStats: {
-      maxHealth: 15,
-      health: 15,
-      attack: 7,
-      defence: 0,
+    skeletonMage: {
+      type: 'skeletonMage',
+      name: 'Skeleton Mage',
+      startingStats: {
+        maxHealth: 15,
+        health: 15,
+        attack: 7,
+        defence: 0,
+      },
+      perception: 8,
+      experience: 4,
+      elite: false,
+      renderKey: 'skeletonMage',
+      dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
-    perception: 8,
-    experience: 4,
-    elite: false,
-    renderKey: 'skeletonMage',
-    dropTable: DEFAULT_ENEMY_DROP_TABLE,
-  },
-  necromancer: {
-    type: 'necromancer',
-    name: 'Necromancer',
-    startingStats: {
-      maxHealth: 34,
-      health: 34,
-      attack: 9,
-      defence: 2,
+    necromancer: {
+      type: 'necromancer',
+      name: 'Necromancer',
+      startingStats: {
+        maxHealth: 34,
+        health: 34,
+        attack: 9,
+        defence: 2,
+      },
+      perception: 15,
+      experience: 10,
+      elite: true,
+      renderKey: 'necromancer',
+      dropTable: ELITE_ENEMY_DROP_TABLE,
     },
-    perception: 15,
-    experience: 10,
-    elite: true,
-    renderKey: 'necromancer',
-    dropTable: ELITE_ENEMY_DROP_TABLE,
-  },
-});
+  });
 
 export function getEnemyDefinition(type: EnemyType): DeepReadonly<EnemyDefinition> {
   return ENEMY_DEFINITIONS[type];
@@ -160,7 +160,7 @@ export function createEnemyStats(type: EnemyType): CombatStats {
 }
 
 /**
- * Query-string testing helper. `?fatal=1` overrides Cave Rat attack only;
+ * Query-string testing helper. `?fatal=1` overrides Skeleton Minion attack only;
  * every other value still comes from the enemy definition.
  */
 export function enemyStatsFactoryFromSearch(search: string): EnemyStatsFactory {
@@ -171,10 +171,10 @@ export function enemyStatsFactoryFromSearch(search: string): EnemyStatsFactory {
 
   return (type) => {
     const stats = createEnemyStats(type);
-    if (fatal && type === 'caveRat') {
+    if (fatal && type === 'skeletonMinion') {
       return createCombatStats({
         ...stats,
-        attack: FATAL_CAVE_RAT_ATTACK,
+        attack: FATAL_SKELETON_MINION_ATTACK,
       });
     }
     return stats;

@@ -3,6 +3,7 @@ import {
   DROP_SPAWN_FX_SEC,
   ENCOUNTER_FX_SEC,
   ENEMY_ADVANCE_FX_SEC,
+  EVADE_FX_SEC,
   MOVE_DURATION_SEC,
   TILE_PITCH,
   TRAP_FX_SEC,
@@ -45,6 +46,7 @@ interface CombatPlayback {
   target: EncounterMonsterView;
   entryIndex: number;
   elapsed: number;
+  awaitingEnemyDeath: boolean;
 }
 
 interface TrapPlayback {
@@ -74,6 +76,7 @@ export class Game {
 
   private animation: MoveAnimation | null = null;
   private encounterFxElapsed: number | null = null;
+  private encounterFxDurationSec = ENCOUNTER_FX_SEC;
   private combatPrelude: Extract<EncounterEvent, { kind: 'combat' }> | null = null;
   private pendingEvents: EncounterEvent[] = [];
   private combatPlayback: CombatPlayback | null = null;
@@ -300,6 +303,7 @@ export class Game {
       this.state.applyEvade(event.monster, event.evadeChance);
       this.updateHud();
       this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
+      this.encounterFxDurationSec = EVADE_FX_SEC;
       this.encounterFxElapsed = 0;
       return;
     }
@@ -307,6 +311,7 @@ export class Game {
     this.combatPrelude = event;
     this.scene.playEnemyTaunt(event.monster);
     this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
+    this.encounterFxDurationSec = ENCOUNTER_FX_SEC;
     this.encounterFxElapsed = 0;
   }
 
@@ -317,6 +322,7 @@ export class Game {
       target: event.monster,
       entryIndex: 0,
       elapsed: 0,
+      awaitingEnemyDeath: false,
     };
     this.beginCurrentCombatHit();
   }
@@ -327,7 +333,7 @@ export class Game {
     }
 
     this.encounterFxElapsed += dt;
-    const t = Math.min(1, this.encounterFxElapsed / ENCOUNTER_FX_SEC);
+    const t = Math.min(1, this.encounterFxElapsed / this.encounterFxDurationSec);
     this.scene.updateEncounterFx(t);
 
     if (t < 1) {
@@ -357,6 +363,12 @@ export class Game {
     if (t < 1) {
       return;
     }
+    if (
+      this.combatPlayback.awaitingEnemyDeath &&
+      !this.scene.isEnemyDeathPresentationComplete(this.combatPlayback.target)
+    ) {
+      return;
+    }
 
     this.scene.endCombatHit();
     this.combatPlayback.entryIndex += 1;
@@ -384,6 +396,7 @@ export class Game {
 
     this.state.applyCombatLogEntry(entry, playback.target);
     this.updateHud();
+    playback.awaitingEnemyDeath = false;
     if (entry.attacker === 'player') {
       this.scene.playPlayerAttack();
     } else {
@@ -397,6 +410,7 @@ export class Game {
       }
     } else if (entry.targetHealthAfter <= 0) {
       this.scene.playEnemyDeath(playback.target);
+      playback.awaitingEnemyDeath = true;
     } else {
       this.scene.playEnemyHit(playback.target);
     }

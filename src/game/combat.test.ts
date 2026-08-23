@@ -8,19 +8,19 @@ import {
 } from './definitions/enemies';
 
 const player = createPlayerStats();
-const caveRat = createEnemyStats('caveRat');
+const skeletonMinion = createEnemyStats('skeletonMinion');
 
 describe('combat', () => {
-  it('deals existing Cave Rat damage values', () => {
-    expect(calculateDamage(player.attack, caveRat.defence)).toBe(5);
-    expect(calculateDamage(caveRat.attack, player.defence)).toBe(2);
-    expect(calculateSurpriseDamage(player.attack, caveRat.defence)).toBe(8);
+  it('deals existing Skeleton Minion damage values', () => {
+    expect(calculateDamage(player.attack, skeletonMinion.defence)).toBe(5);
+    expect(calculateDamage(skeletonMinion.attack, player.defence)).toBe(2);
+    expect(calculateSurpriseDamage(player.attack, skeletonMinion.defence)).toBe(8);
   });
 
-  it('resolves front-on Cave Rat combat with the existing hit sequence', () => {
-    const result = resolveAutomaticCombat(player, caveRat, 'frontOn', {
-      id: 'rat-1',
-      name: 'Cave Rat',
+  it('resolves front-on Skeleton Minion combat with the existing hit sequence', () => {
+    const result = resolveAutomaticCombat(player, skeletonMinion, 'frontOn', {
+      id: 'minion-1',
+      name: 'Skeleton Minion',
     });
 
     expect(result.winner).toBe('player');
@@ -38,9 +38,9 @@ describe('combat', () => {
   });
 
   it('gives Surprise Attack the existing 150% rounded opening hit', () => {
-    const result = resolveAutomaticCombat(player, caveRat, 'surprise', {
-      id: 'rat-1',
-      name: 'Cave Rat',
+    const result = resolveAutomaticCombat(player, skeletonMinion, 'surprise', {
+      id: 'minion-1',
+      name: 'Skeleton Minion',
     });
 
     expect(result.winner).toBe('player');
@@ -54,8 +54,8 @@ describe('combat', () => {
     });
   });
 
-  it('uses definition stats for the default Cave Rat', () => {
-    expect(caveRat).toEqual(ENEMY_DEFINITIONS.caveRat.startingStats);
+  it('uses definition stats for the default Skeleton Minion', () => {
+    expect(skeletonMinion).toEqual(ENEMY_DEFINITIONS.skeletonMinion.startingStats);
   });
 
   it('resolves Crypt Guard and Bone Brute with the existing damage formula', () => {
@@ -84,13 +84,13 @@ describe('combat', () => {
     expect(bruteFight.playerHealthAfter).toBe(0);
   });
 
-  it('lets injected fatal rat stats kill the player', () => {
-    const fatalRat = enemyStatsFactoryFromSearch('?fatal=1')('caveRat');
-    expect(fatalRat.attack).not.toBe(ENEMY_DEFINITIONS.caveRat.startingStats.attack);
-    expect(fatalRat.maxHealth).toBe(ENEMY_DEFINITIONS.caveRat.startingStats.maxHealth);
-    const result = resolveAutomaticCombat(player, fatalRat, 'frontOn', {
-      id: 'fatal-rat',
-      name: 'Cave Rat',
+  it('lets injected fatal minion stats kill the player', () => {
+    const fatalMinion = enemyStatsFactoryFromSearch('?fatal=1')('skeletonMinion');
+    expect(fatalMinion.attack).not.toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.attack);
+    expect(fatalMinion.maxHealth).toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth);
+    const result = resolveAutomaticCombat(player, fatalMinion, 'frontOn', {
+      id: 'fatal-minion',
+      name: 'Skeleton Minion',
     });
 
     expect(result.winner).toBe('monster');

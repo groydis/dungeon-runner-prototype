@@ -21,7 +21,7 @@ export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
   {
     minRow: ELITE_ENEMY_POOL_MIN_ROW,
     entries: [
-      { item: 'caveRat', weight: 25 },
+      { item: 'skeletonMinion', weight: 25 },
       { item: 'cryptGuard', weight: 30 },
       { item: 'boneBrute', weight: 22 },
       { item: 'skeletonMage', weight: 15 },
@@ -31,7 +31,7 @@ export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
   {
     minRow: LATE_ENEMY_POOL_MIN_ROW,
     entries: [
-      { item: 'caveRat', weight: 40 },
+      { item: 'skeletonMinion', weight: 40 },
       { item: 'cryptGuard', weight: 30 },
       { item: 'boneBrute', weight: 20 },
       { item: 'skeletonMage', weight: 10 },
@@ -40,14 +40,14 @@ export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
   {
     minRow: MID_ENEMY_POOL_MIN_ROW,
     entries: [
-      { item: 'caveRat', weight: 65 },
+      { item: 'skeletonMinion', weight: 65 },
       { item: 'cryptGuard', weight: 25 },
       { item: 'skeletonMage', weight: 10 },
     ],
   },
   {
     minRow: EARLY_ENEMY_POOL_MIN_ROW,
-    entries: [{ item: 'caveRat', weight: 100 }],
+    entries: [{ item: 'skeletonMinion', weight: 100 }],
   },
 ];
 

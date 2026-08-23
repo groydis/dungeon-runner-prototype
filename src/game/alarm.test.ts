@@ -12,12 +12,12 @@ const visible = gameplayVisibleRowRange(8);
 
 describe('alarm targeting', () => {
   it('ignores defeated, resolved, and out-of-window enemies', () => {
-    const resolved = createMonster('resolved', 'caveRat', 10, 1);
+    const resolved = createMonster('resolved', 'skeletonMinion', 10, 1);
     resolved.resolveEncounter();
-    const dead = createMonster('dead', 'caveRat', 10, 2);
+    const dead = createMonster('dead', 'skeletonMinion', 10, 2);
     dead.applyHealth(0);
-    const far = createMonster('far', 'caveRat', 30, 1);
-    const behind = createMonster('behind', 'caveRat', 6, 1);
+    const far = createMonster('far', 'skeletonMinion', 30, 1);
+    const behind = createMonster('behind', 'skeletonMinion', 6, 1);
 
     expect(
       selectClosestVisibleEnemy({ row: 8, col: 1 }, [resolved, dead, far, behind], visible),
@@ -35,14 +35,14 @@ describe('alarm targeting', () => {
 
   it('breaks ties by row distance, then column distance, then id', () => {
     const player = { row: 8, col: 1 };
-    const wider = createMonster('a-wide', 'caveRat', 10, 1);
-    const nearerRow = createMonster('z-side', 'caveRat', 9, 2);
+    const wider = createMonster('a-wide', 'skeletonMinion', 10, 1);
+    const nearerRow = createMonster('z-side', 'skeletonMinion', 9, 2);
     expect(
       selectClosestVisibleEnemy(player, [wider, nearerRow], visible)?.id,
     ).toBe('z-side');
 
-    const left = createMonster('z-left', 'caveRat', 10, 0);
-    const right = createMonster('a-right', 'caveRat', 10, 2);
+    const left = createMonster('z-left', 'skeletonMinion', 10, 0);
+    const right = createMonster('a-right', 'skeletonMinion', 10, 2);
     expect(selectClosestVisibleEnemy(player, [left, right], visible)?.id).toBe(
       'a-right',
     );

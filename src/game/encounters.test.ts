@@ -10,14 +10,14 @@ import {
 } from './encounters';
 import { createMonster } from './Monster';
 
-function rat(row: number, col: number) {
-  return createMonster('rat-1', 'caveRat', row, col);
+function minion(row: number, col: number) {
+  return createMonster('minion-1', 'skeletonMinion', row, col);
 }
 
 describe('encounters', () => {
   it('treats same-lane front and behind as front-on combat', () => {
-    const front = findAlignedMonsterEncounters({ row: 5, col: 1 }, [rat(6, 1)]);
-    const behind = findAlignedMonsterEncounters({ row: 5, col: 1 }, [rat(4, 1)]);
+    const front = findAlignedMonsterEncounters({ row: 5, col: 1 }, [minion(6, 1)]);
+    const behind = findAlignedMonsterEncounters({ row: 5, col: 1 }, [minion(4, 1)]);
 
     expect(front).toEqual([
       { kind: 'combat', approach: 'frontOn', monster: expect.objectContaining({ row: 6, col: 1 }) },
@@ -28,7 +28,7 @@ describe('encounters', () => {
   });
 
   it('uses the injected avoidance roll for adjacent same-row encounters', () => {
-    const monster = rat(5, 2);
+    const monster = minion(5, 2);
     const evade = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => true);
     const surprise = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => false);
 
@@ -37,10 +37,10 @@ describe('encounters', () => {
         kind: 'evade',
         monster: expect.objectContaining({
           id: monster.id,
-          name: 'Cave Rat',
+          name: 'Skeleton Minion',
           row: 5,
           col: 2,
-          renderKey: 'caveRat',
+          renderKey: 'skeletonMinion',
         }),
         evadeChance: 1,
       },
@@ -61,10 +61,10 @@ describe('encounters', () => {
 
   it('ignores diagonal positions', () => {
     const events = findAlignedMonsterEncounters({ row: 5, col: 1 }, [
-      rat(6, 0),
-      rat(6, 2),
-      rat(4, 0),
-      rat(4, 2),
+      minion(6, 0),
+      minion(6, 2),
+      minion(4, 0),
+      minion(4, 2),
     ]);
 
     expect(events).toEqual([]);
@@ -73,11 +73,11 @@ describe('encounters', () => {
 
 describe('evade chance', () => {
   it('uses each enemy’s Perception against player Evade', () => {
-    expect(ENEMY_DEFINITIONS.caveRat.perception).toBe(0);
+    expect(ENEMY_DEFINITIONS.skeletonMinion.perception).toBe(0);
     expect(ENEMY_DEFINITIONS.cryptGuard.perception).toBe(5);
     expect(ENEMY_DEFINITIONS.boneBrute.perception).toBe(10);
 
-    expect(evadeChance(PLAYER_BASE_EVADE, ENEMY_DEFINITIONS.caveRat.perception)).toBe(1);
+    expect(evadeChance(PLAYER_BASE_EVADE, ENEMY_DEFINITIONS.skeletonMinion.perception)).toBe(1);
     expect(evadeChance(PLAYER_BASE_EVADE, ENEMY_DEFINITIONS.cryptGuard.perception)).toBe(0);
     expect(evadeChance(PLAYER_BASE_EVADE, ENEMY_DEFINITIONS.boneBrute.perception)).toBe(0);
     expect(evadeChance(20, ENEMY_DEFINITIONS.cryptGuard.perception)).toBe(15);
@@ -88,7 +88,7 @@ describe('evade chance', () => {
     expect(evadeChance(0, 10)).toBe(0);
     expect(evadeChance(4, 10)).toBe(0);
     expect(evadeChance(90, 0)).toBe(85);
-    expect(evadeChance(85, ENEMY_DEFINITIONS.caveRat.perception)).toBe(85);
+    expect(evadeChance(85, ENEMY_DEFINITIONS.skeletonMinion.perception)).toBe(85);
   });
 
   it('rolls against the computed percent, not a flat 50/50', () => {
@@ -114,10 +114,10 @@ describe('evade chance', () => {
   });
 
   it('includes the chance in side-pass status text', () => {
-    const monster = rat(5, 2);
+    const monster = minion(5, 2);
     const [evade] = findAlignedMonsterEncounters({ row: 5, col: 1 }, [monster], () => true);
     expect(encounterStartText(evade!)).toBe(
-      'You slip past the Cave Rat. Evade chance: 1.',
+      'You slip past the Skeleton Minion. Evade chance: 1.',
     );
   });
 

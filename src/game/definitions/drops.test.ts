@@ -19,7 +19,7 @@ describe('enemy drop tables', () => {
     ).toBe(100);
 
     for (const type of [
-      'caveRat',
+      'skeletonMinion',
       'cryptGuard',
       'boneBrute',
       'skeletonMage',
@@ -39,8 +39,8 @@ describe('enemy drop tables', () => {
   });
 
   it('builds unique drop collectible ids from the enemy id', () => {
-    expect(enemyDropCollectibleId('gold', 'demo-cave-rat')).toBe(
-      'drop-gold-demo-cave-rat',
+    expect(enemyDropCollectibleId('gold', 'demo-skeleton-minion')).toBe(
+      'drop-gold-demo-skeleton-minion',
     );
     expect(enemyDropCollectibleId('potion', 'monster-11')).toBe(
       'drop-potion-monster-11',

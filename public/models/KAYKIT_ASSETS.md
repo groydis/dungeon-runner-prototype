@@ -29,7 +29,7 @@ but differ byte-for-byte from the pack's supplied GLBs.
 
 | Target under `public/models/` | Exact KayKit source lineage | Runtime status |
 |---|---|---|
-| `enemies/kaykit/Skeleton_Minion.glb` | `KayKit Skeletons 1.1/SOURCE/Skeleton_Minion.blend` and `characters/gltf/Skeleton_Minion.glb` | Active `caveRat` stand-in |
+| `enemies/kaykit/Skeleton_Minion.glb` | `KayKit Skeletons 1.1/SOURCE/Skeleton_Minion.blend` and `characters/gltf/Skeleton_Minion.glb` | Active `skeletonMinion` |
 | `enemies/kaykit/Skeleton_Rogue.glb` | `KayKit Skeletons 1.1/SOURCE/Skeleton_Rogue.blend` and `characters/gltf/Skeleton_Rogue.glb` | Active `cryptGuard` |
 | `enemies/kaykit/Skeleton_Warrior.glb` | `KayKit Skeletons 1.1/SOURCE/Skeleton_Warrior.blend` and `characters/gltf/Skeleton_Warrior.glb` | Active `boneBrute` |
 | `enemies/kaykit/Skeleton_Mage.glb` | `KayKit Skeletons 1.1/SOURCE/Skeleton_Mage.blend` and `characters/gltf/Skeleton_Mage.glb` | Active normal ranged enemy |

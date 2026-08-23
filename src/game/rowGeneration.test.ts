@@ -40,7 +40,7 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
   for (const lane of recipe) {
     if (lane.kind === 'monster') {
       if (row === DEMO_MONSTER_ROW) {
-        expect(lane.enemyType).toBe('caveRat');
+        expect(lane.enemyType).toBe('skeletonMinion');
       } else {
         expect(encounterPoolForRow(row).map((entry) => entry.item)).toContain(
           lane.enemyType,
@@ -67,7 +67,7 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
 }
 
 describe('row generation', () => {
-  it('keeps the safe opening empty and the demo rat on row 4 centre', () => {
+  it('keeps the safe opening empty and the demo minion on row 4 centre', () => {
     const rng = mulberry32(123);
     for (let row = START_ROW; row <= LAST_SAFE_ROW; row += 1) {
       expect(createRowRecipe(row, rng).every((lane) => lane.kind === 'empty')).toBe(true);
@@ -77,7 +77,7 @@ describe('row generation', () => {
     expect(demo[DEMO_MONSTER_COL]).toEqual({
       kind: 'monster',
       entityId: DEMO_MONSTER_ID,
-      enemyType: 'caveRat',
+      enemyType: 'skeletonMinion',
     });
     expect(demo.filter((lane) => lane.kind === 'empty')).toHaveLength(2);
   });

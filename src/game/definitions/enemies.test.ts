@@ -17,7 +17,7 @@ describe('enemy definitions', () => {
       experience: 2,
       elite: false,
       renderKey: 'cryptGuard',
-      dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
+      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
     });
     expect(ENEMY_DEFINITIONS.boneBrute).toEqual({
       type: 'boneBrute',
@@ -27,7 +27,7 @@ describe('enemy definitions', () => {
       experience: 4,
       elite: false,
       renderKey: 'boneBrute',
-      dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
+      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
     });
   });
 
@@ -46,15 +46,15 @@ describe('enemy definitions', () => {
     });
     expect(createMonster('elite', 'necromancer', 60, 1).elite).toBe(true);
     expect(ENEMY_DEFINITIONS.necromancer.dropTable).not.toBe(
-      ENEMY_DEFINITIONS.caveRat.dropTable,
+      ENEMY_DEFINITIONS.skeletonMinion.dropTable,
     );
   });
 
-  it('awards 1 / 2 / 4 XP on Cave Rat, Crypt Guard, and Bone Brute', () => {
-    expect(ENEMY_DEFINITIONS.caveRat.experience).toBe(1);
+  it('awards 1 / 2 / 4 XP on Skeleton Minion, Crypt Guard, and Bone Brute', () => {
+    expect(ENEMY_DEFINITIONS.skeletonMinion.experience).toBe(1);
     expect(ENEMY_DEFINITIONS.cryptGuard.experience).toBe(2);
     expect(ENEMY_DEFINITIONS.boneBrute.experience).toBe(4);
-    expect(createMonster('xp-rat', 'caveRat', 4, 1).experience).toBe(1);
+    expect(createMonster('xp-minion', 'skeletonMinion', 4, 1).experience).toBe(1);
     expect(createMonster('xp-guard', 'cryptGuard', 4, 1).experience).toBe(2);
     expect(createMonster('xp-brute', 'boneBrute', 4, 1).experience).toBe(4);
   });
@@ -79,7 +79,7 @@ describe('enemy definitions', () => {
     expect(fresh.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
     expect(fresh.perception).toBe(5);
     expect(fresh.experience).toBe(2);
-    expect(fresh.definition.dropTable).toEqual(ENEMY_DEFINITIONS.caveRat.dropTable);
+    expect(fresh.definition.dropTable).toEqual(ENEMY_DEFINITIONS.skeletonMinion.dropTable);
   });
 
   it('gives each monster an independent mutable stats clone', () => {
@@ -92,11 +92,11 @@ describe('enemy definitions', () => {
     expect(second.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
   });
 
-  it('applies ?fatal=1 only to Cave Rat', () => {
+  it('applies ?fatal=1 only to Skeleton Minion', () => {
     const factory = enemyStatsFactoryFromSearch('?fatal=1');
-    expect(factory('caveRat').attack).toBe(99);
-    expect(factory('caveRat').maxHealth).toBe(
-      ENEMY_DEFINITIONS.caveRat.startingStats.maxHealth,
+    expect(factory('skeletonMinion').attack).toBe(99);
+    expect(factory('skeletonMinion').maxHealth).toBe(
+      ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
     );
     expect(factory('cryptGuard')).toEqual(createEnemyStats('cryptGuard'));
     expect(factory('boneBrute')).toEqual(createEnemyStats('boneBrute'));

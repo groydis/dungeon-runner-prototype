@@ -53,7 +53,7 @@ export type LaneRecipe =
 export type RowRecipeFactory = (row: number, rng: Rng) => LaneRecipe[];
 
 /**
- * Rows 5–7 (after the demo rat, before traps). Must sum to 100.
+ * Rows 5–7 (after the demo minion, before traps). Must sum to 100.
  * empty 45 / monster 25 / gold 15 / potion 10 / monster+loot 5
  */
 export const EARLY_ROW_PATTERN_WEIGHTS = [
@@ -91,7 +91,7 @@ export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
   }
 
   if (row === DEMO_MONSTER_ROW) {
-    empty[DEMO_MONSTER_COL] = monsterLane(DEMO_MONSTER_ID, 'caveRat');
+    empty[DEMO_MONSTER_COL] = monsterLane(DEMO_MONSTER_ID, 'skeletonMinion');
     return empty;
   }
 

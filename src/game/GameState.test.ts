@@ -118,30 +118,30 @@ function walkTo(state: GameState, row: number, col: number): TurnResolution | nu
 }
 
 describe('enemy definitions', () => {
-  it('spawns the demo Cave Rat from the enemy definition', () => {
+  it('spawns the demo Skeleton Minion from the enemy definition', () => {
     const state = createState({
       createRng: () => mulberry32(1),
       rollAvoidance: () => true,
     });
 
     const monster = state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
-    const definition = ENEMY_DEFINITIONS.caveRat;
+    const definition = ENEMY_DEFINITIONS.skeletonMinion;
 
     expect(monster?.id).toBe(DEMO_MONSTER_ID);
-    expect(monster?.type).toBe('caveRat');
+    expect(monster?.type).toBe('skeletonMinion');
     expect(monster?.name).toBe(definition.name);
     expect(monster?.renderKey).toBe(definition.renderKey);
     expect(monster?.stats).toEqual(definition.startingStats);
-    expect(monster?.stats).toEqual(createEnemyStats('caveRat'));
+    expect(monster?.stats).toEqual(createEnemyStats('skeletonMinion'));
   });
 
-  it('does not need a separate Cave Rat stats factory for default spawning', () => {
+  it('does not need a separate Skeleton Minion stats factory for default spawning', () => {
     const state = createState();
     const monster = state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
-    expect(monster?.stats).toEqual(ENEMY_DEFINITIONS.caveRat.startingStats);
+    expect(monster?.stats).toEqual(ENEMY_DEFINITIONS.skeletonMinion.startingStats);
   });
 
-  it('applies the fatal query-string override on top of the Cave Rat definition', () => {
+  it('applies the fatal query-string override on top of the Skeleton Minion definition', () => {
     const state = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
       rollAvoidance: () => true,
@@ -152,14 +152,14 @@ describe('enemy definitions', () => {
     const combat = resolution.encounters.find((event) => event.kind === 'combat');
     expect(combat).toBeDefined();
     if (!combat || combat.kind !== 'combat') {
-      throw new Error('Expected front-on combat with the demo rat');
+      throw new Error('Expected front-on combat with the demo minion');
     }
 
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.attack).toBe(
       99,
     );
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.maxHealth).toBe(
-      ENEMY_DEFINITIONS.caveRat.startingStats.maxHealth,
+      ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
     );
 
     const result = state.createCombatResult(combat);
@@ -398,13 +398,13 @@ describe('alarm enemy movement', () => {
   it('advances one cardinal tile and reduces Manhattan distance', () => {
     const state = trapState({
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
-      12: [monsterLane('rat-12', 'caveRat'), emptyRow()[1], emptyRow()[2]],
+      12: [monsterLane('minion-12', 'skeletonMinion'), emptyRow()[1], emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     const resolution = state.resolveCompletedMove(1);
     const move = resolution.trap?.enemyMove;
     expect(move).toEqual({
-      enemyId: 'rat-12',
+      enemyId: 'minion-12',
       from: { row: 12, col: 0 },
       to: { row: 11, col: 0 },
     });
@@ -433,7 +433,7 @@ describe('alarm enemy movement', () => {
         emptyRow()[1],
         emptyRow()[2],
       ],
-      11: [monsterLane('side-rat', 'caveRat'), emptyRow()[1], emptyRow()[2]],
+      11: [monsterLane('side-minion', 'skeletonMinion'), emptyRow()[1], emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     const move = state.resolveCompletedMove(1).trap?.enemyMove;
@@ -450,15 +450,15 @@ describe('alarm enemy movement', () => {
         { kind: 'shop', entityId: 'shop-block' },
         emptyRow()[2],
       ],
-      11: [emptyRow()[0], monsterLane('blocked-rat', 'caveRat'), emptyRow()[2]],
-      13: [emptyRow()[0], monsterLane('far-rat', 'caveRat'), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('blocked-minion', 'skeletonMinion'), emptyRow()[2]],
+      13: [emptyRow()[0], monsterLane('far-minion', 'skeletonMinion'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     const resolution = state.resolveCompletedMove(1);
     expect(resolution.trap?.enemyMove).toBeUndefined();
     expect(resolution.trap?.message).toMatch(/cannot close in/);
-    expect(state.getMonsterAt(11, 1)?.id).toBe('blocked-rat');
-    expect(state.getMonsterAt(13, 1)?.id).toBe('far-rat');
+    expect(state.getMonsterAt(11, 1)?.id).toBe('blocked-minion');
+    expect(state.getMonsterAt(13, 1)?.id).toBe('far-minion');
     expect(state.getTile(10, 1)?.content.type).toBe('shop');
   });
 });
@@ -472,7 +472,7 @@ describe('alarm item consumption', () => {
         { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
         emptyRow()[2],
       ],
-      11: [emptyRow()[0], monsterLane('gold-eater', 'caveRat'), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('gold-eater', 'skeletonMinion'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     expect(state.getCollectibleAt(10, 1)?.kind).toBe('gold');
@@ -530,7 +530,7 @@ describe('alarm item consumption', () => {
         { kind: 'shop', entityId: 'merchant-safe' },
         emptyRow()[2],
       ],
-      11: [emptyRow()[0], monsterLane('shop-shy', 'caveRat'), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('shop-shy', 'skeletonMinion'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     const resolution = state.resolveCompletedMove(1);
@@ -545,7 +545,7 @@ describe('alarm encounters', () => {
   it('includes a trap-moved enemy in the same turn when it enters range', () => {
     const state = trapState({
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
-      10: [emptyRow()[0], monsterLane('closer', 'caveRat'), emptyRow()[2]],
+      10: [emptyRow()[0], monsterLane('closer', 'skeletonMinion'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     const resolution = state.resolveCompletedMove(1);
@@ -561,7 +561,7 @@ describe('alarm encounters', () => {
   it('keeps evade and Surprise Attack rules after an alarm pull', () => {
     const layout = {
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
-      9: [emptyRow()[0], emptyRow()[1], monsterLane('side-rat', 'caveRat')],
+      9: [emptyRow()[0], emptyRow()[1], monsterLane('side-minion', 'skeletonMinion')],
     };
     const evadeState = trapState(layout, () => true);
     walkTo(evadeState, 7, 1);
@@ -603,7 +603,7 @@ describe('alarm reset and pruning', () => {
         { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
         emptyRow()[2],
       ],
-      11: [emptyRow()[0], monsterLane('gold-eater', 'caveRat'), emptyRow()[2]],
+      11: [emptyRow()[0], monsterLane('gold-eater', 'skeletonMinion'), emptyRow()[2]],
     });
     walkTo(state, 7, 1);
     state.resolveCompletedMove(1);
@@ -632,7 +632,7 @@ function alwaysDrop(value: number): () => () => number {
   return () => () => value;
 }
 
-function fightDemoRat(state: GameState): TurnResolution {
+function fightDemoMinion(state: GameState): TurnResolution {
   walkTo(state, DEMO_MONSTER_ROW - 2, 1);
   const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
   playEncounters(state, resolution.encounters);
@@ -655,7 +655,7 @@ describe('enemy drops', () => {
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    fightDemoRat(state);
+    fightDemoMinion(state);
 
     expect(state.runOver).toBe(false);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
@@ -666,7 +666,7 @@ describe('enemy drops', () => {
       type: 'gold',
       id: drop?.id,
     });
-    expect(state.status).toBe('You defeated the Cave Rat. It drops 1 gold.');
+    expect(state.status).toBe('You defeated the Skeleton Minion. It drops 1 gold.');
     expect(state.gold).toBe(0);
 
     const pickup = state.resolveCompletedMove(DEMO_MONSTER_COL);
@@ -680,14 +680,14 @@ describe('enemy drops', () => {
       createDropRng: alwaysDrop(0.9),
       rollAvoidance: () => true,
     });
-    fightDemoRat(state);
+    fightDemoMinion(state);
     state.takeDamage(6);
     const beforeHeal = playerOf(state).stats.health;
 
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
       'potion',
     );
-    expect(state.status).toBe('You defeated the Cave Rat. It drops a potion.');
+    expect(state.status).toBe('You defeated the Skeleton Minion. It drops a potion.');
 
     const pickup = state.resolveCompletedMove(DEMO_MONSTER_COL);
     expect(pickup.pickup?.kind).toBe('potion');
@@ -700,12 +700,12 @@ describe('enemy drops', () => {
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
     });
-    fightDemoRat(state);
+    fightDemoMinion(state);
     expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content.type).toBe(
       'empty',
     );
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
-    expect(state.status).toBe('You defeated the Cave Rat.');
+    expect(state.status).toBe('You defeated the Skeleton Minion.');
   });
 
   it('does not create a drop on evade', () => {
@@ -745,7 +745,7 @@ describe('enemy drops', () => {
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    fightDemoRat(state);
+    fightDemoMinion(state);
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
       'gold',
     );
@@ -774,8 +774,8 @@ describe('enemy drops', () => {
     });
 
     expect(rowContent(goldState, 5, 12)).toEqual(rowContent(noneState, 5, 12));
-    fightDemoRat(goldState);
-    fightDemoRat(noneState);
+    fightDemoMinion(goldState);
+    fightDemoMinion(noneState);
     expect(rowContent(goldState, 5, 12)).toEqual(rowContent(noneState, 5, 12));
 
     walkTo(goldState, 20, 1);
@@ -788,12 +788,12 @@ describe('enemy drops', () => {
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    fightDemoRat(state);
+    fightDemoMinion(state);
     const firstId = state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id;
     expect(firstId).toBe(enemyDropCollectibleId('gold', DEMO_MONSTER_ID));
 
     state.reset();
-    fightDemoRat(state);
+    fightDemoMinion(state);
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
       firstId,
     );
@@ -803,7 +803,7 @@ describe('enemy drops', () => {
     const state = createState({
       createRowRecipe: scriptedRecipes({
         8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
-        10: [emptyRow()[0], monsterLane('closer', 'caveRat'), emptyRow()[2]],
+        10: [emptyRow()[0], monsterLane('closer', 'skeletonMinion'), emptyRow()[2]],
       }),
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
@@ -884,12 +884,12 @@ function finishCombatEvent(
   return state.finishCombat(result, event.monster);
 }
 
-function fightDemoRatPending(state: GameState): CombatFinishResult {
+function fightDemoMinionPending(state: GameState): CombatFinishResult {
   walkTo(state, DEMO_MONSTER_ROW - 2, 1);
   const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
   const combat = resolution.encounters.find((event) => event.kind === 'combat');
   if (!combat) {
-    throw new Error('Expected a front-on Cave Rat fight');
+    throw new Error('Expected a front-on Skeleton Minion fight');
   }
   const finish = finishCombatEvent(state, combat);
   if (!finish) {
@@ -917,7 +917,7 @@ describe('XP and level-up', () => {
     const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
     const combat = resolution.encounters.find((event) => event.kind === 'combat');
     if (!combat) {
-      throw new Error('Expected a front-on Cave Rat fight');
+      throw new Error('Expected a front-on Skeleton Minion fight');
     }
     const combatResult = state.createCombatResult(combat);
     for (const entry of combatResult.log) {
@@ -956,7 +956,7 @@ describe('XP and level-up', () => {
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    const death = fightDemoRatPending(deathState);
+    const death = fightDemoMinionPending(deathState);
     expect(deathState.runOver).toBe(true);
     expect(death.experienceGained).toBe(0);
     expect(death.levelUp).toBeNull();
@@ -970,7 +970,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     state.addExperience(2);
-    const finish = fightDemoRatPending(state);
+    const finish = fightDemoMinionPending(state);
     expect(finish.experienceGained).toBe(1);
     expect(finish.levelsReached).toEqual([2]);
     expect(finish.levelUp?.level).toBe(2);
@@ -998,7 +998,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     vitality.addExperience(2);
-    fightDemoRatPending(vitality);
+    fightDemoMinionPending(vitality);
     vitality.takeDamage(5);
     const healthBefore = playerOf(vitality).stats.health;
     expect(vitality.chooseLevelUp('vitality')).toMatchObject({
@@ -1013,7 +1013,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     sharpened.addExperience(2);
-    fightDemoRatPending(sharpened);
+    fightDemoMinionPending(sharpened);
     expect(sharpened.chooseLevelUp('sharpened')).toMatchObject({
       success: true,
       attackGained: 1,
@@ -1027,7 +1027,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     armoured.addExperience(2);
-    fightDemoRatPending(armoured);
+    fightDemoMinionPending(armoured);
     expect(armoured.chooseLevelUp('armoured')).toMatchObject({
       success: true,
       defenceGained: 1,
@@ -1039,7 +1039,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     evasive.addExperience(2);
-    fightDemoRatPending(evasive);
+    fightDemoMinionPending(evasive);
     expect(evasive.chooseLevelUp('evasive')).toMatchObject({
       success: true,
       evadeGained: 5,
@@ -1055,7 +1055,7 @@ describe('XP and level-up', () => {
     partial.increaseEvade(13);
     expect(playerOf(partial).evade).toBe(16);
     partial.addExperience(2);
-    fightDemoRatPending(partial);
+    fightDemoMinionPending(partial);
     expect(partial.getLevelUpView()?.choices.find((choice) => choice.id === 'evasive')?.available).toBe(
       true,
     );
@@ -1072,7 +1072,7 @@ describe('XP and level-up', () => {
     atCap.increaseEvade(19);
     expect(playerOf(atCap).evade).toBe(PLAYER_EVADE_MAX);
     atCap.addExperience(2);
-    fightDemoRatPending(atCap);
+    fightDemoMinionPending(atCap);
     const view = atCap.getLevelUpView();
     expect(view?.choices.find((choice) => choice.id === 'evasive')).toMatchObject({
       available: false,
@@ -1105,9 +1105,9 @@ describe('XP and level-up', () => {
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
       enemyExperience: (type) =>
-        type === 'caveRat' ? 12 : ENEMY_DEFINITIONS[type].experience,
+        type === 'skeletonMinion' ? 12 : ENEMY_DEFINITIONS[type].experience,
     });
-    const finish = fightDemoRatPending(state);
+    const finish = fightDemoMinionPending(state);
     expect(finish.experienceGained).toBe(12);
     expect(finish.levelsReached).toEqual([2, 3, 4]);
     expect(finish.levelUp?.level).toBe(2);
@@ -1125,7 +1125,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     state.addExperience(2);
-    const finish = fightDemoRatPending(state);
+    const finish = fightDemoMinionPending(state);
     expect(finish.drop?.kind).toBe('gold');
     expect(finish.experienceGained).toBe(1);
     expect(finish.levelsReached).toEqual([2]);
@@ -1146,7 +1146,7 @@ describe('XP and level-up', () => {
       rollAvoidance: () => true,
     });
     state.addExperience(2);
-    fightDemoRatPending(state);
+    fightDemoMinionPending(state);
     state.chooseLevelUp('sharpened');
     expect(playerOf(state).level).toBe(2);
     expect(playerOf(state).stats.attack).toBe(
@@ -1184,7 +1184,7 @@ describe('XP and level-up', () => {
     state.increaseDefence(PLAYER_DEFENCE_CAP);
     state.increaseEvade(PLAYER_EVADE_MAX);
     state.addExperience(2);
-    fightDemoRatPending(state);
+    fightDemoMinionPending(state);
 
     const view = state.getLevelUpView();
     expect(view?.choices.every((choice) => !choice.available && choice.reason === 'capped')).toBe(
@@ -1278,8 +1278,8 @@ describe('player class selection', () => {
 
     expect(rowWindow(selected)).toEqual(rowWindow(injected));
 
-    const injectedDrop = fightDemoRatPending(injected);
-    const selectedDrop = fightDemoRatPending(selected);
+    const injectedDrop = fightDemoMinionPending(injected);
+    const selectedDrop = fightDemoMinionPending(selected);
     expect(selectedDrop.drop).toEqual(injectedDrop.drop);
 
     const injectedEvade = new GameState({ playerClass: 'ranger', ...rngOptions });
@@ -1318,7 +1318,7 @@ describe('player class selection', () => {
     });
     state.addGold(10);
     state.addExperience(2);
-    fightDemoRatPending(state);
+    fightDemoMinionPending(state);
     expect(state.levelUpOpen).toBe(true);
     expect(playerOf(state).gold).toBe(10);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
@@ -1343,7 +1343,7 @@ describe('player class selection', () => {
     expect(state.shopOpen).toBe(false);
     expect(state.distance).toBe(0);
     expect(playerOf(state).row).toBe(0);
-    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe('caveRat');
+    expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe('skeletonMinion');
     expect(state.getHudSnapshot()).toMatchObject({
       className: knight.name,
       gold: 0,
@@ -1396,7 +1396,7 @@ describe('board snapshots and no-class APIs', () => {
     const snapshot = state.getBoardSnapshot();
     const tile = state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
     expect(tile?.content.type).toBe('monster');
-    expect(tile?.monster?.renderKey).toBe('caveRat');
+    expect(tile?.monster?.renderKey).toBe('skeletonMinion');
 
     expect(() => {
       (snapshot.rows as unknown as { row: number }[]).push({ row: 99 });
@@ -1443,8 +1443,8 @@ describe('board snapshots and no-class APIs', () => {
     expect(rowWindow(snapshotted)).toEqual(before.rows);
     expect(rowWindow(snapshotted)).toEqual(rowWindow(untouched));
 
-    expect(fightDemoRatPending(snapshotted).drop).toEqual(
-      fightDemoRatPending(untouched).drop,
+    expect(fightDemoMinionPending(snapshotted).drop).toEqual(
+      fightDemoMinionPending(untouched).drop,
     );
   });
 
@@ -1452,7 +1452,7 @@ describe('board snapshots and no-class APIs', () => {
     const state = createState({
       createRowRecipe: scriptedRecipes({
         5: [
-          monsterLane('rat-5', 'caveRat'),
+          monsterLane('minion-5', 'skeletonMinion'),
           monsterLane('guard-5', 'cryptGuard'),
           { kind: 'gold', entityId: 'gold-5' },
         ],
@@ -1471,9 +1471,9 @@ describe('board snapshots and no-class APIs', () => {
     const snapshot = state.getBoardSnapshot();
 
     expect(tileAt(snapshot, 5, 0)?.monster).toMatchObject({
-      id: 'rat-5',
-      type: 'caveRat',
-      renderKey: 'caveRat',
+      id: 'minion-5',
+      type: 'skeletonMinion',
+      renderKey: 'skeletonMinion',
     });
     expect(tileAt(snapshot, 5, 1)?.monster).toMatchObject({
       type: 'cryptGuard',
@@ -1507,7 +1507,7 @@ describe('board snapshots and no-class APIs', () => {
     expect(state.getBoardSnapshot().playerRenderKey).toBe('mage');
     expect(playerOf(state).row).toBe(0);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.type).toBe(
-      'caveRat',
+      'skeletonMinion',
     );
     expect(state.getCollectibleAt(5, 0)).toBeUndefined();
     expect(state.getTrapAt(8, 1)).toBeUndefined();
@@ -1546,9 +1546,9 @@ describe('immutable encounter and player boundaries', () => {
     const [event] = state.resolveCompletedMove(0).encounters;
     expect(event?.monster).toMatchObject({
       id: DEMO_MONSTER_ID,
-      type: 'caveRat',
-      name: 'Cave Rat',
-      renderKey: 'caveRat',
+      type: 'skeletonMinion',
+      name: 'Skeleton Minion',
+      renderKey: 'skeletonMinion',
     });
     expect(event?.monster).not.toHaveProperty('takeDamage');
     expect(event?.monster).not.toHaveProperty('applyHealth');
@@ -1573,12 +1573,12 @@ describe('immutable encounter and player boundaries', () => {
       .resolveCompletedMove(DEMO_MONSTER_COL)
       .encounters.find((event) => event.kind === 'combat');
     if (!combat || combat.kind !== 'combat') {
-      throw new Error('Expected a front-on Cave Rat fight');
+      throw new Error('Expected a front-on Skeleton Minion fight');
     }
     const result = state.createCombatResult(combat);
     const monsterHit = result.log.find((entry) => entry.target === 'monster');
     if (!monsterHit) {
-      throw new Error('Expected a player hit on the Cave Rat');
+      throw new Error('Expected a player hit on the Skeleton Minion');
     }
     state.applyCombatLogEntry(monsterHit, combat.monster);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.health).toBe(
@@ -1591,10 +1591,10 @@ describe('immutable encounter and player boundaries', () => {
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
-    expect(() => state.applyEvade({ id: 'missing-rat' })).toThrow(
-      'Unknown encounter target: missing-rat',
+    expect(() => state.applyEvade({ id: 'missing-minion' })).toThrow(
+      'Unknown encounter target: missing-minion',
     );
-    const finish = fightDemoRatPending(state);
+    const finish = fightDemoMinionPending(state);
     expect(finish.drop?.kind).toBe('gold');
     expect(playerOf(state).experience).toBe(1);
 
@@ -1624,8 +1624,8 @@ describe('immutable encounter and player boundaries', () => {
       createRowRecipe: scriptedRecipes({
         4: [
           emptyRow()[0],
-          monsterLane(DEMO_MONSTER_ID, 'caveRat'),
-          monsterLane('right-rat', 'caveRat'),
+          monsterLane(DEMO_MONSTER_ID, 'skeletonMinion'),
+          monsterLane('right-minion', 'skeletonMinion'),
         ],
       }),
       rollAvoidance: () => true,
@@ -1636,7 +1636,7 @@ describe('immutable encounter and player boundaries', () => {
     expect(evade?.monster.id).toBe(DEMO_MONSTER_ID);
     state.applyEvade(evade!.monster, evade?.evadeChance);
     expect(state.getMonsterAt(4, 1)).toBeUndefined();
-    expect(state.getMonsterAt(4, 2)?.id).toBe('right-rat');
+    expect(state.getMonsterAt(4, 2)?.id).toBe('right-minion');
   });
 
   it('returns a frozen player snapshot that is null before class selection', () => {
@@ -1689,13 +1689,13 @@ describe('immutable encounter and player boundaries', () => {
       .resolveCompletedMove(DEMO_MONSTER_COL)
       .encounters.find((event) => event.kind === 'combat');
     if (!combat || combat.kind !== 'combat') {
-      throw new Error('Expected a front-on Cave Rat fight');
+      throw new Error('Expected a front-on Skeleton Minion fight');
     }
     const result = state.createCombatResult(combat);
     const healthBefore = playerOf(state).stats.health;
 
-    expect(() => state.finishCombat(result, { id: 'other-rat' })).toThrow(
-      `Combat result target mismatch: expected ${result.monsterId}, got other-rat`,
+    expect(() => state.finishCombat(result, { id: 'other-minion' })).toThrow(
+      `Combat result target mismatch: expected ${result.monsterId}, got other-minion`,
     );
     expect(playerOf(state).stats.health).toBe(healthBefore);
     expect(playerOf(state).experience).toBe(0);
@@ -1706,14 +1706,14 @@ describe('immutable encounter and player boundaries', () => {
 
     const monsterHit = result.log.find((entry) => entry.target === 'monster');
     if (!monsterHit) {
-      throw new Error('Expected a player hit on the Cave Rat');
+      throw new Error('Expected a player hit on the Skeleton Minion');
     }
-    expect(() => state.applyCombatLogEntry(monsterHit, { id: 'other-rat' })).toThrow(
-      `Active combat target mismatch: expected ${DEMO_MONSTER_ID}, got other-rat`,
+    expect(() => state.applyCombatLogEntry(monsterHit, { id: 'other-minion' })).toThrow(
+      `Active combat target mismatch: expected ${DEMO_MONSTER_ID}, got other-minion`,
     );
     expect(
       state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.health,
-    ).toBe(ENEMY_DEFINITIONS.caveRat.startingStats.health);
+    ).toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.health);
   });
 
   it('allows only one active combat session at a time', () => {
@@ -1722,12 +1722,12 @@ describe('immutable encounter and player boundaries', () => {
       createRowRecipe: scriptedRecipes({
         4: [
           emptyRow()[0],
-          monsterLane(DEMO_MONSTER_ID, 'caveRat'),
+          monsterLane(DEMO_MONSTER_ID, 'skeletonMinion'),
           emptyRow()[2],
         ],
         5: [
           emptyRow()[0],
-          monsterLane('second-rat', 'caveRat'),
+          monsterLane('second-minion', 'skeletonMinion'),
           emptyRow()[2],
         ],
       }),
@@ -1738,19 +1738,19 @@ describe('immutable encounter and player boundaries', () => {
       .resolveCompletedMove(DEMO_MONSTER_COL)
       .encounters.find((event) => event.kind === 'combat');
     if (!firstCombat || firstCombat.kind !== 'combat') {
-      throw new Error('Expected a front-on Cave Rat fight');
+      throw new Error('Expected a front-on Skeleton Minion fight');
     }
     const first = state.createCombatResult(firstCombat);
     const secondCombat: EncounterEvent = {
       kind: 'combat',
       approach: 'frontOn',
       monster: {
-        id: 'second-rat',
-        type: 'caveRat',
-        name: 'Cave Rat',
+        id: 'second-minion',
+        type: 'skeletonMinion',
+        name: 'Skeleton Minion',
         row: 5,
         col: 1,
-        renderKey: 'caveRat',
+        renderKey: 'skeletonMinion',
       },
     };
 
@@ -1763,7 +1763,7 @@ describe('immutable encounter and player boundaries', () => {
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.id).toBe(
       DEMO_MONSTER_ID,
     );
-    expect(state.getMonsterAt(5, 1)?.id).toBe('second-rat');
+    expect(state.getMonsterAt(5, 1)?.id).toBe('second-minion');
     expect(playerOf(state).experience).toBe(0);
 
     for (const entry of first.log) {
@@ -1772,7 +1772,7 @@ describe('immutable encounter and player boundaries', () => {
     const finish = state.finishCombat(first, firstCombat.monster);
     expect(finish.experienceGained).toBe(1);
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)).toBeUndefined();
-    expect(state.getMonsterAt(5, 1)?.id).toBe('second-rat');
+    expect(state.getMonsterAt(5, 1)?.id).toBe('second-minion');
     expect(playerOf(state).experience).toBe(1);
   });
 });

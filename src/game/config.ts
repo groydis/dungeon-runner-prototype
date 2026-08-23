@@ -10,7 +10,9 @@ export const TILE_PITCH = TILE_SIZE + TILE_GAP;
 
 export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
+export const EVADE_FX_SEC = 0.7;
 export const COMBAT_HIT_SEC = 0.3;
+export const ENEMY_DEATH_FADE_SEC = 0.28;
 export const COLLECT_FX_SEC = 0.38;
 export const DROP_SPAWN_FX_SEC = 0.32;
 export const TRAP_FX_SEC = 0.34;
@@ -38,10 +40,10 @@ export const PLAYER_EVADE_MAX = 20;
 export const SHOP_ROW_INTERVAL = 14;
 export const MERCHANT_LEAVE_FX_SEC = 0.36;
 
-/** Demo Cave Rat after the safe opening, centre lane, for front-on / side-pass tests. */
+/** Demo Skeleton Minion after the safe opening, centre lane, for front-on / side-pass tests. */
 export const DEMO_MONSTER_ROW = 4;
 export const DEMO_MONSTER_COL = 1;
-export const DEMO_MONSTER_ID = 'demo-cave-rat';
+export const DEMO_MONSTER_ID = 'demo-skeleton-minion';
 
 /** Alarm Traps never appear before this row. Rows 5–7 keep the early weights. */
 export const TRAP_START_ROW = 8;

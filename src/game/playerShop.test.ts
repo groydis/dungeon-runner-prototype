@@ -384,7 +384,7 @@ describe('GameState shop flow', () => {
     const resolution = state.resolveCompletedMove(DEMO_MONSTER_COL);
     const combat = resolution.encounters.find((event) => event.kind === 'combat');
     if (!combat) {
-      throw new Error('Expected a front-on Cave Rat fight');
+      throw new Error('Expected a front-on Skeleton Minion fight');
     }
     const result = state.createCombatResult(combat);
     for (const entry of result.log) {

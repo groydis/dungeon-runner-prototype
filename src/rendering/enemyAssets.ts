@@ -9,7 +9,7 @@ import {
 export type EnemyRenderKey = EnemyType;
 
 export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
-  'caveRat',
+  'skeletonMinion',
   'cryptGuard',
   'boneBrute',
   'skeletonMage',
@@ -17,7 +17,7 @@ export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
 ];
 
 export const ENEMY_MODEL_URLS: Record<EnemyRenderKey, string> = {
-  caveRat: '/models/enemies/kaykit/Skeleton_Minion.glb',
+  skeletonMinion: '/models/enemies/kaykit/Skeleton_Minion.glb',
   cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
   boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
   skeletonMage: '/models/enemies/kaykit/Skeleton_Mage.glb',
@@ -43,7 +43,7 @@ export const ENEMY_ATTACK_CLIPS: Record<
   EnemyRenderKey,
   readonly EnemyAttackClipId[]
 > = {
-  caveRat: ['attackUnarmed', 'attackUnarmedKick'],
+  skeletonMinion: ['attackUnarmed', 'attackUnarmedKick'],
   cryptGuard: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
   boneBrute: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
   skeletonMage: ['magicShoot', 'magicSpellcasting'],
@@ -58,7 +58,7 @@ export interface EnemyModelFit {
 
 /** Per-model presentation. SceneManager must not hard-code these. */
 export const ENEMY_MODEL_FITS: Record<EnemyRenderKey, EnemyModelFit> = {
-  caveRat: { height: 0.78, wrapperY: 0.46, yaw: 0 },
+  skeletonMinion: { height: 0.78, wrapperY: 0.46, yaw: 0 },
   cryptGuard: { height: 0.96, wrapperY: 0.58, yaw: 0 },
   boneBrute: { height: 1.08, wrapperY: 0.52, yaw: 0 },
   skeletonMage: { height: 0.96, wrapperY: 0.58, yaw: 0 },

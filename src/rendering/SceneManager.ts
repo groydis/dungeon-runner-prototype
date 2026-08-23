@@ -32,6 +32,7 @@ import {
   COLLECT_FX_SEC,
   COMBAT_HIT_SEC,
   ENCOUNTER_FX_SEC,
+  ENEMY_DEATH_FADE_SEC,
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
@@ -118,6 +119,7 @@ interface EnemySlot {
   loadToken: number;
   occupantId: string | null;
   dying: boolean;
+  deathFadeStartedAt: number | null;
   attackSequence: number;
 }
 
@@ -140,7 +142,10 @@ interface EncounterFxView {
   monsterMesh: Group;
   monsterBaseX: number;
   monsterBaseY: number;
+  monsterBaseZ: number;
+  monsterBaseRotationY: number;
   playerBaseX: number;
+  playerBaseRotationY: number;
 }
 
 interface CombatHitFx {
@@ -149,7 +154,9 @@ interface CombatHitFx {
   monsterMesh: Group;
   monsterBaseX: number;
   monsterBaseY: number;
+  monsterBaseRotationY: number;
   playerBaseX: number;
+  playerBaseRotationY: number;
 }
 
 interface CollectFx {
@@ -193,6 +200,7 @@ interface ProjectileFx {
 
 const TRAP_SPIKE_RETRACTION = 1.35;
 const TRAP_SPIKE_IDLE_EXTENSION = 0.22;
+const COMBAT_FLASH_RED = 0xff5a4a;
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -219,7 +227,7 @@ export class SceneManager {
   private readonly floorMaterialA: MeshStandardMaterial;
   private readonly floorMaterialB: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
-  private readonly caveRatMaterial: MeshStandardMaterial;
+  private readonly skeletonMinionMaterial: MeshStandardMaterial;
   private readonly cryptGuardMaterial: MeshStandardMaterial;
   private readonly boneBruteMaterial: MeshStandardMaterial;
   private readonly skeletonMageMaterial: MeshStandardMaterial;
@@ -288,7 +296,7 @@ export class SceneManager {
       roughness: 0.62,
       metalness: 0.08,
     });
-    this.caveRatMaterial = new MeshStandardMaterial({
+    this.skeletonMinionMaterial = new MeshStandardMaterial({
       color: 0xc4372e,
       roughness: 0.45,
       metalness: 0.12,
@@ -577,18 +585,30 @@ export class SceneManager {
     this.playEnemyOneShot(slot, slot.clips.skeletonTaunt, 'taunt');
   }
 
-  playEnemyDeath(target: { id: string; row: number; col: number; renderKey: string }): void {
-    const slot = this.findEnemySlot(target.row, target.col, target.renderKey, target.id);
+  playEnemyDeath(target: {
+    id: string;
+    row: number;
+    col: number;
+    renderKey: string;
+  }): void {
+    const slot = this.findEnemySlot(
+      target.row,
+      target.col,
+      target.renderKey,
+      target.id,
+    );
     if (!slot) {
       return;
     }
+    const clip = slot.clips.skeletonDeath ?? slot.clips.death;
     slot.dying = true;
+    slot.deathFadeStartedAt = null;
     slot.group.visible = true;
-    this.playEnemyOneShot(
-      slot,
-      slot.clips.skeletonDeath ?? slot.clips.death,
-      'death',
-    );
+    this.playEnemyOneShot(slot, clip, 'death');
+  }
+
+  isEnemyDeathPresentationComplete(target: { id: string }): boolean {
+    return !this.findEnemySlotById(target.id)?.dying;
   }
 
   /** Initial bind of the recycled row pool to the current logical window. */
@@ -664,6 +684,7 @@ export class SceneManager {
     this.clock = elapsedSec;
     this.playerMixer?.update(dt);
     this.updateEnemyMixers(dt);
+    this.updateEnemyDeathFades(elapsedSec);
     const pulse = 0.22 + 0.18 * Math.sin(elapsedSec * 3.4);
     this.highlightMaterial.emissiveIntensity = pulse;
     this.updateCollectibleIdle(elapsedSec);
@@ -856,6 +877,7 @@ export class SceneManager {
   /** Visual-only: show the resolved monster again so the outcome can play. */
   beginEncounterFx(events: EncounterEvent[], playerCol: number): void {
     this.encounterFx = [];
+    const playerBaseRotationY = this.playerMesh.rotation.y;
     for (const event of events) {
       const mesh = this.findMonsterMesh(
         event.monster.row,
@@ -871,38 +893,61 @@ export class SceneManager {
       mesh.position.x = laneWorldX(event.monster.col);
       mesh.position.y = baseY;
       this.setEnemyOpacity(mesh, 1);
+      const monsterBaseRotationY = mesh.rotation.y;
+      this.facePlayerAndEnemy(mesh);
+      if (event.kind === 'evade') {
+        const slot = this.findSlotByGroup(mesh);
+        if (slot) {
+          this.playEnemyLocomotion(slot, true, false);
+        }
+        const fleeDirection =
+          Math.sign(mesh.position.x - laneWorldX(playerCol)) || 1;
+        mesh.rotation.y = fleeDirection * (Math.PI / 2);
+      }
       this.encounterFx.push({
         event,
         monsterMesh: mesh,
         monsterBaseX: laneWorldX(event.monster.col),
         monsterBaseY: baseY,
+        monsterBaseZ: mesh.position.z,
+        monsterBaseRotationY,
         playerBaseX: laneWorldX(playerCol),
+        playerBaseRotationY,
       });
     }
   }
 
+  private facePlayerAndEnemy(monsterMesh: Group): void {
+    const playerPosition = this.playerMesh.getWorldPosition(new Vector3());
+    const monsterPosition = monsterMesh.getWorldPosition(new Vector3());
+    const dx = monsterPosition.x - playerPosition.x;
+    const dz = monsterPosition.z - playerPosition.z;
+    if (Math.hypot(dx, dz) < 0.001) {
+      return;
+    }
+    // KayKit players face -Z and skeletons face +Z at wrapper yaw 0, so the
+    // same wrapper yaw turns their opposite forward axes toward one another.
+    const facingYaw = Math.atan2(-dx, -dz);
+    this.playerMesh.rotation.y = facingYaw;
+    monsterMesh.rotation.y = facingYaw;
+  }
+
   updateEncounterFx(t: number): void {
-    const swing = Math.sin(t * Math.PI);
     for (const fx of this.encounterFx) {
       if (fx.event.kind === 'evade') {
-        fx.monsterMesh.scale.setScalar(Math.max(0.02, 1 - t));
-        fx.monsterMesh.position.y = fx.monsterBaseY + t * 0.32;
-        this.setEnemyOpacity(fx.monsterMesh, 1 - t);
-        continue;
+        // The skeleton leg cycle is authored KayKit animation; this off-board
+        // wrapper translation and late fade are procedural Three.js motion.
+        const eased = t * t * (3 - 2 * t);
+        const fleeDirection = Math.sign(fx.monsterBaseX - fx.playerBaseX) || 1;
+        fx.monsterMesh.position.x =
+          fx.monsterBaseX + fleeDirection * TILE_PITCH * 2.4 * eased;
+        fx.monsterMesh.position.y = fx.monsterBaseY;
+        fx.monsterMesh.scale.setScalar(1);
+        this.setEnemyOpacity(
+          fx.monsterMesh,
+          t > 0.68 ? 1 - (t - 0.68) / 0.32 : 1,
+        );
       }
-      if (fx.event.approach === 'surprise') {
-        const towardMonster = fx.monsterBaseX - fx.playerBaseX;
-        this.playerMesh.position.x = fx.playerBaseX + towardMonster * swing * 0.45;
-        this.playerMesh.scale.setScalar(1 + swing * 0.12);
-        fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.18;
-        fx.monsterMesh.scale.setScalar(1 - swing * 0.18);
-        this.setEnemyOpacity(fx.monsterMesh, t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1);
-        continue;
-      }
-      const pulse = 1 + swing * 0.32;
-      fx.monsterMesh.scale.setScalar(pulse);
-      this.playerMesh.scale.setScalar(pulse);
-      this.setEnemyOpacity(fx.monsterMesh, t > 0.65 ? 1 - (t - 0.65) / 0.35 : 1);
     }
   }
 
@@ -918,13 +963,18 @@ export class SceneManager {
       return;
     }
     mesh.visible = true;
+    const monsterBaseRotationY = mesh.rotation.y;
+    const playerBaseRotationY = this.playerMesh.rotation.y;
+    this.facePlayerAndEnemy(mesh);
     this.combatHit = {
       attacker: entry.attacker,
       isSurpriseStrike: entry.isSurpriseStrike,
       monsterMesh: mesh,
       monsterBaseX: laneWorldX(monsterCol),
       monsterBaseY: monsterBaseY(mesh),
+      monsterBaseRotationY,
       playerBaseX: laneWorldX(playerCol),
+      playerBaseRotationY,
     };
     if (entry.attacker === 'player') {
       this.launchPlayerProjectile(mesh);
@@ -937,8 +987,9 @@ export class SceneManager {
       return;
     }
 
+    // Authored KayKit attack/hit/death clips supply character motion. Three.js
+    // only carries projectile travel and material flashes during combat hits.
     const swing = Math.sin(t * Math.PI);
-    const towardMonster = fx.monsterBaseX - fx.playerBaseX;
     const playerMaterials = this.playerFlashMaterials();
     const monsterMaterials = this.enemyFlashMaterials(fx.monsterMesh);
     if (this.activeProjectile) {
@@ -951,31 +1002,21 @@ export class SceneManager {
     }
 
     if (fx.attacker === 'player') {
-      const reach = fx.isSurpriseStrike ? 0.72 : 0.42;
-      this.playerMesh.position.x = fx.playerBaseX + towardMonster * swing * reach;
-      this.playerMesh.scale.setScalar(1 + swing * (fx.isSurpriseStrike ? 0.22 : 0.1));
-      fx.monsterMesh.position.x = fx.monsterBaseX + towardMonster * swing * 0.16;
-      fx.monsterMesh.scale.setScalar(1 - swing * 0.14);
       this.flashPlayerMaterials(
         monsterMaterials,
-        0xfff1c8,
+        COMBAT_FLASH_RED,
         swing * (fx.isSurpriseStrike ? 1.1 : 0.7),
       );
       this.flashPlayerMaterials(
         playerMaterials,
-        fx.isSurpriseStrike ? 0xffe27a : 0x3ecf8e,
+        COMBAT_FLASH_RED,
         swing * (fx.isSurpriseStrike ? 0.9 : 0.2),
       );
       return;
     }
 
-    const towardPlayer = fx.playerBaseX - fx.monsterBaseX;
-    fx.monsterMesh.position.x = fx.monsterBaseX + towardPlayer * swing * 0.5;
-    fx.monsterMesh.scale.setScalar(1 + swing * 0.12);
-    this.playerMesh.position.x = fx.playerBaseX + towardPlayer * swing * 0.18;
-    this.playerMesh.scale.setScalar(1 - swing * 0.08);
-    this.flashPlayerMaterials(playerMaterials, 0xff5a4a, swing * 0.85);
-    this.flashPlayerMaterials(monsterMaterials, 0xc4372e, swing * 0.35);
+    this.flashPlayerMaterials(playerMaterials, COMBAT_FLASH_RED, swing * 0.85);
+    this.flashPlayerMaterials(monsterMaterials, COMBAT_FLASH_RED, swing * 0.35);
   }
 
   endCombatHit(): void {
@@ -986,8 +1027,14 @@ export class SceneManager {
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
       fx.monsterMesh.position.y = fx.monsterBaseY;
-      this.flashPlayerMaterials(this.enemyFlashMaterials(fx.monsterMesh), 0x000000, 0);
+      fx.monsterMesh.rotation.y = fx.monsterBaseRotationY;
+      this.flashPlayerMaterials(
+        this.enemyFlashMaterials(fx.monsterMesh),
+        0x000000,
+        0,
+      );
       this.playerMesh.position.x = fx.playerBaseX;
+      this.playerMesh.rotation.y = fx.playerBaseRotationY;
     }
     this.releaseActiveProjectile();
     this.combatHit = null;
@@ -1021,12 +1068,20 @@ export class SceneManager {
 
   endEncounterFx(): void {
     for (const fx of this.encounterFx) {
-      fx.monsterMesh.visible = false;
+      const evaded = fx.event.kind === 'evade';
+      fx.monsterMesh.visible = !evaded;
       fx.monsterMesh.scale.setScalar(1);
       fx.monsterMesh.position.x = fx.monsterBaseX;
       fx.monsterMesh.position.y = fx.monsterBaseY;
+      fx.monsterMesh.position.z = fx.monsterBaseZ;
+      fx.monsterMesh.rotation.y = fx.monsterBaseRotationY;
       this.setEnemyOpacity(fx.monsterMesh, 1);
       this.playerMesh.position.x = fx.playerBaseX;
+      this.playerMesh.rotation.y = fx.playerBaseRotationY;
+      const slot = this.findSlotByGroup(fx.monsterMesh);
+      if (slot && !evaded) {
+        this.playEnemyLocomotion(slot, false, false);
+      }
     }
     this.playerMesh.scale.setScalar(1);
     this.encounterFx = [];
@@ -1065,7 +1120,7 @@ export class SceneManager {
   private buildRowPool(): void {
     const tileGeo = new BoxGeometry(TILE_SIZE, 0.14, TILE_SIZE);
     const hitGeo = new PlaneGeometry(TILE_PITCH * 0.96, TILE_PITCH * 0.96);
-    const caveRatGeo = new SphereGeometry(0.28, 10, 8);
+    const skeletonMinionGeo = new SphereGeometry(0.28, 10, 8);
     const cryptGuardGeo = new CapsuleGeometry(0.16, 0.52, 4, 8);
     const boneBruteGeo = new BoxGeometry(0.5, 0.62, 0.5);
     const goldGeo = new CylinderGeometry(0.16, 0.16, 0.05, 14);
@@ -1100,7 +1155,7 @@ export class SceneManager {
 
         const variants = this.createEnemySlots(
           col,
-          caveRatGeo,
+          skeletonMinionGeo,
           cryptGuardGeo,
           boneBruteGeo,
         );
@@ -1318,7 +1373,7 @@ export class SceneManager {
           this.requestEnemyModel(slot, occupant.id, key);
           continue;
         }
-        if (playingMonsterFx || (slot.dying && slot.mixer)) {
+        if (playingMonsterFx || slot.dying) {
           slot.group.visible = true;
           continue;
         }
@@ -1519,12 +1574,18 @@ export class SceneManager {
 
   private createEnemySlots(
     col: number,
-    caveRatGeo: SphereGeometry,
+    skeletonMinionGeo: SphereGeometry,
     cryptGuardGeo: CapsuleGeometry,
     boneBruteGeo: BoxGeometry,
   ): Record<EnemyRenderKey, EnemySlot> {
     return {
-      caveRat: this.createEnemySlot('caveRat', col, caveRatGeo, this.caveRatMaterial, 0.46),
+      skeletonMinion: this.createEnemySlot(
+        'skeletonMinion',
+        col,
+        skeletonMinionGeo,
+        this.skeletonMinionMaterial,
+        0.46,
+      ),
       cryptGuard: this.createEnemySlot(
         'cryptGuard',
         col,
@@ -1583,6 +1644,7 @@ export class SceneManager {
       loadToken: 0,
       occupantId: null,
       dying: false,
+      deathFadeStartedAt: null,
       attackSequence: 0,
     };
   }
@@ -2152,6 +2214,27 @@ export class SceneManager {
     }
   }
 
+  private updateEnemyDeathFades(elapsedSec: number): void {
+    for (const view of this.rowViews) {
+      for (const variants of view.enemySlots) {
+        for (const key of ENEMY_RENDER_KEYS) {
+          const slot = variants[key];
+          if (!slot.dying || slot.deathFadeStartedAt === null) {
+            continue;
+          }
+          const t = Math.min(
+            1,
+            (elapsedSec - slot.deathFadeStartedAt) / ENEMY_DEATH_FADE_SEC,
+          );
+          this.setEnemyOpacity(slot.group, 1 - t);
+          if (t >= 1) {
+            this.releaseEnemySlot(slot);
+          }
+        }
+      }
+    }
+  }
+
   private requestEnemyModel(
     slot: EnemySlot,
     occupantId: string,
@@ -2162,6 +2245,7 @@ export class SceneManager {
     }
     this.detachEnemyModel(slot);
     slot.dying = false;
+    slot.deathFadeStartedAt = null;
     slot.occupantId = occupantId;
     slot.loadToken += 1;
     const token = slot.loadToken;
@@ -2187,6 +2271,7 @@ export class SceneManager {
         return;
       }
       const model = cloneSkinned(template) as Group;
+      cloneMeshMaterials(model);
       fitEnemyModel(model, key);
       this.attachEnemyModel(slot, model, clips);
     } catch (error) {
@@ -2214,6 +2299,7 @@ export class SceneManager {
     slot.placeholder.visible = false;
     slot.mixer = new AnimationMixer(model);
     if (slot.dying) {
+      slot.deathFadeStartedAt = null;
       this.playEnemyOneShot(
         slot,
         clips.skeletonDeath ?? clips.death,
@@ -2242,6 +2328,7 @@ export class SceneManager {
     slot.loadToken += 1;
     slot.occupantId = null;
     slot.dying = false;
+    slot.deathFadeStartedAt = null;
     slot.attackSequence = 0;
     this.detachEnemyModel(slot);
     slot.group.visible = false;
@@ -2294,6 +2381,7 @@ export class SceneManager {
     if (!mixer || !clip) {
       if (kind === 'death') {
         slot.dying = true;
+        slot.deathFadeStartedAt = this.clock;
       }
       return;
     }
@@ -2324,7 +2412,7 @@ export class SceneManager {
       }
       slot.oneShotAction = null;
       if (kind === 'death') {
-        this.releaseEnemySlot(slot);
+        slot.deathFadeStartedAt = this.clock;
         return;
       }
       this.playEnemyLocomotion(slot, false, false);

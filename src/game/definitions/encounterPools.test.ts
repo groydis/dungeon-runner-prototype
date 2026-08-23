@@ -8,19 +8,19 @@ import {
 } from './encounterPools';
 
 describe('encounter pool boundaries', () => {
-  it('keeps the demo row as a Cave Rat', () => {
+  it('keeps the demo row as a Skeleton Minion', () => {
     const demo = createRowRecipe(DEMO_MONSTER_ROW, () => 0);
     expect(demo[DEMO_MONSTER_COL]).toMatchObject({
       kind: 'monster',
-      enemyType: 'caveRat',
+      enemyType: 'skeletonMinion',
     });
   });
 
-  it('uses only Cave Rat for rows 5–19', () => {
-    expect(encounterPoolForRow(5).map((entry) => entry.item)).toEqual(['caveRat']);
-    expect(encounterPoolForRow(19).map((entry) => entry.item)).toEqual(['caveRat']);
-    expect(pickEnemyTypeForRow(5, () => 0)).toBe('caveRat');
-    expect(pickEnemyTypeForRow(19, () => 0.99)).toBe('caveRat');
+  it('uses only Skeleton Minion for rows 5–19', () => {
+    expect(encounterPoolForRow(5).map((entry) => entry.item)).toEqual(['skeletonMinion']);
+    expect(encounterPoolForRow(19).map((entry) => entry.item)).toEqual(['skeletonMinion']);
+    expect(pickEnemyTypeForRow(5, () => 0)).toBe('skeletonMinion');
+    expect(pickEnemyTypeForRow(19, () => 0.99)).toBe('skeletonMinion');
   });
 
   it('begins allowing Crypt Guard and Skeleton Mage at row 20', () => {
@@ -56,13 +56,13 @@ describe('encounter pool boundaries', () => {
 
 describe('weighted enemy selection', () => {
   it('selects each mid-band branch with a deterministic roll', () => {
-    expect(pickEnemyTypeForRow(20, () => 0)).toBe('caveRat');
+    expect(pickEnemyTypeForRow(20, () => 0)).toBe('skeletonMinion');
     expect(pickEnemyTypeForRow(20, () => 0.7)).toBe('cryptGuard');
     expect(pickEnemyTypeForRow(39, () => 0.99)).toBe('skeletonMage');
   });
 
   it('selects each late-band branch with a deterministic roll', () => {
-    expect(pickEnemyTypeForRow(40, () => 0)).toBe('caveRat');
+    expect(pickEnemyTypeForRow(40, () => 0)).toBe('skeletonMinion');
     expect(pickEnemyTypeForRow(40, () => 0.5)).toBe('cryptGuard');
     expect(pickEnemyTypeForRow(40, () => 0.8)).toBe('boneBrute');
     expect(pickEnemyTypeForRow(40, () => 0.99)).toBe('skeletonMage');
@@ -82,7 +82,7 @@ describe('seeded enemy-type sequences', () => {
   it('replays the same enemy-type sequence for the same seed', () => {
     const first = enemyTypes(123, 60);
     expect(enemyTypes(123, 60)).toEqual(first);
-    expect(first.some((type) => type === 'caveRat')).toBe(true);
+    expect(first.some((type) => type === 'skeletonMinion')).toBe(true);
   });
 
   it('can produce a different sequence for a different seed', () => {
