@@ -27,7 +27,14 @@ export type PlayerEquipmentAssetKey =
   | 'shieldSpikes'
   | 'shieldSpikesColor'
   | 'shieldSquare'
-  | 'shieldSquareColor';
+  | 'shieldSquareColor'
+  | 'fantasyDaggerC'
+  | 'fantasyBowAWithString'
+  | 'fantasyStaffD'
+  | 'fantasySwordG'
+  | 'fantasyShieldA'
+  | 'fantasyHammerD'
+  | 'fantasyStaffC';
 
 export const PLAYER_EQUIPMENT_URLS: Record<PlayerEquipmentAssetKey, string> = {
   dagger: '/models/players/kaykit/weapons/dagger.glb',
@@ -53,6 +60,15 @@ export const PLAYER_EQUIPMENT_URLS: Record<PlayerEquipmentAssetKey, string> = {
   shieldSpikesColor: '/models/players/kaykit/weapons/shield_spikes_color.glb',
   shieldSquare: '/models/players/kaykit/weapons/shield_square.glb',
   shieldSquareColor: '/models/players/kaykit/weapons/shield_square_color.glb',
+  fantasyDaggerC:
+    '/models/players/kaykit/weapons/fantasy_bits/dagger_C.glb',
+  fantasyBowAWithString:
+    '/models/players/kaykit/weapons/fantasy_bits/bow_A_withString.glb',
+  fantasyStaffD: '/models/players/kaykit/weapons/fantasy_bits/staff_D.glb',
+  fantasySwordG: '/models/players/kaykit/weapons/fantasy_bits/sword_G.glb',
+  fantasyShieldA: '/models/players/kaykit/weapons/fantasy_bits/shield_A.glb',
+  fantasyHammerD: '/models/players/kaykit/weapons/fantasy_bits/hammer_D.glb',
+  fantasyStaffC: '/models/players/kaykit/weapons/fantasy_bits/staff_C.glb',
 };
 
 export const PLAYER_WEAPON_MOUNT_NAME = 'weaponMount';
@@ -125,6 +141,35 @@ export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
   lorekeeper: [{ assetKey: 'staff', ...RIGHT_HAND_DEFAULT }],
 };
 
+/** One-time class shop equipment from KayKit Fantasy Weapons Bits 1.0. */
+export const PLAYER_SPECIAL_EQUIPMENT_LOADOUTS: Readonly<
+  Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>
+> = {
+  rogue: [{ assetKey: 'fantasyDaggerC', ...RIGHT_HAND_DEFAULT }],
+  ranger: [
+    {
+      assetKey: 'fantasyBowAWithString',
+      mount: 'handslot.r',
+      position: [0, 0, 0],
+      rotation: [0, Math.PI / 2, 0],
+      scale: 1,
+    },
+  ],
+  mage: [{ assetKey: 'fantasyStaffD', ...RIGHT_HAND_DEFAULT }],
+  knight: [
+    {
+      assetKey: 'fantasySwordG',
+      mount: 'handslot.r',
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: 0.82,
+    },
+    { assetKey: 'fantasyShieldA', ...LEFT_HAND_DEFAULT },
+  ],
+  barbarian: [{ assetKey: 'fantasyHammerD', ...RIGHT_HAND_DEFAULT }],
+  lorekeeper: [{ assetKey: 'fantasyStaffC', ...RIGHT_HAND_DEFAULT }],
+};
+
 export function isPlayerEquipmentAssetKey(
   value: string,
 ): value is PlayerEquipmentAssetKey {
@@ -138,9 +183,13 @@ export function playerEquipmentUrl(assetKey: PlayerEquipmentAssetKey): string {
 export function playerEquipmentLoadout(
   key: PlayerRenderKey | null | undefined,
   upgrades: PlayerEquipmentUpgradeLevels = NO_EQUIPMENT_UPGRADES,
+  specialEquipmentEquipped = false,
 ): readonly PlayerEquipmentVisual[] {
   if (!key) {
     return [];
+  }
+  if (specialEquipmentEquipped) {
+    return PLAYER_SPECIAL_EQUIPMENT_LOADOUTS[key];
   }
   const sharpened = Math.max(0, upgrades.sharpened);
   const armoured = Math.max(0, upgrades.armoured);

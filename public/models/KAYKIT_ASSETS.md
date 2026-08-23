@@ -95,6 +95,27 @@ class texture. The common editable source is
 | `sword_2handed_color.glb` | Active Barbarian Sharpened tier 2+ |
 | `wand.glb` | Active Mage and Lorekeeper Sharpened tier 1+ |
 
+### Fantasy Weapons Bits class equipment
+
+These selected models come from
+`KayKit Fantasy Weapons Bits 1.0/Assets/gltf/`. Each supplied `.gltf` and `.bin`
+was packaged directly as a self-contained GLB with
+`weapons_bits_texture.png` embedded; geometry, hierarchy, materials, and the
+Staff D emissive shards were preserved. The editable source remains
+`KayKit Fantasy Weapons Bits 1.0/SOURCE/Fantasy_Weapons_Bits_SOURCE.blend` in
+the purchased collection. No Blender source, Draco, or KTX data was added to
+the game repository.
+
+| Target under `players/kaykit/weapons/fantasy_bits/` | Exact KayKit source | Runtime status |
+|---|---|---|
+| `dagger_C.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/dagger_C.gltf` | Rogue-only Venomfang Dagger; one-time shop purchase, +2 ATK / +1 EVA |
+| `bow_A_withString.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/bow_A_withString.gltf` | Ranger-only Moonpiercer Bow; one-time shop purchase, +2 ATK / +1 EVA |
+| `staff_D.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/staff_D.gltf` | Mage-only Shardcaller Staff; one-time shop purchase, +3 ATK |
+| `sword_G.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/sword_G.gltf` | Knight-only Frostguard sword; equipped with Shield A, +2 ATK / +2 DEF together |
+| `shield_A.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/shield_A.gltf` | Knight-only Frostguard shield; equipped with Sword G |
+| `hammer_D.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/hammer_D.gltf` | Barbarian-only Worldbreaker Hammer; one-time shop purchase, +3 ATK / +2 max HP |
+| `staff_C.glb` | `KayKit Fantasy Weapons Bits 1.0/Assets/gltf/staff_C.gltf` | Lorekeeper-only Verdant Staff; one-time shop purchase, +2 ATK / +1 DEF |
+
 ## Collectibles
 
 Each potion target was exported from the matching `.gltf` and `.bin` under

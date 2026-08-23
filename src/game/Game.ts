@@ -27,6 +27,7 @@ import { InputController, type TilePick } from './InputController';
 import { type LevelUpChoice } from './levelUp';
 import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
 import { CameraController } from '../rendering/CameraController';
+import { MerchantShopPreview } from '../rendering/MerchantShopPreview';
 import { SceneManager } from '../rendering/SceneManager';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
 import { GameOverView } from '../ui/GameOverView';
@@ -70,6 +71,7 @@ export class Game {
   private readonly hud: HudView;
   private readonly gameOver: GameOverView;
   private readonly shop: ShopOverlayView;
+  private readonly merchantShopPreview: MerchantShopPreview;
   private readonly levelUp: LevelUpOverlayView;
   private readonly classSelect: ClassSelectionView;
   private readonly resizeObserver: ResizeObserver;
@@ -99,6 +101,12 @@ export class Game {
     this.hud = new HudView();
     this.gameOver = new GameOverView();
     this.shop = new ShopOverlayView();
+    const merchantPreviewCanvas =
+      document.querySelector<HTMLCanvasElement>('#shop-merchant-preview');
+    if (!merchantPreviewCanvas) {
+      throw new Error('Missing required element: #shop-merchant-preview');
+    }
+    this.merchantShopPreview = new MerchantShopPreview(merchantPreviewCanvas);
     this.levelUp = new LevelUpOverlayView();
     this.classSelect = new ClassSelectionView();
     this.gameOver.onRestart(() => this.returnToClassSelection());
@@ -109,6 +117,7 @@ export class Game {
       this.shop.onOffer(offerId, () => this.buyShopOffer(offerId));
     }
     this.shop.onLeave(() => this.leaveShop());
+    this.shop.onSpecialEquipment(() => this.buySpecialEquipment());
     this.levelUp.onChoice('vitality', () => this.chooseLevelUp('vitality'));
     this.levelUp.onChoice('sharpened', () => this.chooseLevelUp('sharpened'));
     this.levelUp.onChoice('armoured', () => this.chooseLevelUp('armoured'));
@@ -138,6 +147,7 @@ export class Game {
     this.resizeObserver.disconnect();
     this.gameOver.dispose();
     this.shop.dispose();
+    this.merchantShopPreview.dispose();
     this.levelUp.dispose();
     this.classSelect.dispose();
     this.input.dispose();
@@ -160,6 +170,8 @@ export class Game {
     this.camera.update(dt);
     this.scene.update(nowMs / 1000);
     this.scene.render(this.camera.camera);
+    this.merchantShopPreview.update(dt);
+    this.merchantShopPreview.render();
 
     requestAnimationFrame(this.loop);
   };
@@ -227,6 +239,7 @@ export class Game {
     }
     if (resolution.shop) {
       this.shop.show(resolution.shop);
+      this.merchantShopPreview.setVisible(true);
     }
     this.pendingEvents = resolution.encounters;
     this.setBoardInteractive(false);
@@ -468,6 +481,7 @@ export class Game {
     if (this.state.runOver) {
       this.setBoardInteractive(false);
       this.shop.hide();
+      this.merchantShopPreview.setVisible(false);
       this.levelUp.hide();
       this.state.dismissOpenShop();
       this.state.dismissLevelUp();
@@ -510,6 +524,7 @@ export class Game {
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();
+    this.merchantShopPreview.setVisible(false);
     this.levelUp.hide();
     this.gameOver.hide();
     this.state.clearSelectedClass();
@@ -530,6 +545,17 @@ export class Game {
         sharpened: progress.sharpened,
         armoured: progress.armoured,
       });
+    }
+    this.updateHud();
+  }
+
+  private buySpecialEquipment(): void {
+    if (!this.state.shopOpen) {
+      return;
+    }
+    const result = this.state.buySpecialEquipment();
+    if (result.success) {
+      this.scene.setPlayerSpecialEquipmentEquipped(true);
     }
     this.updateHud();
   }
@@ -573,6 +599,7 @@ export class Game {
     }
 
     this.shop.hide();
+    this.merchantShopPreview.setVisible(false);
     this.scene.beginMerchantLeaveFx(left.row, left.col);
     this.setBoardInteractive(true);
     this.updateHud();
@@ -604,6 +631,10 @@ export class Game {
   private updateHud(): void {
     this.hud.update(this.state.getHudSnapshot());
     const shopView = this.state.getShopView();
+    this.scene.setPlayerSpecialEquipmentEquipped(
+      this.state.hasSpecialEquipment,
+    );
+    this.merchantShopPreview.setVisible(shopView !== null);
     if (shopView) {
       this.shop.render(shopView);
     }

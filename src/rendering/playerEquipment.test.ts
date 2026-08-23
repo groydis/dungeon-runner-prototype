@@ -4,6 +4,7 @@ import { GameState } from '../game/GameState';
 import {
   PLAYER_EQUIPMENT_LOADOUTS,
   PLAYER_EQUIPMENT_URLS,
+  PLAYER_SPECIAL_EQUIPMENT_LOADOUTS,
   isPlayerEquipmentAssetKey,
   playerEquipmentLoadout,
   playerEquipmentMountNames,
@@ -84,6 +85,33 @@ describe('player equipment registry', () => {
         (visual) => visual.assetKey,
       ),
     ).toEqual(['sword1H', 'shieldSpikesColor']);
+  });
+
+  it('replaces each class loadout with its purchased Fantasy Weapons Bits set', () => {
+    expect(
+      Object.fromEntries(
+        PLAYER_RENDER_KEYS.map((key) => [
+          key,
+          playerEquipmentLoadout(
+            key,
+            { sharpened: 8, armoured: 8 },
+            true,
+          ).map((visual) => visual.assetKey),
+        ]),
+      ),
+    ).toEqual({
+      rogue: ['fantasyDaggerC'],
+      ranger: ['fantasyBowAWithString'],
+      mage: ['fantasyStaffD'],
+      knight: ['fantasySwordG', 'fantasyShieldA'],
+      barbarian: ['fantasyHammerD'],
+      lorekeeper: ['fantasyStaffC'],
+    });
+    for (const visual of Object.values(PLAYER_SPECIAL_EQUIPMENT_LOADOUTS).flat()) {
+      expect(PLAYER_EQUIPMENT_URLS[visual.assetKey]).toMatch(
+        /^\/models\/players\/kaykit\/weapons\/fantasy_bits\/.+\.glb$/,
+      );
+    }
   });
 
   it('supports both authored hand slots and gives every class equipment', () => {

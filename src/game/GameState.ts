@@ -67,10 +67,12 @@ import { RunWorld } from './RunWorld';
 import {
   type ActiveShop,
   applyShopPurchase,
+  applySpecialEquipmentPurchase,
   buildShopView,
   createActiveShop,
   createShopProgress,
   evaluateShopOffer,
+  evaluateSpecialEquipmentOffer,
   shopStatSnapshot,
   type ShopOfferId,
   type ShopProgress,
@@ -152,6 +154,7 @@ export class GameState {
 
   private activeShop: ActiveShop | null = null;
   private shopProgress: ShopProgress = createShopProgress();
+  private specialEquipmentOwned = false;
   private readonly pendingLevelUps: number[] = [];
   private activeCombatTargetId: string | null = null;
 
@@ -214,6 +217,10 @@ export class GameState {
 
   get shopOpen(): boolean {
     return this.activeShop !== null;
+  }
+
+  get hasSpecialEquipment(): boolean {
+    return this.specialEquipmentOwned;
   }
 
   get levelUpOpen(): boolean {
@@ -409,6 +416,8 @@ export class GameState {
       this._player.gold,
       shopStatSnapshot(this._player),
       this.shopProgress,
+      this._player.classId,
+      this.specialEquipmentOwned,
     );
   }
 
@@ -426,6 +435,19 @@ export class GameState {
       this._player.gold,
       shopStatSnapshot(this._player),
       this.shopProgress,
+    ).available;
+  }
+
+  canBuySpecialEquipment(): boolean {
+    if (!this._player || !this.activeShop) {
+      return false;
+    }
+    return evaluateSpecialEquipmentOffer(
+      this.activeShop.merchant,
+      this._player.classId,
+      this._player.gold,
+      shopStatSnapshot(this._player),
+      this.specialEquipmentOwned,
     ).available;
   }
 
@@ -478,6 +500,60 @@ export class GameState {
     this._player.increaseAttack(result.attackGained);
     this._player.increaseDefence(result.defenceGained);
     this._player.increaseEvade(result.evadeGained);
+    this._status = result.status;
+    return result;
+  }
+
+  buySpecialEquipment(): ShopPurchaseResult {
+    if (!this._player) {
+      return {
+        success: false,
+        offerId: 'specialEquipment',
+        reason: 'noClass',
+        goldRemaining: 0,
+        goldSpent: 0,
+        maxHealthGained: 0,
+        attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
+        status: 'Choose a class first.',
+      };
+    }
+
+    const merchant = this.activeShop?.merchant;
+    if (!merchant) {
+      return {
+        success: false,
+        offerId: 'specialEquipment',
+        reason: 'noShop',
+        goldRemaining: this._player.gold,
+        goldSpent: 0,
+        maxHealthGained: 0,
+        attackGained: 0,
+        defenceGained: 0,
+        evadeGained: 0,
+        status: 'There is no merchant here.',
+      };
+    }
+
+    const result = applySpecialEquipmentPurchase(
+      merchant,
+      this._player.classId,
+      this._player.gold,
+      shopStatSnapshot(this._player),
+      this.specialEquipmentOwned,
+    );
+    if (!result.success) {
+      this._status = result.status;
+      return result;
+    }
+
+    this._player.trySpendGold(result.goldSpent);
+    this._player.increaseMaxHealth(result.maxHealthGained);
+    this._player.increaseAttack(result.attackGained);
+    this._player.increaseDefence(result.defenceGained);
+    this._player.increaseEvade(result.evadeGained);
+    this.specialEquipmentOwned = true;
     this._status = result.status;
     return result;
   }
@@ -718,6 +794,7 @@ export class GameState {
     this._runOver = false;
     this.activeShop = null;
     this.shopProgress = createShopProgress();
+    this.specialEquipmentOwned = false;
     this.pendingLevelUps.length = 0;
     this.activeCombatTargetId = null;
   }

@@ -70,51 +70,69 @@
         aria-modal="true"
       >
         <div class="shop-card">
-          <h2 id="shop-title">TRAVELLING MERCHANT</h2>
-          <p id="shop-gold">Gold: 0</p>
-          <button
-            type="button"
-            id="shop-offer-vitality"
-            class="shop-offer"
-            aria-label="Vitality, 2 gold. +1 max HP"
-          >
-            <span id="shop-vitality-title" class="shop-offer-title">Vitality — 2 gold</span>
-            <span id="shop-vitality-desc" class="shop-offer-desc">+1 max HP (20 → 21)</span>
-            <span id="shop-vitality-reason" class="shop-offer-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="shop-offer-sharpened"
-            class="shop-offer"
-            aria-label="Sharpened, 3 gold. +1 attack"
-          >
-            <span id="shop-sharpened-title" class="shop-offer-title">Sharpened — 3 gold</span>
-            <span id="shop-sharpened-desc" class="shop-offer-desc">+1 attack (5 → 6)</span>
-            <span id="shop-sharpened-reason" class="shop-offer-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="shop-offer-armoured"
-            class="shop-offer"
-            aria-label="Armoured, 3 gold. +1 defence"
-          >
-            <span id="shop-armoured-title" class="shop-offer-title">Armoured — 3 gold</span>
-            <span id="shop-armoured-desc" class="shop-offer-desc">+1 defence (1 → 2)</span>
-            <span id="shop-armoured-reason" class="shop-offer-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="shop-offer-evasive"
-            class="shop-offer"
-            aria-label="Evasive, 2 gold. +1 Evade"
-          >
-            <span id="shop-evasive-title" class="shop-offer-title">Evasive — 2 gold</span>
-            <span id="shop-evasive-desc" class="shop-offer-desc">+1 Evade (1 → 2)</span>
-            <span id="shop-evasive-reason" class="shop-offer-reason"></span>
-          </button>
-          <button type="button" id="shop-leave" aria-label="Leave the travelling merchant">
-            Leave
-          </button>
+          <header class="shop-header">
+            <div>
+              <p class="shop-kicker">TRAVELLING MERCHANT</p>
+              <h2 id="shop-title">THE HOARDER</h2>
+            </div>
+            <div class="shop-purse" aria-label="Your gold">
+              <span>YOUR GOLD</span>
+              <strong id="shop-gold" aria-live="polite">0</strong>
+            </div>
+          </header>
+          <div class="shop-body">
+            <aside class="shop-merchant-panel" aria-label="The Hoarder says: What can I help you with?">
+              <div class="shop-portrait-stage">
+                <canvas id="shop-merchant-preview" aria-hidden="true"></canvas>
+                <span class="shop-portrait-loading" aria-hidden="true">MERCHANT</span>
+              </div>
+              <p class="shop-speech">What can I help you with?</p>
+            </aside>
+            <section class="shop-inventory" aria-label="Merchant inventory">
+              <p class="shop-section-title">CLASS EQUIPMENT</p>
+              <button
+                type="button"
+                id="shop-special-equipment"
+                class="shop-special-offer"
+                aria-label="Class equipment"
+              >
+                <span class="shop-special-heading">
+                  <span id="shop-special-class" class="shop-special-class">RANGER ONLY</span>
+                  <span id="shop-special-cost" class="shop-offer-cost">6 G</span>
+                </span>
+                <span id="shop-special-title" class="shop-special-title">Moonpiercer Bow</span>
+                <span id="shop-special-desc" class="shop-special-desc">An ornate bow balanced for a sure release.</span>
+                <span id="shop-special-stats" class="shop-special-stats">+2 ATK · +1 EVA</span>
+                <span id="shop-special-reason" class="shop-special-reason"></span>
+              </button>
+              <p id="shop-inventory-title" class="shop-section-title">RUN UPGRADES</p>
+              <div class="shop-offers-grid">
+                <button type="button" id="shop-offer-vitality" class="shop-offer" aria-label="Vitality, 2 gold. +1 max HP">
+                  <span class="shop-offer-heading"><span id="shop-vitality-title" class="shop-offer-title">Vitality</span><span id="shop-vitality-cost" class="shop-offer-cost">2 G</span></span>
+                  <span id="shop-vitality-desc" class="shop-offer-desc">+1 max HP (20 → 21)</span>
+                  <span id="shop-vitality-reason" class="shop-offer-reason"></span>
+                </button>
+                <button type="button" id="shop-offer-sharpened" class="shop-offer" aria-label="Sharpened, 3 gold. +1 attack">
+                  <span class="shop-offer-heading"><span id="shop-sharpened-title" class="shop-offer-title">Sharpened</span><span id="shop-sharpened-cost" class="shop-offer-cost">3 G</span></span>
+                  <span id="shop-sharpened-desc" class="shop-offer-desc">+1 attack (5 → 6)</span>
+                  <span id="shop-sharpened-reason" class="shop-offer-reason"></span>
+                </button>
+                <button type="button" id="shop-offer-armoured" class="shop-offer" aria-label="Armoured, 3 gold. +1 defence">
+                  <span class="shop-offer-heading"><span id="shop-armoured-title" class="shop-offer-title">Armoured</span><span id="shop-armoured-cost" class="shop-offer-cost">3 G</span></span>
+                  <span id="shop-armoured-desc" class="shop-offer-desc">+1 defence (1 → 2)</span>
+                  <span id="shop-armoured-reason" class="shop-offer-reason"></span>
+                </button>
+                <button type="button" id="shop-offer-evasive" class="shop-offer" aria-label="Evasive, 2 gold. +1 Evade">
+                  <span class="shop-offer-heading"><span id="shop-evasive-title" class="shop-offer-title">Evasive</span><span id="shop-evasive-cost" class="shop-offer-cost">2 G</span></span>
+                  <span id="shop-evasive-desc" class="shop-offer-desc">+1 Evade (1 → 2)</span>
+                  <span id="shop-evasive-reason" class="shop-offer-reason"></span>
+                </button>
+              </div>
+              <button type="button" id="shop-leave" aria-label="Leave the travelling merchant">
+                BACK TO THE DUNGEON
+              </button>
+            </section>
+          </div>
         </div>
       </div>
       <div

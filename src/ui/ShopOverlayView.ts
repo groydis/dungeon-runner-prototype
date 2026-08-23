@@ -10,17 +10,36 @@ export class ShopOverlayView {
   private readonly overlayEl: HTMLElement;
   private readonly goldEl: HTMLElement;
   private readonly leaveButton: HTMLButtonElement;
+  private readonly specialButton: HTMLButtonElement;
+  private readonly specialClassEl: HTMLElement;
+  private readonly specialTitleEl: HTMLElement;
+  private readonly specialDescEl: HTMLElement;
+  private readonly specialStatsEl: HTMLElement;
+  private readonly specialCostEl: HTMLElement;
+  private readonly specialReasonEl: HTMLElement;
   private readonly buttons: Record<ShopOfferId, HTMLButtonElement>;
   private readonly titles: Record<ShopOfferId, HTMLElement>;
+  private readonly costs: Record<ShopOfferId, HTMLElement>;
   private readonly descs: Record<ShopOfferId, HTMLElement>;
   private readonly reasons: Record<ShopOfferId, HTMLElement>;
   private readonly handlers: Partial<Record<ShopOfferId, () => void>> = {};
   private leaveHandler: (() => void) | null = null;
+  private specialHandler: (() => void) | null = null;
 
   constructor(root: ParentNode = document) {
     this.overlayEl = requireElement(root, '#shop');
     this.goldEl = requireElement(root, '#shop-gold');
     this.leaveButton = requireElement(root, '#shop-leave') as HTMLButtonElement;
+    this.specialButton = requireElement(
+      root,
+      '#shop-special-equipment',
+    ) as HTMLButtonElement;
+    this.specialClassEl = requireElement(root, '#shop-special-class');
+    this.specialTitleEl = requireElement(root, '#shop-special-title');
+    this.specialDescEl = requireElement(root, '#shop-special-desc');
+    this.specialStatsEl = requireElement(root, '#shop-special-stats');
+    this.specialCostEl = requireElement(root, '#shop-special-cost');
+    this.specialReasonEl = requireElement(root, '#shop-special-reason');
     this.buttons = {
       vitality: requireElement(root, '#shop-offer-vitality') as HTMLButtonElement,
       sharpened: requireElement(root, '#shop-offer-sharpened') as HTMLButtonElement,
@@ -32,6 +51,12 @@ export class ShopOverlayView {
       sharpened: requireElement(root, '#shop-sharpened-title'),
       armoured: requireElement(root, '#shop-armoured-title'),
       evasive: requireElement(root, '#shop-evasive-title'),
+    };
+    this.costs = {
+      vitality: requireElement(root, '#shop-vitality-cost'),
+      sharpened: requireElement(root, '#shop-sharpened-cost'),
+      armoured: requireElement(root, '#shop-armoured-cost'),
+      evasive: requireElement(root, '#shop-evasive-cost'),
     };
     this.descs = {
       vitality: requireElement(root, '#shop-vitality-desc'),
@@ -60,6 +85,12 @@ export class ShopOverlayView {
     this.leaveButton.addEventListener('click', handler);
   }
 
+  onSpecialEquipment(handler: () => void): void {
+    this.detachSpecialEquipment();
+    this.specialHandler = handler;
+    this.specialButton.addEventListener('click', handler);
+  }
+
   show(view: ShopView): void {
     this.render(view);
     this.overlayEl.hidden = false;
@@ -70,9 +101,26 @@ export class ShopOverlayView {
   }
 
   render(view: ShopView): void {
-    this.goldEl.textContent = `Gold: ${view.gold}`;
+    this.goldEl.textContent = String(view.gold);
     for (const id of SHOP_OFFER_IDS) {
       this.renderOffer(view.offers.find((offer) => offer.id === id));
+    }
+    const special = view.specialOffer;
+    this.specialButton.hidden = special === null;
+    if (special) {
+      this.specialClassEl.textContent = `${special.classId.toUpperCase()} ONLY`;
+      this.specialTitleEl.textContent = special.title;
+      this.specialDescEl.textContent = special.description;
+      this.specialStatsEl.textContent = special.statLine;
+      this.specialCostEl.textContent = `${special.cost} G`;
+      this.specialReasonEl.textContent = special.available
+        ? ''
+        : (special.reasonText ?? 'Unavailable');
+      this.specialButton.disabled = !special.available;
+      this.specialButton.setAttribute(
+        'aria-label',
+        `${special.title}, ${special.classId} only, ${special.cost} gold. ${special.statLine}. ${special.available ? special.description : (special.reasonText ?? 'Unavailable')}`,
+      );
     }
   }
 
@@ -81,6 +129,7 @@ export class ShopOverlayView {
       this.detachOffer(id);
     }
     this.detachLeave();
+    this.detachSpecialEquipment();
     this.overlayEl.removeEventListener('pointerdown', this.blockPointer);
   }
 
@@ -89,7 +138,8 @@ export class ShopOverlayView {
       return;
     }
 
-    this.titles[offer.id].textContent = `${offer.title} — ${offer.cost} gold`;
+    this.titles[offer.id].textContent = offer.title;
+    this.costs[offer.id].textContent = `${offer.cost} G`;
     this.descs[offer.id].textContent =
       `${offer.description} (${offer.currentValue} → ${offer.nextValue})`;
     this.reasons[offer.id].textContent = offer.available
@@ -120,6 +170,14 @@ export class ShopOverlayView {
     }
     this.leaveButton.removeEventListener('click', this.leaveHandler);
     this.leaveHandler = null;
+  }
+
+  private detachSpecialEquipment(): void {
+    if (!this.specialHandler) {
+      return;
+    }
+    this.specialButton.removeEventListener('click', this.specialHandler);
+    this.specialHandler = null;
   }
 
   private readonly blockPointer = (event: PointerEvent): void => {

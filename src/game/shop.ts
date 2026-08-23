@@ -6,6 +6,14 @@ import {
 } from './config';
 import { type Merchant } from './Merchant';
 import { type CombatStats } from './Combatant';
+import { type PlayerClassId } from './definitions/classes';
+import {
+  applicableSpecialEquipmentGains,
+  hasSpecialEquipmentGain,
+  specialEquipmentForClass,
+  specialEquipmentStatLine,
+  type SpecialEquipmentId,
+} from './specialEquipment';
 
 export const SHOP_OFFER_IDS = [
   'vitality',
@@ -16,7 +24,12 @@ export const SHOP_OFFER_IDS = [
 
 export type ShopOfferId = (typeof SHOP_OFFER_IDS)[number];
 
-export type ShopUnavailableReason = 'noShop' | 'noClass' | 'unaffordable' | 'capped';
+export type ShopUnavailableReason =
+  | 'noShop'
+  | 'noClass'
+  | 'unaffordable'
+  | 'capped'
+  | 'owned';
 
 export type ShopStatKey = 'maxHealth' | 'attack' | 'defence' | 'evade';
 
@@ -86,14 +99,29 @@ export interface ShopOfferView {
   reasonText?: string;
 }
 
+export interface ShopSpecialOfferView {
+  id: 'specialEquipment';
+  equipmentId: SpecialEquipmentId;
+  title: string;
+  description: string;
+  statLine: string;
+  classId: PlayerClassId;
+  cost: number;
+  available: boolean;
+  reason?: ShopUnavailableReason;
+  reasonText?: string;
+}
+
 export interface ShopView {
   gold: number;
   offers: ShopOfferView[];
+  specialOffer: ShopSpecialOfferView | null;
 }
 
 export interface ShopPurchaseResult {
   success: boolean;
-  offerId?: ShopOfferId;
+  offerId?: ShopOfferId | 'specialEquipment';
+  specialEquipmentId?: SpecialEquipmentId;
   reason?: ShopUnavailableReason;
   goldRemaining: number;
   goldSpent: number;
@@ -168,6 +196,8 @@ export function buildShopView(
   gold: number,
   stats: ShopStatSnapshot,
   progress: ShopProgress,
+  playerClassId?: PlayerClassId,
+  specialEquipmentOwned = false,
 ): ShopView | null {
   if (!merchant) {
     return null;
@@ -194,6 +224,15 @@ export function buildShopView(
           : undefined,
       };
     }),
+    specialOffer: playerClassId
+      ? buildSpecialEquipmentOfferView(
+          merchant,
+          playerClassId,
+          gold,
+          stats,
+          specialEquipmentOwned,
+        )
+      : null,
   };
 }
 
@@ -204,10 +243,74 @@ export function unavailableReasonText(reason: ShopUnavailableReason): string {
   if (reason === 'unaffordable') {
     return 'Not enough gold';
   }
+  if (reason === 'owned') {
+    return 'Already equipped';
+  }
   if (reason === 'noClass') {
     return 'Choose a class first.';
   }
   return 'Unavailable';
+}
+
+export function evaluateSpecialEquipmentOffer(
+  merchant: Merchant | null,
+  classId: PlayerClassId,
+  gold: number,
+  stats: ShopStatSnapshot,
+  owned: boolean,
+): { available: boolean; reason?: ShopUnavailableReason } {
+  if (!merchant) {
+    return { available: false, reason: 'noShop' };
+  }
+  if (owned) {
+    return { available: false, reason: 'owned' };
+  }
+  const definition = specialEquipmentForClass(classId);
+  const gains = applicableSpecialEquipmentGains(definition.gains, stats);
+  if (!hasSpecialEquipmentGain(gains)) {
+    return { available: false, reason: 'capped' };
+  }
+  if (gold < definition.cost) {
+    return { available: false, reason: 'unaffordable' };
+  }
+  return { available: true };
+}
+
+export function applySpecialEquipmentPurchase(
+  merchant: Merchant | null,
+  classId: PlayerClassId,
+  gold: number,
+  stats: ShopStatSnapshot,
+  owned: boolean,
+): ShopPurchaseResult {
+  const definition = specialEquipmentForClass(classId);
+  const evaluation = evaluateSpecialEquipmentOffer(
+    merchant,
+    classId,
+    gold,
+    stats,
+    owned,
+  );
+  if (!evaluation.available) {
+    return emptyPurchase(
+      'specialEquipment',
+      gold,
+      evaluation.reason ?? 'noShop',
+    );
+  }
+  const gains = applicableSpecialEquipmentGains(definition.gains, stats);
+  return {
+    success: true,
+    offerId: 'specialEquipment',
+    specialEquipmentId: definition.id,
+    goldRemaining: gold - definition.cost,
+    goldSpent: definition.cost,
+    maxHealthGained: gains.maxHealth,
+    attackGained: gains.attack,
+    defenceGained: gains.defence,
+    evadeGained: gains.evade,
+    status: `You equip ${definition.name}. ${specialEquipmentStatLine(gains)}.`,
+  };
 }
 
 export function applyShopPurchase(
@@ -240,7 +343,7 @@ export function applyShopPurchase(
 }
 
 function emptyPurchase(
-  offerId: ShopOfferId,
+  offerId: ShopOfferId | 'specialEquipment',
   gold: number,
   reason: ShopUnavailableReason,
 ): ShopPurchaseResult {
@@ -255,6 +358,40 @@ function emptyPurchase(
     defenceGained: 0,
     evadeGained: 0,
     status: unavailableReasonText(reason),
+  };
+}
+
+function buildSpecialEquipmentOfferView(
+  merchant: Merchant,
+  classId: PlayerClassId,
+  gold: number,
+  stats: ShopStatSnapshot,
+  owned: boolean,
+): ShopSpecialOfferView {
+  const definition = specialEquipmentForClass(classId);
+  const displayedGains = owned
+    ? definition.gains
+    : applicableSpecialEquipmentGains(definition.gains, stats);
+  const evaluation = evaluateSpecialEquipmentOffer(
+    merchant,
+    classId,
+    gold,
+    stats,
+    owned,
+  );
+  return {
+    id: 'specialEquipment',
+    equipmentId: definition.id,
+    title: definition.name,
+    description: definition.flavour,
+    statLine: specialEquipmentStatLine(displayedGains),
+    classId,
+    cost: definition.cost,
+    available: evaluation.available,
+    reason: evaluation.reason,
+    reasonText: evaluation.reason
+      ? unavailableReasonText(evaluation.reason)
+      : undefined,
   };
 }
 

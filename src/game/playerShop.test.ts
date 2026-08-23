@@ -5,7 +5,10 @@ import {
   DEMO_MONSTER_ROW,
   PLAYER_EVADE_MAX,
 } from './config';
-import { getPlayerClassDefinition } from './definitions/classes';
+import {
+  PLAYER_CLASS_IDS,
+  getPlayerClassDefinition,
+} from './definitions/classes';
 import { GameState, type GameStateOptions } from './GameState';
 import { Merchant } from './Merchant';
 import { Player } from './Player';
@@ -13,15 +16,18 @@ import { mulberry32 } from './random';
 import {
   SHOP_OFFER_CATALOG,
   applyShopPurchase,
+  applySpecialEquipmentPurchase,
   buildShopView,
   createShopProgress,
   evaluateShopOffer,
+  evaluateSpecialEquipmentOffer,
   shopOfferPrice,
   shopStatSnapshot,
   type ShopOfferId,
   type ShopStatSnapshot,
   type ShopView,
 } from './shop';
+import { specialEquipmentForClass } from './specialEquipment';
 
 
 function playerOf(state: GameState) {
@@ -267,6 +273,101 @@ describe('shop offers', () => {
 });
 
 describe('GameState shop flow', () => {
+  it('offers and equips only the selected class special equipment', () => {
+    for (const classId of PLAYER_CLASS_IDS) {
+      const state = openSeededShop(
+        createState({
+          playerClass: classId,
+          createRng: () => mulberry32(123),
+          rollAvoidance: () => true,
+        }),
+      );
+      const definition = specialEquipmentForClass(classId);
+      expect(state.getShopView()?.specialOffer).toMatchObject({
+        equipmentId: definition.id,
+        classId,
+        title: definition.name,
+        cost: definition.cost,
+        available: false,
+        reason: 'unaffordable',
+      });
+
+      state.addGold(definition.cost);
+      const before = playerOf(state);
+      expect(state.canBuySpecialEquipment()).toBe(true);
+      expect(state.buySpecialEquipment()).toMatchObject({
+        success: true,
+        offerId: 'specialEquipment',
+        specialEquipmentId: definition.id,
+        goldSpent: definition.cost,
+        maxHealthGained: definition.gains.maxHealth,
+        attackGained: definition.gains.attack,
+        defenceGained: definition.gains.defence,
+        evadeGained: definition.gains.evade,
+      });
+      const after = playerOf(state);
+      expect(after.stats.maxHealth).toBe(
+        before.stats.maxHealth + definition.gains.maxHealth,
+      );
+      expect(after.stats.attack).toBe(
+        before.stats.attack + definition.gains.attack,
+      );
+      expect(after.stats.defence).toBe(
+        before.stats.defence + definition.gains.defence,
+      );
+      expect(after.evade).toBe(before.evade + definition.gains.evade);
+      expect(state.hasSpecialEquipment).toBe(true);
+      expect(state.getShopView()?.specialOffer).toMatchObject({
+        available: false,
+        reason: 'owned',
+        reasonText: 'Already equipped',
+      });
+      expect(state.buySpecialEquipment()).toMatchObject({
+        success: false,
+        reason: 'owned',
+      });
+
+      state.reset();
+      expect(state.hasSpecialEquipment).toBe(false);
+    }
+  });
+
+  it('keeps the special purchase unavailable without a merchant or at every relevant cap', () => {
+    const player = new Player('knight');
+    const definition = specialEquipmentForClass('knight');
+    expect(
+      evaluateSpecialEquipmentOffer(
+        null,
+        'knight',
+        definition.cost,
+        shopStatSnapshot(player),
+        false,
+      ).reason,
+    ).toBe('noShop');
+
+    player.increaseAttack(100);
+    player.increaseDefence(100);
+    const merchant = new Merchant('merchant-special', 14, 1);
+    expect(
+      evaluateSpecialEquipmentOffer(
+        merchant,
+        'knight',
+        definition.cost,
+        shopStatSnapshot(player),
+        false,
+      ).reason,
+    ).toBe('capped');
+    expect(
+      applySpecialEquipmentPurchase(
+        merchant,
+        'knight',
+        definition.cost,
+        shopStatSnapshot(player),
+        false,
+      ),
+    ).toMatchObject({ success: false, reason: 'capped' });
+  });
+
   it('applies a Merchant attack upgrade and resets prices on run reset', () => {
     const state = openSeededShop();
     expect(state.shopOpen).toBe(true);

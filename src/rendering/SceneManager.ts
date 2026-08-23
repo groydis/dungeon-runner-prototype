@@ -267,6 +267,7 @@ export class SceneManager {
   private playerEquipmentMounts: Group[] = [];
   private playerEquipmentUpgrades: PlayerEquipmentUpgradeLevels =
     NO_EQUIPMENT_UPGRADES;
+  private playerSpecialEquipmentEquipped = false;
   private playerEquipmentLoadToken = 0;
   private playerAttackSequence = 0;
   private playerLoadToken = 0;
@@ -499,6 +500,7 @@ export class SceneManager {
     this.playerRenderKey = renderKey;
     if (!renderKey) {
       this.playerEquipmentUpgrades = NO_EQUIPMENT_UPGRADES;
+      this.playerSpecialEquipmentEquipped = false;
       this.playerAttackSequence = 0;
     }
     this.playerLoadToken += 1;
@@ -539,6 +541,20 @@ export class SceneManager {
     if (projectileKind) {
       void this.prepareProjectilePool(projectileKind);
     }
+    if (this.playerModel && this.playerRenderKey) {
+      void this.installPlayerEquipmentLoadout(
+        this.playerModel,
+        this.playerRenderKey,
+        this.playerLoadToken,
+      );
+    }
+  }
+
+  setPlayerSpecialEquipmentEquipped(equipped: boolean): void {
+    if (equipped === this.playerSpecialEquipmentEquipped) {
+      return;
+    }
+    this.playerSpecialEquipmentEquipped = equipped;
     if (this.playerModel && this.playerRenderKey) {
       void this.installPlayerEquipmentLoadout(
         this.playerModel,
@@ -2310,7 +2326,11 @@ export class SceneManager {
   ): Promise<void> {
     const equipmentToken = ++this.playerEquipmentLoadToken;
     this.removePlayerEquipment();
-    const loadout = playerEquipmentLoadout(key, this.playerEquipmentUpgrades);
+    const loadout = playerEquipmentLoadout(
+      key,
+      this.playerEquipmentUpgrades,
+      this.playerSpecialEquipmentEquipped,
+    );
     await Promise.all(
       loadout.map((visual) =>
         this.installPlayerEquipment(
