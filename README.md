@@ -166,7 +166,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Cave Rat attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
 - **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots and derives visual weapon/shield tiers from successful Sharpened and Armoured shop purchases. Equipment remains visual-only; the shop rules still own all stat changes.
-- **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage is a normal ranged enemy from row 20; Necromancer is a rare elite from row 60. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
+- **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. General, basic movement, melee, and skeleton clips share one cache. Ranger, Mage, Skeleton Mage, and Necromancer lazily add the ranged bundle. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Dungeon floors** use three self-contained KayKit GLBs over the pooled box fallbacks. Broken variants are selected deterministically from row/column and do not affect generation or saved game state.
@@ -390,14 +390,23 @@ Monsters are game entities with a stable `id`, `name`, `row`, `col`, `encounterR
        [ x ]
 ```
 
-Diagonals do nothing. After each successful step, `resolveCompletedMove()` finds eligible monsters. Events are unchanged:
+Diagonals do nothing. After each successful step, `resolveCompletedMove()` finds eligible monsters. Events carry a frozen `EncounterMonsterView`, never a live `Monster`:
 
 ```ts
 type CombatApproach = 'frontOn' | 'surprise';
 
+interface EncounterMonsterView {
+  readonly id: string;
+  readonly type: EnemyType;
+  readonly name: string;
+  readonly row: number;
+  readonly col: number;
+  readonly renderKey: string;
+}
+
 type EncounterEvent =
-  | { kind: 'combat'; approach: CombatApproach; monster: Monster }
-  | { kind: 'evade'; monster: Monster };
+  | { kind: 'combat'; approach: CombatApproach; monster: EncounterMonsterView; evadeChance?: number }
+  | { kind: 'evade'; monster: EncounterMonsterView; evadeChance?: number };
 ```
 
 - **Same lane** (in front or behind) — `{ kind: 'combat', approach: 'frontOn' }`
