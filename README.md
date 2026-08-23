@@ -11,6 +11,7 @@ You choose a class on launch, then start in the centre lane at the near end of t
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
 - Floor tiles use a rotated KayKit geometric-stone GLB, with a wood floor for Merchant tiles and an animated KayKit spike assembly for Alarm/Trip tiles. Pooled dark-box and rune meshes remain loading/failure fallbacks.
+- Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, scaffolds, and periodically mounted torches with warm emissive glows and short-range pooled lights.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
 - Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium and large red variants are retained for future healing tiers but are not loaded.
 - Rows can contain empty lanes, Skeleton Minions, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
@@ -139,13 +140,13 @@ src/
     ShopOverlayView.ts    Merchant overlay
     LevelUpOverlayView.ts Level-up overlay
   rendering/
-    SceneManager.ts       Scene, lights, recycled row meshes, player/hit FX
+    SceneManager.ts       Scene, lights, recycled row/wall meshes, player/hit FX
     playerAssets.ts       KayKit player GLB URLs
     playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
     combatPresentationAssets.ts KayKit pooled projectile registry and fitting
     enemyAssets.ts        KayKit Skeleton enemy GLB URLs and per-model fits
     rigMediumAnimations.ts Shared Rig_Medium clip loader/cache
-    environmentAssets.ts  KayKit dungeon-floor GLBs and deterministic variants
+    environmentAssets.ts  KayKit dungeon-floor/wall GLBs and deterministic variants
     potionAssets.ts       Active and reserved KayKit health-potion GLBs
     reservedKaykitAssets.ts Lazy URLs for retained future characters/equipment
     CameraController.ts   Elevated follow camera
@@ -173,6 +174,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
 - **Dungeon floors** use self-contained KayKit GLBs over pooled box fallbacks. The large geometric stone tile is the normal floor and receives deterministic quarter-turn rotations to break up repetition without adding pooled models. Merchant tiles use the large wood floor, and Alarm/Trip tiles use a separately loaded spike assembly whose named spike node rises during the trigger effect. These choices remain presentation-only and do not affect generation or saved game state.
+- **Dungeon walls** are part of the same recycled row pool: each logical row owns a left and right section just beyond the outer lanes. A deterministic row/side hash selects mostly plain masonry with occasional damaged, windowed, gated, decorated, or scaffold variants; mounted torches recur every seven rows and alternate sides. Each visible torch owns a small emissive flame treatment and a shadowless, short-range warm point light inside the same pool. Wall selection has no collision, generation, or saved-state role, and simple stone boxes remain loading/failure fallbacks.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -521,7 +523,7 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 - Further evade/perception tuning and more defined level thresholds
 - More shop stock or meta progression; more loot kinds
 - Damaging traps, more trap kinds, doors, and authored biomes
-- Additional walls, doors, props, and authored dungeon biomes
+- Interactive doors, room transitions, more dungeon props, and authored biomes
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)
 
 ## License

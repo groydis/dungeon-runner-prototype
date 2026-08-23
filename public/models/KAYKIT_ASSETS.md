@@ -5,9 +5,11 @@ by Kay Lousberg and are released under **CC0 1.0**. Attribution is optional;
 the project credits KayKit in the main README. Original `.blend` files remain in
 the purchased source library and are never copied into this repository.
 
-Source paths below are relative to the collection root. Blender exports were
-made with Blender 5.2 LTS as self-contained GLBs, with referenced PNG textures
-embedded and without Draco or KTX compression.
+Source paths below are relative to the collection root. Where Blender export was
+needed, Blender 5.2 LTS produced self-contained GLBs with referenced PNG textures
+embedded. The Dungeon wall and torch files were packaged directly from KayKit's
+supplied glTF, BIN, and PNG files without changing their geometry or materials.
+No target uses Draco or KTX compression.
 
 ## Characters
 
@@ -113,16 +115,29 @@ KayKit source assets remain unchanged in the Complete Collection.
 
 ## Dungeon environment
 
-Each target was exported from the matching `.gltf` and `.bin` under
-`KayKit Dungeon Pack 1.1/Assets/gltf/`, embedding `dungeon_texture.png`. The
-editable source remains
+Each target came from the matching `.gltf` and `.bin` under
+`KayKit Dungeon Pack 1.1/Assets/gltf/`, embedding `dungeon_texture.png`. Floor
+and trap targets were exported through Blender; wall and torch targets were
+losslessly packaged into GLB because their supplied transforms and hierarchy
+were already suitable. The editable source remains
 `KayKit Dungeon Pack 1.1/Source/Dungeon_Asset_Pack_1.1_Source.blend`.
 
-| Target under `environment/kaykit/dungeon/` | Runtime status |
-|---|---|
-| `floor_tile_large.glb` | Active geometric base floor, scaled to one logical cell |
-| `floor_wood_large.glb` | Active Merchant/safe-tile floor |
-| `floor_tile_big_spikes.glb` | Active Alarm/Trip floor; its separate `spikes` node is animated at runtime |
-| `floor_tile_small.glb` | Retained previous base-floor export; not loaded by the current runtime |
-| `floor_tile_small_broken_A.glb` | Retained previous broken-floor export; not loaded by the current runtime |
-| `floor_tile_small_broken_B.glb` | Retained previous broken-floor export; not loaded by the current runtime |
+| Target under `environment/kaykit/dungeon/` | Exact KayKit source | Operation | Runtime status |
+|---|---|---|---|
+| `floor_tile_large.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_tile_large.gltf` | Blender export; embedded texture | Active geometric base floor, scaled to one logical cell |
+| `floor_wood_large.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_wood_large.gltf` | Blender export; embedded texture | Active Merchant/safe-tile floor |
+| `floor_tile_big_spikes.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_tile_big_spikes.gltf` | Blender export; embedded texture and preserved `spikes` node | Active Alarm/Trip floor; its separate `spikes` node is animated at runtime |
+| `floor_tile_small.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_tile_small.gltf` | Blender export; embedded texture | Retained previous base-floor export; not loaded by the current runtime |
+| `floor_tile_small_broken_A.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_tile_small_broken_A.gltf` | Blender export; embedded texture | Retained previous broken-floor export; not loaded by the current runtime |
+| `floor_tile_small_broken_B.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/floor_tile_small_broken_B.gltf` | Blender export; embedded texture | Retained previous broken-floor export; not loaded by the current runtime |
+| `walls/wall.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall.gltf` | Direct GLB packaging; embedded texture | Active common side-wall section |
+| `walls/wall_cracked.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_cracked.gltf` | Direct GLB packaging; embedded texture | Active uncommon damaged section |
+| `walls/wall_window_closed.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_window_closed.gltf` | Direct GLB packaging; embedded texture | Active uncommon closed-window section |
+| `walls/wall_gated.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_gated.gltf` | Direct GLB packaging; embedded texture | Active rare barred section |
+| `walls/wall_archedwindow_gated.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_archedwindow_gated.gltf` | Direct GLB packaging; embedded texture | Active rare arched barred section |
+| `walls/wall_shelves.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_shelves.gltf` | Direct GLB packaging; embedded texture | Active rare decorative shelf section |
+| `walls/wall_inset.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_inset.gltf` | Direct GLB packaging; embedded texture | Active rare inset section |
+| `walls/wall_scaffold.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_scaffold.gltf` | Direct GLB packaging; embedded texture | Active rare scaffold section |
+| `walls/wall_window_closed_scaffold.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_window_closed_scaffold.gltf` | Direct GLB packaging; embedded texture | Active rare window/scaffold section |
+| `walls/wall_open_scaffold.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/wall_open_scaffold.gltf` | Direct GLB packaging; embedded texture | Reserved future doorway/frame; not registered or loaded |
+| `props/torch_mounted.glb` | `KayKit Dungeon Pack 1.1/Assets/gltf/torch_mounted.gltf` | Direct GLB packaging; embedded texture | Active mount every seven rows, alternating sides; runtime adds a pooled emissive glow and shadowless warm point light |

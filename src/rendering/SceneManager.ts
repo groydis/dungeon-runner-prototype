@@ -1,5 +1,7 @@
 import {
+  AdditiveBlending,
   AnimationMixer,
+  Box3,
   BoxGeometry,
   CapsuleGeometry,
   CircleGeometry,
@@ -16,6 +18,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  PointLight,
   RingGeometry,
   SRGBColorSpace,
   Scene,
@@ -65,13 +68,22 @@ import {
 } from './enemyAssets';
 import {
   DUNGEON_FLOOR_KEYS,
+  DUNGEON_WALL_KEYS,
   dungeonFloorRotation,
   dungeonFloorVariant,
+  dungeonWallTorchSide,
+  dungeonWallVariant,
   fitDungeonFloorModel,
   fitDungeonTrapModel,
+  fitDungeonWallModel,
+  fitDungeonWallTorch,
   loadDungeonFloorTemplate,
   loadDungeonTrapTemplate,
+  loadDungeonWallTemplate,
+  loadDungeonWallTorchTemplate,
   type DungeonFloorAssetKey,
+  type DungeonWallAssetKey,
+  type DungeonWallSide,
 } from './environmentAssets';
 import {
   fitPlayerModel,
@@ -123,6 +135,16 @@ interface EnemySlot {
   attackSequence: number;
 }
 
+interface DungeonWallSlot {
+  side: DungeonWallSide;
+  group: Group;
+  placeholder: Mesh;
+  models: Partial<Record<DungeonWallAssetKey, Group>>;
+  assetKey: DungeonWallAssetKey;
+  torchModel: Group | null;
+  torchGlow: Group | null;
+}
+
 interface RowView {
   group: Group;
   tiles: Mesh[];
@@ -134,6 +156,7 @@ interface RowView {
   potions: Mesh[];
   traps: Group[];
   merchants: Group[];
+  walls: Record<DungeonWallSide, DungeonWallSlot>;
   assignedRow: number;
 }
 
@@ -201,6 +224,9 @@ interface ProjectileFx {
 const TRAP_SPIKE_RETRACTION = 1.35;
 const TRAP_SPIKE_IDLE_EXTENSION = 0.22;
 const COMBAT_FLASH_RED = 0xff5a4a;
+const TORCH_LIGHT_COLOR = 0xff7a32;
+const TORCH_LIGHT_INTENSITY = 3.4;
+const TORCH_LIGHT_DISTANCE = TILE_PITCH * 2.8;
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -226,6 +252,7 @@ export class SceneManager {
   private playerDead = false;
   private readonly floorMaterialA: MeshStandardMaterial;
   private readonly floorMaterialB: MeshStandardMaterial;
+  private readonly wallFallbackMaterial: MeshStandardMaterial;
   private readonly highlightMaterial: MeshStandardMaterial;
   private readonly skeletonMinionMaterial: MeshStandardMaterial;
   private readonly cryptGuardMaterial: MeshStandardMaterial;
@@ -287,6 +314,11 @@ export class SceneManager {
     this.floorMaterialB = new MeshStandardMaterial({
       color: 0x24272e,
       roughness: 0.94,
+      metalness: 0.04,
+    });
+    this.wallFallbackMaterial = new MeshStandardMaterial({
+      color: 0x4a4e55,
+      roughness: 0.92,
       metalness: 0.04,
     });
     this.highlightMaterial = new MeshStandardMaterial({
@@ -412,6 +444,7 @@ export class SceneManager {
 
     this.buildRowPool();
     void this.installDungeonFloorModels();
+    void this.installDungeonWallModels();
     void this.installDungeonTrapModels();
     void this.installPotionModels();
     const player = this.createPlayer();
@@ -1120,6 +1153,7 @@ export class SceneManager {
   private buildRowPool(): void {
     const tileGeo = new BoxGeometry(TILE_SIZE, 0.14, TILE_SIZE);
     const hitGeo = new PlaneGeometry(TILE_PITCH * 0.96, TILE_PITCH * 0.96);
+    const wallGeo = new BoxGeometry(TILE_PITCH / 4, TILE_PITCH, TILE_PITCH);
     const skeletonMinionGeo = new SphereGeometry(0.28, 10, 8);
     const cryptGuardGeo = new CapsuleGeometry(0.16, 0.52, 4, 8);
     const boneBruteGeo = new BoxGeometry(0.5, 0.62, 0.5);
@@ -1144,6 +1178,12 @@ export class SceneManager {
       const potions: Mesh[] = [];
       const traps: Group[] = [];
       const merchants: Group[] = [];
+      const walls: Record<DungeonWallSide, DungeonWallSlot> = {
+        left: this.createDungeonWallSlot('left', wallGeo),
+        right: this.createDungeonWallSlot('right', wallGeo),
+      };
+
+      group.add(walls.left.group, walls.right.group);
 
       for (let col = 0; col < LANE_COUNT; col += 1) {
         const tile = new Mesh(tileGeo, this.floorMaterialA);
@@ -1207,9 +1247,39 @@ export class SceneManager {
         potions,
         traps,
         merchants,
+        walls,
         assignedRow: i,
       });
     }
+  }
+
+  private createDungeonWallSlot(
+    side: DungeonWallSide,
+    geometry: BoxGeometry,
+  ): DungeonWallSlot {
+    const group = new Group();
+    group.name = `dungeonWall-${side}`;
+    const placeholder = new Mesh(geometry, this.wallFallbackMaterial.clone());
+    const roadEdge = Math.abs(laneWorldX(LANE_COUNT - 1)) + TILE_SIZE / 2;
+    const halfThickness = TILE_PITCH / 8;
+    placeholder.position.set(
+      side === 'left'
+        ? -(roadEdge + halfThickness)
+        : roadEdge + halfThickness,
+      0.071 + TILE_PITCH / 2,
+      0,
+    );
+    placeholder.name = `dungeonWallFallback-${side}`;
+    group.add(placeholder);
+    return {
+      side,
+      group,
+      placeholder,
+      models: {},
+      assetKey: 'stone',
+      torchModel: null,
+      torchGlow: null,
+    };
   }
 
   private async installDungeonFloorModels(): Promise<void> {
@@ -1236,6 +1306,98 @@ export class SceneManager {
     } catch (error) {
       console.error('Failed to load KayKit dungeon floor models', error);
     }
+  }
+
+  private async installDungeonWallModels(): Promise<void> {
+    try {
+      const [templates, torchTemplate] = await Promise.all([
+        Promise.all(
+          DUNGEON_WALL_KEYS.map(async (key) => ({
+            key,
+            template: await loadDungeonWallTemplate(key),
+          })),
+        ),
+        loadDungeonWallTorchTemplate(),
+      ]);
+      for (const view of this.rowViews) {
+        for (const side of ['left', 'right'] as const) {
+          const slot = view.walls[side];
+          for (const { key, template } of templates) {
+            const model = template.clone(true);
+            cloneMeshMaterials(model);
+            model.name = `dungeonWall-${side}-${key}`;
+            fitDungeonWallModel(model, side);
+            model.visible = false;
+            slot.group.add(model);
+            slot.models[key] = model;
+          }
+
+          const torch = torchTemplate.clone(true);
+          cloneMeshMaterials(torch);
+          torch.name = `dungeonWallTorch-${side}`;
+          fitDungeonWallTorch(torch, side);
+          torch.visible = false;
+          slot.group.add(torch);
+          slot.torchModel = torch;
+
+          const glow = this.createDungeonWallTorchGlow(torch, side);
+          glow.visible = false;
+          slot.group.add(glow);
+          slot.torchGlow = glow;
+        }
+        this.applyDungeonWallPresentation(view);
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit dungeon wall models', error);
+    }
+  }
+
+  private createDungeonWallTorchGlow(
+    torch: Group,
+    side: DungeonWallSide,
+  ): Group {
+    torch.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(torch);
+    const width = Math.max(bounds.max.x - bounds.min.x, 0.001);
+    const height = Math.max(bounds.max.y - bounds.min.y, 0.001);
+    const glow = new Group();
+    glow.name = `dungeonWallTorchGlow-${side}`;
+    glow.position.set(
+      side === 'left'
+        ? bounds.max.x - width * 0.16
+        : bounds.min.x + width * 0.16,
+      bounds.max.y - height * 0.12,
+      (bounds.min.z + bounds.max.z) / 2,
+    );
+
+    const coreMaterial = new MeshBasicMaterial({
+      color: 0xffd083,
+      toneMapped: false,
+    });
+    const core = new Mesh(new SphereGeometry(0.04, 8, 6), coreMaterial);
+    core.name = 'torchFlameCore';
+
+    const haloMaterial = new MeshBasicMaterial({
+      color: TORCH_LIGHT_COLOR,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      toneMapped: false,
+    });
+    const halo = new Mesh(new SphereGeometry(0.095, 8, 6), haloMaterial);
+    halo.name = 'torchFlameHalo';
+
+    const light = new PointLight(
+      TORCH_LIGHT_COLOR,
+      TORCH_LIGHT_INTENSITY,
+      TORCH_LIGHT_DISTANCE,
+      2,
+    );
+    light.name = 'torchPointLight';
+    light.position.y = 0.025;
+    glow.add(halo, core, light);
+    return glow;
   }
 
   private async installDungeonTrapModels(): Promise<void> {
@@ -1303,6 +1465,28 @@ export class SceneManager {
     }
   }
 
+  private applyDungeonWallPresentation(view: RowView): void {
+    const torchSide = dungeonWallTorchSide(view.assignedRow);
+    for (const side of ['left', 'right'] as const) {
+      const slot = view.walls[side];
+      const selected = dungeonWallVariant(view.assignedRow, side);
+      slot.assetKey = selected;
+      for (const key of DUNGEON_WALL_KEYS) {
+        const model = slot.models[key];
+        if (model) {
+          model.visible = key === selected;
+        }
+      }
+      slot.placeholder.visible = !slot.models[selected];
+      if (slot.torchModel) {
+        slot.torchModel.visible = torchSide === side;
+      }
+      if (slot.torchGlow) {
+        slot.torchGlow.visible = torchSide === side;
+      }
+    }
+  }
+
   private bindRow(view: RowView, row: number, snapshot: BoardSnapshot): void {
     this.merchantLeaveFx = this.merchantLeaveFx.filter(
       (fx) => !view.merchants.includes(fx.group),
@@ -1322,6 +1506,7 @@ export class SceneManager {
     }
     this.releaseRowEnemySlots(view);
     view.assignedRow = row;
+    this.applyDungeonWallPresentation(view);
     this.applyTileChrome(view, snapshot);
   }
 
