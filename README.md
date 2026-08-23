@@ -82,20 +82,19 @@ npm run preview
 
 ## Deploy
 
-Production is a static Vite build on [Cloudflare Pages](https://developers.cloudflare.com/pages/), served at [hollowmile.com](https://hollowmile.com).
+Production is a static Vite build on [Cloudflare Workers](https://developers.cloudflare.com/workers/static-assets/), served at [hollowmile.com](https://hollowmile.com).
 
-Connect the GitHub repo in **Workers & Pages → Create → Pages → Import an existing Git repository**, then use:
+Connect the GitHub repo in **Workers & Pages → Import a repository**, then use:
 
 | Setting | Value |
 |---|---|
-| Production branch | `main` |
+| Project name | `hollow-mile` |
 | Build command | `npm run build` |
-| Build output directory | `dist` |
-| Node.js version | `20` |
+| Deploy command | `npx wrangler deploy` |
 
-`wrangler.jsonc` sets the Pages project name to `hollow-mile` and the output directory to `./dist`. After the first successful deploy, attach the custom domain under **Custom domains** and add `hollowmile.com` (plus `www` if you want both).
+`wrangler.jsonc` names the Worker `hollow-mile` and serves `./dist` as static assets. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
 
-Pushes to the production branch publish automatically. Pull requests get preview URLs.
+Pushes to the production branch publish automatically. Pull requests get preview deployments.
 
 Query-string helpers (no on-screen debug UI):
 
