@@ -66,6 +66,7 @@ const sceneCache = new Map<string, Promise<Group>>();
 const clipCache = new Map<string, Promise<AnimationClip[]>>();
 let clipsPromise: Promise<RigMediumClipMap> | null = null;
 let rangedClipsPromise: Promise<RigMediumClipMap> | null = null;
+let idleClipPromise: Promise<AnimationClip | undefined> | null = null;
 
 export function loadGltfScene(url: string): Promise<Group> {
   const cached = sceneCache.get(url);
@@ -129,6 +130,16 @@ export async function loadRigMediumClips(
     return clips;
   }
   return { ...clips, ...(await loadRigMediumRangedClips()) };
+}
+
+/** Class selection needs only Idle_A; do not pull combat/movement bundles at boot. */
+export function loadRigMediumIdleClip(): Promise<AnimationClip | undefined> {
+  if (!idleClipPromise) {
+    idleClipPromise = loadAnimationClips(
+      RIG_MEDIUM_ANIMATION_URLS.general,
+    ).then((clips) => findClip(clips, RIG_MEDIUM_CLIP_NAMES.idle));
+  }
+  return idleClipPromise;
 }
 
 /** Load bow and magic clips only for ranged classes or enemies. */

@@ -43,6 +43,7 @@ Included:
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
 - Six player classes that set starting HP, attack, defence, and Evade
+- A measured boot loader that caches the complete class carousel and opening-dungeon presentation before play
 - A full-screen **Choose Your Class** carousel with animated KayKit model previews; board input stays locked until a class is selected
 - HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
@@ -153,6 +154,7 @@ src/
       enemies.ts          Authoritative enemy names, base stats, XP, render keys
       encounterPools.ts   Distance-based enemy-type weights
   ui/
+    LoadingView.ts        Boot progress and loading-screen transition
     HudView.ts            Class, distance, level, XP, gold, attack, evade, HP, status
     ClassSelectionView.ts Choose Your Class overlay
     GameOverView.ts       Death overlay and Restart Run
@@ -161,6 +163,7 @@ src/
   rendering/
     SceneManager.ts       Scene, lights, recycled row/wall meshes, player/hit FX
     ClassSelectionPreview.ts Idle KayKit class-carousel model renderer
+    preloadAssets.ts      Boot, class-select background, and per-class preload stages
     playerAssets.ts       KayKit player GLB URLs
     playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
     combatPresentationAssets.ts KayKit pooled projectile registry and fitting
@@ -184,6 +187,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **RunWorld** is private to GameState. It owns the mutable board: Grid, recipes, entity maps, tile materialisation, prepare/prune, lookups, alarm movement, world reset, and snapshot construction.
 - **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster.
 - **Game.ts** owns overlay order, animation, and input-lock state. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
+- **Asset preloading** has two boundaries. `main.ts` blocks on measured carousel/opening-dungeon groups before constructing the game. While class selection is visible, `preloadAssets.ts` warms core combat, early-enemy, and Merchant promises in the background; highlighting a ranged class also requests its ranged bundle. Beginning a run waits on only the highlighted class and shows `Preparing [class]…` if that work is still outstanding. Later enemies, advanced potions, future equipment, and reserved animations remain lazy.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. `ClassSelectionPreview.ts` renders the visible carousel class with its starting equipment and shared idle clip. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
@@ -191,7 +195,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
 - **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the capped stat package and run-scoped ownership.
 - **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
-- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. General, basic movement, melee, and skeleton clips share one cache. Ranger, Mage, Skeleton Mage, and Necromancer lazily add the ranged bundle. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
+- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
 - **Merchant presentation** mounts the fully equipped KayKit Hoarder in each pooled merchant slot, explicitly requiring its backpack, raised face-mask, and front-pouch sword meshes, and plays the shared `Rig_Medium` idle clip. The existing leave/shrink/fade sequence operates on the wrapper, while the previous geometric merchant remains a loading/failure fallback.
@@ -365,7 +369,7 @@ Classes are starting stats and presentation only. Ranger arrows, Mage and Loreke
 
 `src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, Merchant prices, pending level-ups, entities, or RNG state.
 
-**Choose Your Class** appears full-screen on first launch and after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Until the visible class is selected, the board has no legal highlights and `GameState` rejects movement.
+**Choose Your Class** appears full-screen after the measured boot preload and after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Gameplay assets continue warming while the player browses. If the highlighted class is not ready when selected, its button temporarily reads `Preparing [class]…`. Until that class is ready and selected, the board has no legal highlights and `GameState` rejects movement.
 
 Universal run caps (Merchant purchases and level-up rewards share these):
 

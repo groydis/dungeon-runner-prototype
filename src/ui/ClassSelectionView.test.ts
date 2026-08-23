@@ -95,6 +95,25 @@ describe('class-selection overlay', () => {
     overlay.dispose();
   });
 
+  it('locks browsing and labels the selected class while gameplay assets prepare', () => {
+    const root = createClassSelectRoot();
+    const overlay = new ClassSelectionView(root);
+    overlay.show(buildClassSelectionView());
+
+    overlay.setPreparing(true);
+    expect(root.text('class-select-current')).toBe('PREPARING ROGUE…');
+    expect(root.button('class-select-current').disabled).toBe(true);
+    expect(root.button('class-previous').disabled).toBe(true);
+    expect(root.button('class-next').disabled).toBe(true);
+    root.button('class-next').click();
+    expect(overlay.selectedClassId).toBe('rogue');
+
+    overlay.setPreparing(false);
+    expect(root.text('class-select-current')).toBe('BEGIN AS ROGUE');
+    expect(root.button('class-select-current').disabled).toBe(false);
+    overlay.dispose();
+  });
+
   it('blocks pointer input from falling through to the board', () => {
     const root = createClassSelectRoot();
     const overlay = new ClassSelectionView(root);

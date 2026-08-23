@@ -33,6 +33,7 @@ export class ClassSelectionView {
   private readonly handlers: Partial<Record<PlayerClassId, () => void>> = {};
   private classes: ClassOptionView[] = [];
   private currentIndex = 0;
+  private preparing = false;
   private pointerStartX: number | null = null;
   private changeHandler: ((classId: PlayerClassId) => void) | null = null;
 
@@ -81,6 +82,7 @@ export class ClassSelectionView {
   show(view: ClassSelectionSnapshot): void {
     this.classes = [...view.classes];
     this.currentIndex = 0;
+    this.preparing = false;
     this.renderCurrent();
     this.overlayEl.hidden = false;
     this.notifyChange();
@@ -96,6 +98,11 @@ export class ClassSelectionView {
 
   get selectedClassId(): PlayerClassId | null {
     return this.currentOption?.id ?? null;
+  }
+
+  setPreparing(preparing: boolean): void {
+    this.preparing = preparing;
+    this.renderCurrent();
   }
 
   render(view: ClassSelectionSnapshot): void {
@@ -136,13 +143,17 @@ export class ClassSelectionView {
     this.attackEl.textContent = String(option.attack);
     this.defenceEl.textContent = String(option.defence);
     this.evadeEl.textContent = String(option.evade);
-    this.selectButton.textContent = `BEGIN AS ${option.name.toUpperCase()}`;
-    this.selectButton.disabled = false;
+    this.selectButton.textContent = this.preparing
+      ? `PREPARING ${option.name.toUpperCase()}…`
+      : `BEGIN AS ${option.name.toUpperCase()}`;
+    this.selectButton.disabled = this.preparing;
+    this.previousButton.disabled = this.preparing;
+    this.nextButton.disabled = this.preparing;
     this.selectButton.setAttribute('aria-label', classSelectAriaLabel(option));
   }
 
   private step(delta: number): void {
-    if (this.classes.length === 0) {
+    if (this.classes.length === 0 || this.preparing) {
       return;
     }
     this.currentIndex =

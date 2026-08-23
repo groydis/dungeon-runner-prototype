@@ -51,6 +51,93 @@ body {
   touch-action: none;
 }
 
+.loading-screen {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right))
+    calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
+  background: #242627;
+  color: var(--hud);
+  opacity: 1;
+  transition: opacity 220ms ease;
+}
+
+.loading-screen[data-state="leaving"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-screen[hidden] {
+  display: none;
+}
+
+.loading-card {
+  width: min(34rem, 100%);
+  border-top: 3px solid var(--ui-brown);
+  border-bottom: 3px solid var(--ui-brown);
+  padding: clamp(22px, 5vw, 42px) 0;
+  text-align: center;
+}
+
+.loading-kicker,
+#loading-status,
+#loading-percent {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.loading-kicker {
+  margin: 0;
+  color: var(--ui-brown-light);
+  font-size: 0.66rem;
+}
+
+.loading-card h1 {
+  margin: 5px 0 clamp(30px, 7vh, 54px);
+  color: var(--hud);
+  font-size: clamp(2.35rem, 8vw, 4.8rem);
+  line-height: 0.94;
+  letter-spacing: 0.045em;
+}
+
+#loading-status {
+  min-height: 1.25em;
+  margin: 0 0 11px;
+  color: #c7bfb5;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.loading-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  background: #343637;
+}
+
+#loading-progress-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--ui-brown-light);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 140ms ease;
+}
+
+#loading-percent {
+  margin: 9px 0 0;
+  color: #a9a39b;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+}
+
 #hud {
   pointer-events: none;
   position: absolute;
@@ -863,6 +950,12 @@ body {
   transform: scale(0.96);
 }
 
+.class-carousel-control:disabled {
+  color: #7d7166;
+  cursor: wait;
+  opacity: 0.42;
+}
+
 .class-select-details {
   display: flex;
   width: min(42rem, 100%);
@@ -929,6 +1022,12 @@ body {
 #class-select-current:hover {
   border-color: var(--ui-brown-light);
   background: #4a4c4b;
+}
+
+#class-select-current:disabled {
+  color: #b8b1a8;
+  cursor: wait;
+  opacity: 0.76;
 }
 
 .class-carousel-control:focus-visible {

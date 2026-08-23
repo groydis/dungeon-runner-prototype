@@ -30,6 +30,10 @@ import { CameraController } from '../rendering/CameraController';
 import { ClassSelectionPreview } from '../rendering/ClassSelectionPreview';
 import { EquipmentShopPreview } from '../rendering/EquipmentShopPreview';
 import { MerchantShopPreview } from '../rendering/MerchantShopPreview';
+import {
+  preloadCharacterSelectionBackgroundAssets,
+  preloadClassGameplayAssets,
+} from '../rendering/preloadAssets';
 import { SceneManager } from '../rendering/SceneManager';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
 import { GameOverView } from '../ui/GameOverView';
@@ -129,6 +133,7 @@ export class Game {
     this.classSelect = new ClassSelectionView();
     this.classSelect.onChange((classId) => {
       this.classSelectionPreview.setClassId(classId);
+      void preloadClassGameplayAssets(classId);
     });
     this.gameOver.onRestart(() => this.returnToClassSelection());
     for (const classId of PLAYER_CLASS_IDS) {
@@ -150,6 +155,7 @@ export class Game {
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
     this.classSelectionPreview.setVisible(true);
     this.classSelect.show(this.state.getClassSelectionView());
+    void preloadCharacterSelectionBackgroundAssets();
     this.setBoardInteractive(false);
     this.handleResize();
     this.updateHud();
@@ -535,7 +541,9 @@ export class Game {
     this.setBoardInteractive(true);
   }
 
-  private selectClass(classId: PlayerClassId): void {
+  private async selectClass(classId: PlayerClassId): Promise<void> {
+    this.classSelect.setPreparing(true);
+    await preloadClassGameplayAssets(classId);
     this.state.selectClass(classId);
     this.classSelect.hide();
     this.classSelectionPreview.setVisible(false);

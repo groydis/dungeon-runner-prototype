@@ -17,6 +17,30 @@
   <body>
     <div id="app">
       <canvas id="game-canvas"></canvas>
+      <div
+        id="loading-screen"
+        class="loading-screen"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="loading-card">
+          <p class="loading-kicker">THE ROAD BELOW AWAITS</p>
+          <h1>THE HOLLOW MILE</h1>
+          <p id="loading-status">Preparing the dungeon</p>
+          <div
+            id="loading-progress"
+            class="loading-progress"
+            role="progressbar"
+            aria-label="Loading game assets"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span id="loading-progress-fill"></span>
+          </div>
+          <p id="loading-percent">0%</p>
+        </div>
+      </div>
       <div id="hud">
         <header class="hud-top">
           <h1>The Hollow Mile</h1>

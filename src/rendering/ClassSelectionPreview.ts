@@ -24,7 +24,7 @@ import {
   playerEquipmentMountNames,
   type PlayerEquipmentVisual,
 } from './playerEquipment';
-import { loadRigMediumClips } from './rigMediumAnimations';
+import { loadRigMediumIdleClip } from './rigMediumAnimations';
 
 const MAX_PIXEL_RATIO = 1.5;
 const PREVIEW_MODEL_HEIGHT = 1.88;
@@ -112,9 +112,9 @@ export class ClassSelectionPreview {
   ): Promise<void> {
     const loadout = playerEquipmentLoadout(classId);
     try {
-      const [template, clips, equipmentTemplates] = await Promise.all([
+      const [template, idleClip, equipmentTemplates] = await Promise.all([
         loadPlayerTemplate(classId),
-        loadRigMediumClips(),
+        loadRigMediumIdleClip(),
         Promise.all(
           loadout.map((visual) =>
             loadPlayerEquipmentTemplate(visual.assetKey),
@@ -139,8 +139,8 @@ export class ClassSelectionPreview {
       this.model = model;
 
       const mixer = new AnimationMixer(model);
-      if (clips.idle) {
-        const idle = mixer.clipAction(clips.idle);
+      if (idleClip) {
+        const idle = mixer.clipAction(idleClip);
         idle.setLoop(LoopRepeat, Infinity);
         idle.play();
       }
