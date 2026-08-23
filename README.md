@@ -1,6 +1,6 @@
-# Dungeon Runner
+# The Hollow Mile
 
-A mobile-first, tile-based dungeon roguelite prototype. The playfield is a three-lane “highway” seen from a slightly elevated 3D view. You are not free to roam: every turn you advance exactly one row, and you may shift at most one lane sideways.
+A mobile-first, tile-based dungeon roguelite. The playfield is a three-lane “highway” seen from a slightly elevated 3D view. You are not free to roam: every turn you advance exactly one row, and you may shift at most one lane sideways.
 
 This repository is a working visual skeleton, not a complete game. It is built with **Vite**, **TypeScript**, and **Three.js** (no React).
 
@@ -79,6 +79,23 @@ npm run preview
 ```
 
 `build` type-checks with `tsc --noEmit`, then bundles with Vite.
+
+## Deploy
+
+Production is a static Vite build on [Cloudflare Pages](https://developers.cloudflare.com/pages/), served at [hollowmile.com](https://hollowmile.com).
+
+Connect the GitHub repo in **Workers & Pages → Create → Pages → Import an existing Git repository**, then use:
+
+| Setting | Value |
+|---|---|
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Node.js version | `20` |
+
+`wrangler.jsonc` sets the Pages project name to `hollow-mile` and the output directory to `./dist`. After the first successful deploy, attach the custom domain under **Custom domains** and add `hollowmile.com` (plus `www` if you want both).
+
+Pushes to the production branch publish automatically. Pull requests get preview URLs.
 
 Query-string helpers (no on-screen debug UI):
 
@@ -535,8 +552,8 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 
 ## License
 
-Private prototype. Add a license before publishing.
+The Hollow Mile game code, writing, and branding are all rights reserved unless a `LICENSE` file is added later.
 
-Player characters, merchants, Skeleton enemies, environment assets, and shared `Rig_Medium` animations are **KayKit** by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Player characters, merchants, Skeleton enemies, environment assets, and shared `Rig_Medium` animations are from [The Complete KayKit](https://kaylousberg.itch.io/kaykit-complete) by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Attribution is optional; this project credits KayKit in the class-select screen and here.
 
 Exact source paths, export decisions, runtime targets, and future reservations are recorded in [`public/models/KAYKIT_ASSETS.md`](public/models/KAYKIT_ASSETS.md).

@@ -8,14 +8,18 @@
     />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#121316" />
-    <title>Dungeon Runner</title>
+    <meta
+      name="description"
+      content="The Hollow Mile — a mobile-first, tile-based dungeon roguelite."
+    />
+    <title>The Hollow Mile</title>
   </head>
   <body>
     <div id="app">
       <canvas id="game-canvas"></canvas>
       <div id="hud">
         <header class="hud-top">
-          <h1>Dungeon Runner</h1>
+          <h1>The Hollow Mile</h1>
           <p id="distance">Distance: 0</p>
           <p id="class-name">CLASS: —</p>
           <div class="hud-progress">
@@ -204,7 +208,7 @@
       >
         <div class="class-select-card">
           <header class="class-select-header">
-            <p class="class-select-kicker">CHOOSE YOUR CLASS</p>
+            <p class="class-select-kicker">THE HOLLOW MILE</p>
             <h2 id="class-current-name" aria-live="polite">Rogue</h2>
             <p id="class-carousel-position" class="class-carousel-position">1 / 6</p>
           </header>
@@ -240,6 +244,15 @@
             </div>
             <button type="button" id="class-select-current">BEGIN AS ROGUE</button>
             <p class="class-swipe-hint">SWIPE OR USE THE ARROWS</p>
+            <p class="class-select-credit">
+              Characters and dungeon art from
+              <a
+                href="https://kaylousberg.itch.io/kaykit-complete"
+                target="_blank"
+                rel="noopener noreferrer"
+              >KayKit</a>
+              by Kay Lousberg
+            </p>
           </section>
         </div>
       </div>

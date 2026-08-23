@@ -66,8 +66,8 @@ body {
 
 .hud-top h1 {
   margin: 0;
-  font-size: clamp(1.35rem, 5vw, 2rem);
-  letter-spacing: 0.04em;
+  font-size: clamp(1.25rem, 4.6vw, 1.85rem);
+  letter-spacing: 0.03em;
   font-weight: 600;
 }
 
@@ -945,6 +945,28 @@ body {
   color: #918b83;
   font-size: 0.56rem;
   letter-spacing: 0.14em;
+}
+
+.class-select-credit {
+  margin: 8px 0 0;
+  color: #7d7871;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.class-select-credit a {
+  color: #c4a27a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.class-select-credit a:focus-visible {
+  outline: 2px solid #d4c2ad;
+  outline-offset: 3px;
 }
 
 #game-over-distance {
