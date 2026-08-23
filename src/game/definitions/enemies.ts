@@ -9,6 +9,9 @@ export type EnemyType =
   | 'skeletonMage'
   | 'necromancer';
 
+/** One distinct render key per enemy type. Rendering maps these to GLBs. */
+export type EnemyRenderKey = EnemyType;
+
 export type EnemyDropKind = 'none' | 'gold' | 'potion';
 
 export interface EnemyDropTableEntry {
@@ -48,7 +51,7 @@ export interface EnemyDefinition {
   readonly perception: number;
   readonly experience: number;
   readonly elite: boolean;
-  readonly renderKey: string;
+  readonly renderKey: EnemyRenderKey;
   readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
 }
 

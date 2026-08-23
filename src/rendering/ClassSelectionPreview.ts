@@ -2,16 +2,11 @@ import {
   AmbientLight,
   AnimationMixer,
   Box3,
-  Color,
   DirectionalLight,
   Group,
   LoopRepeat,
-  PerspectiveCamera,
-  Scene,
   SkinnedMesh,
-  SRGBColorSpace,
   Vector3,
-  WebGLRenderer,
   type Object3D,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -24,49 +19,37 @@ import {
   playerEquipmentMountNames,
   type PlayerEquipmentVisual,
 } from './playerEquipment';
+import { PreviewStage } from './PreviewStage';
 import { loadRigMediumIdleClip } from './rigMediumAnimations';
 
-const MAX_PIXEL_RATIO = 1.5;
 const PREVIEW_MODEL_HEIGHT = 1.88;
 
 /** Idle KayKit adventurer shown by the full-screen class carousel. */
 export class ClassSelectionPreview {
-  private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(27, 1, 0.1, 20);
-  private readonly renderer: WebGLRenderer;
+  private readonly stage: PreviewStage;
   private readonly presentation = new Group();
   private model: Group | null = null;
   private mixer: AnimationMixer | null = null;
   private classId: PlayerClassId | null = null;
   private loadToken = 0;
   private visible = false;
-  private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    this.renderer = new WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
-    this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.setClearColor(new Color(0x000000), 0);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this.stage = new PreviewStage(canvas, { fov: 27 });
+    this.stage.scene.add(this.presentation);
+    this.stage.camera.position.set(0, 0.08, 4.6);
+    this.stage.camera.lookAt(0, 0.02, 0);
 
-    this.scene.add(this.presentation);
-    this.camera.position.set(0, 0.08, 4.6);
-    this.camera.lookAt(0, 0.02, 0);
-
-    this.scene.add(new AmbientLight(0xffead0, 2.15));
+    this.stage.scene.add(new AmbientLight(0xffead0, 2.15));
     const keyLight = new DirectionalLight(0xffd3a0, 3.3);
     keyLight.position.set(-2.8, 3.8, 4.2);
-    this.scene.add(keyLight);
+    this.stage.scene.add(keyLight);
     const fillLight = new DirectionalLight(0xaeb7c0, 2.1);
     fillLight.position.set(3.2, 2.4, 1.2);
-    this.scene.add(fillLight);
+    this.stage.scene.add(fillLight);
     const rimLight = new DirectionalLight(0x8c99ad, 1.4);
     rimLight.position.set(1.4, 2.6, -3.4);
-    this.scene.add(rimLight);
+    this.stage.scene.add(rimLight);
   }
 
   setVisible(visible: boolean): void {
@@ -92,18 +75,13 @@ export class ClassSelectionPreview {
   }
 
   render(): void {
-    if (!this.visible || this.disposed) {
-      return;
-    }
-    this.resizeToCanvas();
-    this.renderer.render(this.scene, this.camera);
+    this.stage.renderWhen(this.visible);
   }
 
   dispose(): void {
-    this.disposed = true;
     this.loadToken += 1;
     this.clearModel();
-    this.renderer.dispose();
+    this.stage.dispose();
   }
 
   private async loadClass(
@@ -122,7 +100,7 @@ export class ClassSelectionPreview {
         ),
       ]);
       if (
-        this.disposed ||
+        this.stage.isDisposed ||
         token !== this.loadToken ||
         classId !== this.classId
       ) {
@@ -198,23 +176,6 @@ export class ClassSelectionPreview {
     this.mixer = null;
     this.model?.removeFromParent();
     this.model = null;
-  }
-
-  private resizeToCanvas(): void {
-    const width = Math.max(1, Math.round(this.canvas.clientWidth));
-    const height = Math.max(1, Math.round(this.canvas.clientHeight));
-    const pixelRatio = this.renderer.getPixelRatio();
-    const targetWidth = Math.round(width * pixelRatio);
-    const targetHeight = Math.round(height * pixelRatio);
-    if (
-      this.canvas.width === targetWidth &&
-      this.canvas.height === targetHeight
-    ) {
-      return;
-    }
-    this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
   }
 }
 

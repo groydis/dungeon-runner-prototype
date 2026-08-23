@@ -1535,11 +1535,17 @@ describe('board snapshots and no-class APIs', () => {
     const state = new GameState();
     expect(state.getShopView()).toBeNull();
     expect(state.canBuyShopOffer('sharpened')).toBe(false);
+    expect(state.canBuySpecialEquipment()).toBe(false);
     expect(state.buyShopOffer('sharpened')).toMatchObject({
       success: false,
       reason: 'noClass',
       goldRemaining: 0,
       goldSpent: 0,
+    });
+    expect(state.buySpecialEquipment()).toMatchObject({
+      success: false,
+      reason: 'noClass',
+      goldRemaining: 0,
     });
     expect(state.leaveShop()).toBeNull();
     expect(state.gold).toBe(0);

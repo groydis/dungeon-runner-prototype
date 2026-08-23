@@ -1,6 +1,7 @@
 import { type CombatStats, createCombatStats } from './Combatant';
 import {
   type EnemyDefinition,
+  type EnemyRenderKey,
   type EnemyType,
   getEnemyDefinition,
 } from './definitions/enemies';
@@ -43,7 +44,7 @@ export class Monster {
     return this.definition.name;
   }
 
-  get renderKey(): string {
+  get renderKey(): EnemyRenderKey {
     return this.definition.renderKey;
   }
 

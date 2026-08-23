@@ -1,12 +1,12 @@
 import { Box3, type Group, type Object3D } from 'three';
-import { type EnemyType } from '../game/definitions/enemies';
+import { type EnemyRenderKey } from '../game/definitions/enemies';
+
+export type { EnemyRenderKey };
 import {
   loadGltfScene,
   loadRigMediumClips,
   type RigMediumClipMap,
 } from './rigMediumAnimations';
-
-export type EnemyRenderKey = EnemyType;
 
 export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
   'skeletonMinion',

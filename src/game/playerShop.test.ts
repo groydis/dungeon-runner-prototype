@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evadeHudText } from '../ui/HudView';
+import gameStateSource from './GameState.ts?raw';
 import {
   DEMO_MONSTER_COL,
   DEMO_MONSTER_ROW,
@@ -531,6 +532,118 @@ describe('GameState shop flow', () => {
     ]);
     restored.addGold(3);
     expect(restored.canBuyShopOffer('sharpened')).toBe(true);
+  });
+
+  it('rejects shop actions before a class is selected', () => {
+    const state = new GameState();
+    expect(state.shopOpen).toBe(false);
+    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.getShopView()).toBeNull();
+    expect(state.canBuyShopOffer('sharpened')).toBe(false);
+    expect(state.canBuySpecialEquipment()).toBe(false);
+    expect(state.buyShopOffer('sharpened')).toMatchObject({
+      success: false,
+      reason: 'noClass',
+      goldRemaining: 0,
+      status: 'Choose a class first.',
+    });
+    expect(state.buySpecialEquipment()).toMatchObject({
+      success: false,
+      reason: 'noClass',
+      goldRemaining: 0,
+      status: 'Choose a class first.',
+    });
+    expect(state.leaveShop()).toBeNull();
+    expect(state.status).toBe('');
+  });
+
+  it('closes a shop without consuming the Merchant', () => {
+    const state = openSeededShop();
+    const { row, col } = playerOf(state);
+    expect(state.getTile(row, col)?.content.type).toBe('shop');
+    state.dismissOpenShop();
+    expect(state.shopOpen).toBe(false);
+    expect(state.getShopView()).toBeNull();
+    expect(state.buyShopOffer('vitality')).toMatchObject({
+      success: false,
+      reason: 'noShop',
+      status: 'There is no merchant here.',
+    });
+    expect(state.status).toBe('A travelling merchant beckons.');
+    expect(state.getTile(row, col)?.content.type).toBe('shop');
+  });
+
+  it('marks the Merchant used when leaving and keeps upgrade prices for the next visit', () => {
+    const state = openSeededShop();
+    const firstCol = playerOf(state).col;
+    state.addGold(3);
+    expect(state.buyShopOffer('sharpened').success).toBe(true);
+    expect(offerOf(state.getShopView(), 'sharpened').cost).toBe(4);
+    expect(state.getShopProgressSnapshot().sharpened).toBe(1);
+    expect(() => {
+      (state.getShopProgressSnapshot() as { sharpened: number }).sharpened = 9;
+    }).toThrow(TypeError);
+    expect(state.getShopProgressSnapshot().sharpened).toBe(1);
+
+    expect(state.leaveShop()).toEqual({ row: 14, col: firstCol });
+    expect(state.shopOpen).toBe(false);
+    expect(state.getShopView()).toBeNull();
+    expect(state.status).toBe('You leave the merchant behind.');
+    expect(state.getTile(14, firstCol)?.content.type).toBe('empty');
+
+    walkTo(state, 27, 1);
+    const secondCol = shopColAt(state, 28);
+    state.resolveCompletedMove(secondCol);
+    expect(state.shopOpen).toBe(true);
+    expect(offerOf(state.getShopView(), 'sharpened').cost).toBe(4);
+    expect(offerOf(state.getShopView(), 'vitality').cost).toBe(2);
+    expect(state.getShopProgressSnapshot()).toMatchObject({
+      sharpened: 1,
+      vitality: 0,
+      armoured: 0,
+      evasive: 0,
+    });
+  });
+
+  it('clears shop progress and special ownership on class reselection', () => {
+    const state = openSeededShop();
+    const special = specialEquipmentForClass('ranger');
+    state.addGold(special.cost + 3);
+    expect(state.buyShopOffer('sharpened').success).toBe(true);
+    expect(state.buySpecialEquipment().success).toBe(true);
+    expect(state.hasSpecialEquipment).toBe(true);
+
+    state.clearSelectedClass();
+    expect(state.hasSelectedClass).toBe(false);
+    expect(state.shopOpen).toBe(false);
+    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.getShopProgressSnapshot()).toEqual({
+      vitality: 0,
+      sharpened: 0,
+      armoured: 0,
+      evasive: 0,
+    });
+
+    state.selectClass('ranger');
+    const again = openSeededShop(state);
+    expect(again.hasSpecialEquipment).toBe(false);
+    expect(again.canBuySpecialEquipment()).toBe(false);
+    expect(offerOf(again.getShopView(), 'sharpened').cost).toBe(3);
+    again.addGold(special.cost);
+    expect(again.canBuySpecialEquipment()).toBe(true);
+    expect(again.buySpecialEquipment().success).toBe(true);
+    expect(again.hasSpecialEquipment).toBe(true);
+  });
+});
+
+describe('GameState shop ownership', () => {
+  it('delegates run shop session state without exposing the live object', () => {
+    expect(gameStateSource).toMatch(/new ShopSession/);
+    expect(gameStateSource).not.toMatch(/private activeShop/);
+    expect(gameStateSource).not.toMatch(/private shopProgress/);
+    expect(gameStateSource).not.toMatch(/private specialEquipmentOwned/);
+    expect(gameStateSource).not.toMatch(/get shopSession/);
+    expect(gameStateSource).not.toMatch(/export \{ ShopSession/);
   });
 });
 

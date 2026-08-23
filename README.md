@@ -129,6 +129,8 @@ src/
   game/
     Game.ts               Animation, input, and view/render orchestration
     GameState.ts          Single-run aggregate and public rule boundary
+    ShopSession.ts        Run-owned Merchant visit, prices, and special ownership
+    presentationPhase.ts  Game.ts board-interactivity and overlay phase
     RunWorld.ts           Grid, recipes, entities, and board snapshots
     BoardSnapshot.ts      Immutable board/read models for rendering
     Grid.ts               Logical 3-wide sliding tile window
@@ -162,7 +164,10 @@ src/
     LevelUpOverlayView.ts Level-up overlay
   rendering/
     SceneManager.ts       Scene, lights, recycled row/wall meshes, player/hit FX
+    PreviewStage.ts       Shared transparent WebGL lifecycle for overlay previews
     ClassSelectionPreview.ts Idle KayKit class-carousel model renderer
+    MerchantShopPreview.ts Animated Hoarder portrait while the shop is open
+    EquipmentShopPreview.ts Class special-equipment product view
     preloadAssets.ts      Boot, class-select background, and per-class preload stages
     playerAssets.ts       KayKit player GLB URLs
     playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
@@ -183,18 +188,18 @@ public/                   Static assets
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result.
+- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visit, upgrade price tracks, and one-time special-equipment ownership live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress.
 - **RunWorld** is private to GameState. It owns the mutable board: Grid, recipes, entity maps, tile materialisation, prepare/prune, lookups, alarm movement, world reset, and snapshot construction.
-- **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster.
-- **Game.ts** owns overlay order, animation, and input-lock state. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens.
+- **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster. Enemy snapshots carry a definition-layer `EnemyRenderKey`, not an unconstrained string.
+- **Game.ts** owns overlay order, animation, and input-lock state through an explicit presentation phase. Only `idle` enables board highlights and raycast input; class selection, movement, trap, encounter, combat, drop FX, shop, level-up, and game-over all lock the board. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens. Restart and dispose bump a generation token so a stale class-preload cannot reopen the board.
 - **Asset preloading** has two boundaries. `main.ts` blocks on measured carousel/opening-dungeon groups before constructing the game. While class selection is visible, `preloadAssets.ts` warms core combat, early-enemy, and Merchant promises in the background; highlighting a ranged class also requests its ranged bundle. Beginning a run waits on only the highlighted class and shows `Preparing [class]…` if that work is still outstanding. Later enemies, advanced potions, future equipment, and reserved animations remain lazy.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
-- **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. `ClassSelectionPreview.ts` renders the visible carousel class with its starting equipment and shared idle clip. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
+- **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. Overlay previews share `PreviewStage` for transparent renderer, resize, visibility-aware render, and dispose. `ClassSelectionPreview.ts` still owns carousel models, load tokens, and idle playback. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
 - **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the capped stat package and run-scoped ownership.
-- **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
+- **Enemy presentation** maps definition-layer `EnemyRenderKey` values (currently one per `EnemyType`) to KayKit GLBs in `enemyAssets.ts`. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only and does not own the key union.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
@@ -433,7 +438,7 @@ interface EncounterMonsterView {
   readonly name: string;
   readonly row: number;
   readonly col: number;
-  readonly renderKey: string;
+  readonly renderKey: EnemyRenderKey;
 }
 
 type EncounterEvent =

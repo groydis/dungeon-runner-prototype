@@ -3,7 +3,7 @@ import { type CollectibleKind } from './Collectible';
 import { type CombatStats } from './Combatant';
 import { LANE_COUNT, ROW_POOL_SIZE, START_COL, START_ROW } from './config';
 import { type PlayerClassId, type PlayerRenderKey } from './definitions/classes';
-import { type EnemyType } from './definitions/enemies';
+import { type EnemyRenderKey, type EnemyType } from './definitions/enemies';
 import { deepFreeze, type DeepReadonly } from './freeze';
 import { type GridPosition, type TileContentType } from './Tile';
 import { type TrapKind } from './Trap';
@@ -16,7 +16,7 @@ export interface TileContentSnapshot {
 export interface TileMonsterView {
   readonly id: string;
   readonly type: EnemyType;
-  readonly renderKey: string;
+  readonly renderKey: EnemyRenderKey;
 }
 
 export interface TileSnapshot {
@@ -46,7 +46,7 @@ export interface MonsterSnapshot {
   readonly id: string;
   readonly type: EnemyType;
   readonly name: string;
-  readonly renderKey: string;
+  readonly renderKey: EnemyRenderKey;
   readonly row: number;
   readonly col: number;
   readonly encounterResolved: boolean;
@@ -63,7 +63,7 @@ export interface EncounterMonsterView {
   readonly name: string;
   readonly row: number;
   readonly col: number;
-  readonly renderKey: string;
+  readonly renderKey: EnemyRenderKey;
 }
 
 export interface EncounterTarget {
@@ -199,7 +199,7 @@ export function encounterMonsterView(monster: {
   name: string;
   row: number;
   col: number;
-  renderKey: string;
+  renderKey: EnemyRenderKey;
 }): EncounterMonsterView {
   return freezeReadModel({
     id: monster.id,

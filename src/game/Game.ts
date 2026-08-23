@@ -16,8 +16,12 @@ import {
 } from './encounters';
 import { PLAYER_CLASS_IDS, type PlayerClassId } from './definitions/classes';
 import { enemyStatsFactoryFromSearch } from './definitions/enemies';
-import { GameState, type TrapResolution } from './GameState';
+import { GameState } from './GameState';
 import { type EncounterMonsterView } from './BoardSnapshot';
+import {
+  isBoardInteractive,
+  type PresentationPhase,
+} from './presentationPhase';
 import {
   dropRngFactoryFromSearch,
   evadeRngFactoryFromSearch,
@@ -41,27 +45,6 @@ import { HudView } from '../ui/HudView';
 import { LevelUpOverlayView } from '../ui/LevelUpOverlayView';
 import { ShopOverlayView } from '../ui/ShopOverlayView';
 
-interface MoveAnimation {
-  fromCol: number;
-  toCol: number;
-  anchorRow: number;
-  elapsed: number;
-}
-
-interface CombatPlayback {
-  result: CombatResult;
-  target: EncounterMonsterView;
-  entryIndex: number;
-  elapsed: number;
-  awaitingEnemyDeath: boolean;
-}
-
-interface TrapPlayback {
-  resolution: TrapResolution;
-  phase: 'flash' | 'advance';
-  elapsed: number;
-}
-
 export class Game {
   private readonly state = new GameState({
     rollAvoidance: avoidanceOverrideFromSearch(window.location.search),
@@ -84,14 +67,9 @@ export class Game {
   private readonly classSelectionPreview: ClassSelectionPreview;
   private readonly resizeObserver: ResizeObserver;
 
-  private animation: MoveAnimation | null = null;
-  private encounterFxElapsed: number | null = null;
-  private encounterFxDurationSec = ENCOUNTER_FX_SEC;
-  private combatPrelude: Extract<EncounterEvent, { kind: 'combat' }> | null = null;
+  private phase: PresentationPhase = { kind: 'classSelection' };
   private pendingEvents: EncounterEvent[] = [];
-  private combatPlayback: CombatPlayback | null = null;
-  private trapPlayback: TrapPlayback | null = null;
-  private dropSpawnElapsed: number | null = null;
+  private presentationGeneration = 0;
   private lastTimeMs = 0;
   private running = false;
 
@@ -156,7 +134,7 @@ export class Game {
     this.classSelectionPreview.setVisible(true);
     this.classSelect.show(this.state.getClassSelectionView());
     void preloadCharacterSelectionBackgroundAssets();
-    this.setBoardInteractive(false);
+    this.setPhase({ kind: 'classSelection' });
     this.handleResize();
     this.updateHud();
   }
@@ -172,6 +150,7 @@ export class Game {
 
   dispose(): void {
     this.running = false;
+    this.presentationGeneration += 1;
     this.resizeObserver.disconnect();
     this.gameOver.dispose();
     this.shop.dispose();
@@ -212,7 +191,7 @@ export class Game {
 
   private tryMove(tile: TilePick): void {
     if (
-      this.boardLocked ||
+      this.phase.kind !== 'idle' ||
       this.state.runOver ||
       !this.state.hasSelectedClass ||
       this.state.shopOpen ||
@@ -222,32 +201,35 @@ export class Game {
       return;
     }
 
-    this.setBoardInteractive(false);
     this.camera.nudge();
     this.scene.setPlayerMoving(true);
 
     const player = this.requirePlayerSnapshot();
-    this.animation = {
-      fromCol: player.col,
-      toCol: tile.col,
-      anchorRow: player.row,
-      elapsed: 0,
-    };
+    this.setPhase({
+      kind: 'moving',
+      animation: {
+        fromCol: player.col,
+        toCol: tile.col,
+        anchorRow: player.row,
+        elapsed: 0,
+      },
+    });
   }
 
   private updateMove(dt: number): void {
-    if (!this.animation) {
+    if (this.phase.kind !== 'moving') {
       return;
     }
 
-    this.animation.elapsed += dt;
-    const t = Math.min(1, this.animation.elapsed / MOVE_DURATION_SEC);
+    const animation = this.phase.animation;
+    animation.elapsed += dt;
+    const t = Math.min(1, animation.elapsed / MOVE_DURATION_SEC);
     const eased = easeOutCubic(t);
 
     this.scene.setScrollZ(eased * TILE_PITCH);
-    this.scene.layoutRows(this.animation.anchorRow);
+    this.scene.layoutRows(animation.anchorRow);
     this.scene.setPlayerVisual(
-      lerp(laneWorldX(this.animation.fromCol), laneWorldX(this.animation.toCol), eased),
+      lerp(laneWorldX(animation.fromCol), laneWorldX(animation.toCol), eased),
       Math.sin(t * Math.PI) * 0.22,
     );
 
@@ -255,9 +237,8 @@ export class Game {
       return;
     }
 
-    const toCol = this.animation.toCol;
-    const leftBehindRow = this.animation.anchorRow;
-    this.animation = null;
+    const toCol = animation.toCol;
+    const leftBehindRow = animation.anchorRow;
     this.scene.setPlayerMoving(false);
 
     const resolution = this.state.resolveCompletedMove(toCol);
@@ -276,15 +257,17 @@ export class Game {
       this.merchantShopPreview.setVisible(true);
     }
     this.pendingEvents = resolution.encounters;
-    this.setBoardInteractive(false);
     this.updateHud();
 
     if (resolution.trap) {
-      this.trapPlayback = {
-        resolution: resolution.trap,
-        phase: 'flash',
-        elapsed: 0,
-      };
+      this.setPhase({
+        kind: 'trap',
+        playback: {
+          resolution: resolution.trap,
+          phase: 'flash',
+          elapsed: 0,
+        },
+      });
       const player = this.requirePlayerSnapshot();
       this.scene.beginTrapTriggerFx(player.row, player.col);
       if (resolution.trap.enemyMove) {
@@ -298,16 +281,17 @@ export class Game {
   }
 
   private updateTrapPlayback(dt: number): void {
-    if (!this.trapPlayback) {
+    if (this.phase.kind !== 'trap') {
       return;
     }
 
-    this.trapPlayback.elapsed += dt;
+    const playback = this.phase.playback;
+    playback.elapsed += dt;
     const duration =
-      this.trapPlayback.phase === 'flash' ? TRAP_FX_SEC : ENEMY_ADVANCE_FX_SEC;
-    const t = Math.min(1, this.trapPlayback.elapsed / duration);
+      playback.phase === 'flash' ? TRAP_FX_SEC : ENEMY_ADVANCE_FX_SEC;
+    const t = Math.min(1, playback.elapsed / duration);
 
-    if (this.trapPlayback.phase === 'flash') {
+    if (playback.phase === 'flash') {
       this.scene.updateTrapTriggerFx(t);
     } else {
       this.scene.updateEnemyAdvanceFx(t);
@@ -317,9 +301,9 @@ export class Game {
       return;
     }
 
-    if (this.trapPlayback.phase === 'flash') {
+    if (playback.phase === 'flash') {
       this.scene.endTrapTriggerFx();
-      const move = this.trapPlayback.resolution.enemyMove;
+      const move = playback.resolution.enemyMove;
       if (move) {
         if (move.consumed === 'gold' || move.consumed === 'potion') {
           this.scene.beginItemConsumeFx(move.consumed, move.to.row, move.to.col);
@@ -327,15 +311,14 @@ export class Game {
         if (move.consumed === 'trap') {
           this.scene.beginTrapConsumeFx(move.to.row, move.to.col);
         }
-        this.trapPlayback.phase = 'advance';
-        this.trapPlayback.elapsed = 0;
+        playback.phase = 'advance';
+        playback.elapsed = 0;
         return;
       }
     } else {
       this.scene.endEnemyAdvanceFx();
     }
 
-    this.trapPlayback = null;
     this.playNextPendingEvent();
   }
 
@@ -350,37 +333,47 @@ export class Game {
       this.state.applyEvade(event.monster, event.evadeChance);
       this.updateHud();
       this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
-      this.encounterFxDurationSec = EVADE_FX_SEC;
-      this.encounterFxElapsed = 0;
+      this.setPhase({
+        kind: 'encounter',
+        event,
+        elapsed: 0,
+        durationSec: EVADE_FX_SEC,
+      });
       return;
     }
 
-    this.combatPrelude = event;
     this.scene.playEnemyTaunt(event.monster);
     this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
-    this.encounterFxDurationSec = ENCOUNTER_FX_SEC;
-    this.encounterFxElapsed = 0;
+    this.setPhase({
+      kind: 'encounter',
+      event,
+      elapsed: 0,
+      durationSec: ENCOUNTER_FX_SEC,
+    });
   }
 
   private beginCombat(event: Extract<EncounterEvent, { kind: 'combat' }>): void {
     const result = this.state.createCombatResult(event);
-    this.combatPlayback = {
-      result,
-      target: event.monster,
-      entryIndex: 0,
-      elapsed: 0,
-      awaitingEnemyDeath: false,
-    };
+    this.setPhase({
+      kind: 'combat',
+      playback: {
+        result,
+        target: event.monster,
+        entryIndex: 0,
+        elapsed: 0,
+        awaitingEnemyDeath: false,
+      },
+    });
     this.beginCurrentCombatHit();
   }
 
   private updateEncounterFx(dt: number): void {
-    if (this.encounterFxElapsed === null) {
+    if (this.phase.kind !== 'encounter') {
       return;
     }
 
-    this.encounterFxElapsed += dt;
-    const t = Math.min(1, this.encounterFxElapsed / this.encounterFxDurationSec);
+    this.phase.elapsed += dt;
+    const t = Math.min(1, this.phase.elapsed / this.phase.durationSec);
     this.scene.updateEncounterFx(t);
 
     if (t < 1) {
@@ -388,10 +381,8 @@ export class Game {
     }
 
     this.scene.endEncounterFx();
-    this.encounterFxElapsed = null;
-    if (this.combatPrelude) {
-      const event = this.combatPrelude;
-      this.combatPrelude = null;
+    const event = this.phase.event;
+    if (event.kind === 'combat') {
       this.beginCombat(event);
       return;
     }
@@ -399,30 +390,31 @@ export class Game {
   }
 
   private updateCombatPlayback(dt: number): void {
-    if (!this.combatPlayback) {
+    if (this.phase.kind !== 'combat') {
       return;
     }
 
-    this.combatPlayback.elapsed += dt;
-    const t = Math.min(1, this.combatPlayback.elapsed / COMBAT_HIT_SEC);
+    const playback = this.phase.playback;
+    playback.elapsed += dt;
+    const t = Math.min(1, playback.elapsed / COMBAT_HIT_SEC);
     this.scene.updateCombatHit(t);
 
     if (t < 1) {
       return;
     }
     if (
-      this.combatPlayback.awaitingEnemyDeath &&
-      !this.scene.isEnemyDeathPresentationComplete(this.combatPlayback.target)
+      playback.awaitingEnemyDeath &&
+      !this.scene.isEnemyDeathPresentationComplete(playback.target)
     ) {
       return;
     }
 
     this.scene.endCombatHit();
-    this.combatPlayback.entryIndex += 1;
-    this.combatPlayback.elapsed = 0;
+    playback.entryIndex += 1;
+    playback.elapsed = 0;
 
-    if (this.combatPlayback.entryIndex >= this.combatPlayback.result.log.length) {
-      this.concludeCombat(this.combatPlayback.result, this.combatPlayback.target);
+    if (playback.entryIndex >= playback.result.log.length) {
+      this.concludeCombat(playback.result, playback.target);
       return;
     }
 
@@ -430,11 +422,11 @@ export class Game {
   }
 
   private beginCurrentCombatHit(): void {
-    const playback = this.combatPlayback;
-    if (!playback) {
+    if (this.phase.kind !== 'combat') {
       return;
     }
 
+    const playback = this.phase.playback;
     const entry = playback.result.log[playback.entryIndex];
     if (!entry) {
       this.concludeCombat(playback.result, playback.target);
@@ -471,13 +463,11 @@ export class Game {
 
   private concludeCombat(result: CombatResult, target: EncounterMonsterView): void {
     const finish = this.state.finishCombat(result, target);
-    this.combatPlayback = null;
-    this.setBoardInteractive(false);
     this.updateHud();
 
     if (finish.drop) {
+      this.setPhase({ kind: 'drop', elapsed: 0 });
       this.scene.beginDropSpawnFx(finish.drop);
-      this.dropSpawnElapsed = 0;
       return;
     }
 
@@ -489,12 +479,12 @@ export class Game {
   }
 
   private updateDropSpawn(dt: number): void {
-    if (this.dropSpawnElapsed === null) {
+    if (this.phase.kind !== 'drop') {
       return;
     }
 
-    this.dropSpawnElapsed += dt;
-    const t = Math.min(1, this.dropSpawnElapsed / DROP_SPAWN_FX_SEC);
+    this.phase.elapsed += dt;
+    const t = Math.min(1, this.phase.elapsed / DROP_SPAWN_FX_SEC);
     this.scene.updateDropSpawnFx(t);
 
     if (t < 1) {
@@ -502,7 +492,6 @@ export class Game {
     }
 
     this.scene.endDropSpawnFx();
-    this.dropSpawnElapsed = null;
     if (this.tryOpenLevelUp()) {
       return;
     }
@@ -513,7 +502,6 @@ export class Game {
     this.updateHud();
 
     if (this.state.runOver) {
-      this.setBoardInteractive(false);
       this.shop.hide();
       this.merchantShopPreview.setVisible(false);
       this.equipmentShopPreview.setClassId(null);
@@ -521,6 +509,7 @@ export class Game {
       this.state.dismissOpenShop();
       this.state.dismissLevelUp();
       this.gameOver.show(this.state.distance);
+      this.setPhase({ kind: 'gameOver' });
       return;
     }
 
@@ -529,36 +518,39 @@ export class Game {
     }
 
     if (this.state.shopOpen) {
-      this.setBoardInteractive(false);
+      this.setPhase({ kind: 'shop' });
       return;
     }
 
     if (!this.state.hasSelectedClass) {
-      this.setBoardInteractive(false);
+      this.setPhase({ kind: 'classSelection' });
       return;
     }
 
-    this.setBoardInteractive(true);
+    this.setPhase({ kind: 'idle' });
   }
 
   private async selectClass(classId: PlayerClassId): Promise<void> {
+    const token = this.presentationGeneration;
     this.classSelect.setPreparing(true);
     await preloadClassGameplayAssets(classId);
+    if (
+      !this.running ||
+      token !== this.presentationGeneration ||
+      this.phase.kind !== 'classSelection'
+    ) {
+      return;
+    }
     this.state.selectClass(classId);
     this.classSelect.hide();
     this.classSelectionPreview.setVisible(false);
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: true });
-    this.setBoardInteractive(true);
+    this.setPhase({ kind: 'idle' });
     this.updateHud();
   }
 
   private returnToClassSelection(): void {
-    this.animation = null;
-    this.encounterFxElapsed = null;
-    this.combatPrelude = null;
-    this.combatPlayback = null;
-    this.trapPlayback = null;
-    this.dropSpawnElapsed = null;
+    this.presentationGeneration += 1;
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();
@@ -570,12 +562,12 @@ export class Game {
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
     this.classSelectionPreview.setVisible(true);
     this.classSelect.show(this.state.getClassSelectionView());
-    this.setBoardInteractive(false);
+    this.setPhase({ kind: 'classSelection' });
     this.updateHud();
   }
 
   private buyShopOffer(offerId: ShopOfferId): void {
-    if (!this.state.shopOpen) {
+    if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
       return;
     }
     const result = this.state.buyShopOffer(offerId);
@@ -590,7 +582,7 @@ export class Game {
   }
 
   private buySpecialEquipment(): void {
-    if (!this.state.shopOpen) {
+    if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
       return;
     }
     const result = this.state.buySpecialEquipment();
@@ -601,7 +593,7 @@ export class Game {
   }
 
   private chooseLevelUp(choice: LevelUpChoice): void {
-    if (!this.state.levelUpOpen) {
+    if (this.phase.kind !== 'levelUp' || !this.state.levelUpOpen) {
       return;
     }
 
@@ -628,11 +620,14 @@ export class Game {
       return false;
     }
     this.levelUp.show(view);
-    this.setBoardInteractive(false);
+    this.setPhase({ kind: 'levelUp' });
     return true;
   }
 
   private leaveShop(): void {
+    if (this.phase.kind !== 'shop') {
+      return;
+    }
     const left = this.state.leaveShop();
     if (!left) {
       return;
@@ -642,18 +637,8 @@ export class Game {
     this.merchantShopPreview.setVisible(false);
     this.equipmentShopPreview.setClassId(null);
     this.scene.beginMerchantLeaveFx(left.row, left.col);
-    this.setBoardInteractive(true);
+    this.setPhase({ kind: 'idle' });
     this.updateHud();
-  }
-
-  private get boardLocked(): boolean {
-    return (
-      this.animation !== null ||
-      this.combatPlayback !== null ||
-      this.encounterFxElapsed !== null ||
-      this.trapPlayback !== null ||
-      this.dropSpawnElapsed !== null
-    );
   }
 
   private requirePlayerSnapshot() {
@@ -664,7 +649,9 @@ export class Game {
     return player;
   }
 
-  private setBoardInteractive(interactive: boolean): void {
+  private setPhase(phase: PresentationPhase): void {
+    this.phase = phase;
+    const interactive = isBoardInteractive(phase);
     this.input.setEnabled(interactive);
     this.scene.refreshHighlights(this.state.getBoardSnapshot(), { interactive });
   }

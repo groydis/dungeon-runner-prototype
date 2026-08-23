@@ -62,7 +62,6 @@ import {
   enemyModelUrl,
   enemySpawnClip,
   fitEnemyModel,
-  isEnemyRenderKey,
   loadEnemyClips,
   loadEnemyTemplate,
   type EnemyRenderKey,
@@ -615,7 +614,7 @@ export class SceneManager {
     this.playPlayerOneShot(this.playerClips.death, 'death');
   }
 
-  playEnemyHit(target: { id: string; row: number; col: number; renderKey: string }): void {
+  playEnemyHit(target: { id: string; row: number; col: number; renderKey: EnemyRenderKey }): void {
     const slot = this.findEnemySlot(target.row, target.col, target.renderKey, target.id);
     if (!slot || slot.dying) {
       return;
@@ -627,7 +626,7 @@ export class SceneManager {
     id: string;
     row: number;
     col: number;
-    renderKey: string;
+    renderKey: EnemyRenderKey;
   }): void {
     const slot = this.findEnemySlot(
       target.row,
@@ -647,7 +646,7 @@ export class SceneManager {
     id: string;
     row: number;
     col: number;
-    renderKey: string;
+    renderKey: EnemyRenderKey;
   }): void {
     const slot = this.findEnemySlot(
       target.row,
@@ -665,7 +664,7 @@ export class SceneManager {
     id: string;
     row: number;
     col: number;
-    renderKey: string;
+    renderKey: EnemyRenderKey;
   }): void {
     const slot = this.findEnemySlot(
       target.row,
@@ -1856,7 +1855,7 @@ export class SceneManager {
   private findMonsterMesh(
     row: number,
     col: number,
-    renderKey?: string,
+    renderKey?: EnemyRenderKey,
   ): Group | undefined {
     return this.findEnemySlot(row, col, renderKey)?.group;
   }
@@ -1864,7 +1863,7 @@ export class SceneManager {
   private findEnemySlot(
     row: number,
     col: number,
-    renderKey?: string,
+    renderKey?: EnemyRenderKey,
     occupantId?: string,
   ): EnemySlot | undefined {
     if (occupantId) {
@@ -1878,7 +1877,7 @@ export class SceneManager {
     if (!variants) {
       return undefined;
     }
-    if (renderKey && isEnemyRenderKey(renderKey)) {
+    if (renderKey) {
       return variants[renderKey];
     }
     return ENEMY_RENDER_KEYS.map((key) => variants[key]).find(

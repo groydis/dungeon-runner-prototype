@@ -1,14 +1,9 @@
 import {
   AmbientLight,
   AnimationMixer,
-  Color,
   DirectionalLight,
   Group,
   LoopRepeat,
-  PerspectiveCamera,
-  Scene,
-  SRGBColorSpace,
-  WebGLRenderer,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
@@ -16,42 +11,30 @@ import {
   loadMerchantClips,
   loadMerchantTemplate,
 } from './merchantAssets';
+import { PreviewStage } from './PreviewStage';
 
 const PREVIEW_MODEL_SCALE = 1.62;
-const MAX_PIXEL_RATIO = 1.5;
 
 /** Animated Hoarder portrait rendered only while the Merchant shop is open. */
 export class MerchantShopPreview {
-  private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(32, 1, 0.1, 20);
-  private readonly renderer: WebGLRenderer;
+  private readonly stage: PreviewStage;
   private mixer: AnimationMixer | null = null;
   private model: Group | null = null;
   private loading: Promise<void> | null = null;
   private visible = false;
-  private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    this.renderer = new WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
-    this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.setClearColor(new Color(0x000000), 0);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this.stage = new PreviewStage(canvas, { fov: 32 });
+    this.stage.camera.position.set(0, 1.05, 3.2);
+    this.stage.camera.lookAt(0, 0.76, 0);
 
-    this.camera.position.set(0, 1.05, 3.2);
-    this.camera.lookAt(0, 0.76, 0);
-
-    this.scene.add(new AmbientLight(0xffe7c2, 2.25));
+    this.stage.scene.add(new AmbientLight(0xffe7c2, 2.25));
     const keyLight = new DirectionalLight(0xffd18b, 3.2);
     keyLight.position.set(-2.4, 3.2, 3.5);
-    this.scene.add(keyLight);
+    this.stage.scene.add(keyLight);
     const rimLight = new DirectionalLight(0x8ea7d8, 1.65);
     rimLight.position.set(2.8, 2.2, -2.5);
-    this.scene.add(rimLight);
+    this.stage.scene.add(rimLight);
   }
 
   setVisible(visible: boolean): void {
@@ -69,20 +52,15 @@ export class MerchantShopPreview {
   }
 
   render(): void {
-    if (!this.visible || this.disposed) {
-      return;
-    }
-    this.resizeToCanvas();
-    this.renderer.render(this.scene, this.camera);
+    this.stage.renderWhen(this.visible);
   }
 
   dispose(): void {
-    this.disposed = true;
     if (this.model && this.mixer) {
       this.mixer.stopAllAction();
       this.mixer.uncacheRoot(this.model);
     }
-    this.renderer.dispose();
+    this.stage.dispose();
   }
 
   private ensureModel(): Promise<void> {
@@ -95,7 +73,7 @@ export class MerchantShopPreview {
 
     this.loading = Promise.all([loadMerchantTemplate(), loadMerchantClips()])
       .then(([template, clips]) => {
-        if (this.disposed) {
+        if (this.stage.isDisposed) {
           return;
         }
         const model = cloneSkinned(template) as Group;
@@ -103,7 +81,7 @@ export class MerchantShopPreview {
         fitMerchantModel(model);
         model.scale.multiplyScalar(PREVIEW_MODEL_SCALE);
         model.position.y = -0.08;
-        this.scene.add(model);
+        this.stage.scene.add(model);
         this.model = model;
 
         const mixer = new AnimationMixer(model);
@@ -120,22 +98,5 @@ export class MerchantShopPreview {
         this.canvas.dataset.failed = 'true';
       });
     return this.loading;
-  }
-
-  private resizeToCanvas(): void {
-    const width = Math.max(1, Math.round(this.canvas.clientWidth));
-    const height = Math.max(1, Math.round(this.canvas.clientHeight));
-    const pixelRatio = this.renderer.getPixelRatio();
-    const targetWidth = Math.round(width * pixelRatio);
-    const targetHeight = Math.round(height * pixelRatio);
-    if (
-      this.canvas.width === targetWidth &&
-      this.canvas.height === targetHeight
-    ) {
-      return;
-    }
-    this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
   }
 }

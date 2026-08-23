@@ -64,15 +64,8 @@ import { type ExperienceGain } from './progression';
 import { type Rng } from './random';
 import { createRowRecipe, type RowRecipeFactory } from './rowGeneration';
 import { RunWorld } from './RunWorld';
+import { ShopSession } from './ShopSession';
 import {
-  type ActiveShop,
-  applyShopPurchase,
-  applySpecialEquipmentPurchase,
-  buildShopView,
-  createActiveShop,
-  createShopProgress,
-  evaluateShopOffer,
-  evaluateSpecialEquipmentOffer,
   shopStatSnapshot,
   type ShopOfferId,
   type ShopProgress,
@@ -152,9 +145,7 @@ export class GameState {
   private _player: Player | null = null;
   private readonly world: RunWorld;
 
-  private activeShop: ActiveShop | null = null;
-  private shopProgress: ShopProgress = createShopProgress();
-  private specialEquipmentOwned = false;
+  private readonly shopSession = new ShopSession();
   private readonly pendingLevelUps: number[] = [];
   private activeCombatTargetId: string | null = null;
 
@@ -216,11 +207,11 @@ export class GameState {
   }
 
   get shopOpen(): boolean {
-    return this.activeShop !== null;
+    return this.shopSession.isOpen;
   }
 
   get hasSpecialEquipment(): boolean {
-    return this.specialEquipmentOwned;
+    return this.shopSession.hasSpecialEquipment;
   }
 
   get levelUpOpen(): boolean {
@@ -378,7 +369,7 @@ export class GameState {
     if (this._runOver) {
       throw new Error('Cannot move after the run is over');
     }
-    if (this.activeShop) {
+    if (this.shopSession.isOpen) {
       throw new Error('Cannot move while a merchant shop is open');
     }
     if (this.levelUpOpen) {
@@ -397,7 +388,7 @@ export class GameState {
     this.commitMove(toCol);
     const pickup = this.resolveLandedPickup();
     this.openShopForCurrentTile();
-    const trap = this.activeShop ? null : this.resolveLandedAlarmTrap();
+    const trap = this.shopSession.isOpen ? null : this.resolveLandedAlarmTrap();
     const encounters = this.resolveMonsterEncountersAfterMove();
     return {
       pickup,
@@ -408,175 +399,56 @@ export class GameState {
   }
 
   getShopView(): ShopView | null {
-    if (!this.activeShop || !this._player) {
-      return null;
-    }
-    return buildShopView(
-      this.activeShop.merchant,
-      this._player.gold,
-      shopStatSnapshot(this._player),
-      this.shopProgress,
-      this._player.classId,
-      this.specialEquipmentOwned,
-    );
+    return this.shopSession.getShopView(this._player);
   }
 
   getShopProgressSnapshot(): Readonly<ShopProgress> {
-    return freezeReadModel({ ...this.shopProgress });
+    return this.shopSession.getProgressSnapshot();
   }
 
   canBuyShopOffer(offerId: ShopOfferId): boolean {
-    if (!this._player || !this.activeShop) {
-      return false;
-    }
-    return evaluateShopOffer(
-      this.activeShop.merchant,
-      offerId,
-      this._player.gold,
-      shopStatSnapshot(this._player),
-      this.shopProgress,
-    ).available;
+    return this.shopSession.canBuyOffer(this._player, offerId);
   }
 
   canBuySpecialEquipment(): boolean {
-    if (!this._player || !this.activeShop) {
-      return false;
-    }
-    return evaluateSpecialEquipmentOffer(
-      this.activeShop.merchant,
-      this._player.classId,
-      this._player.gold,
-      shopStatSnapshot(this._player),
-      this.specialEquipmentOwned,
-    ).available;
+    return this.shopSession.canBuySpecialEquipment(this._player);
   }
 
   buyShopOffer(offerId: ShopOfferId): ShopPurchaseResult {
-    if (!this._player) {
-      return {
-        success: false,
-        offerId,
-        reason: 'noClass',
-        goldRemaining: 0,
-        goldSpent: 0,
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
-        status: 'Choose a class first.',
-      };
-    }
-
-    const merchant = this.activeShop?.merchant;
-    if (!merchant) {
-      return {
-        success: false,
-        offerId,
-        reason: 'noShop',
-        goldRemaining: this._player.gold,
-        goldSpent: 0,
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
-        status: 'There is no merchant here.',
-      };
-    }
-
-    const result = applyShopPurchase(
-      merchant,
-      offerId,
-      this._player.gold,
-      shopStatSnapshot(this._player),
-      this.shopProgress,
-    );
-    if (!result.success) {
+    const result = this.shopSession.buyOffer(this._player, offerId);
+    if (this._player && this.shopSession.isOpen) {
       this._status = result.status;
-      return result;
     }
-
-    this._player.trySpendGold(result.goldSpent);
-    this._player.increaseMaxHealth(result.maxHealthGained);
-    this._player.increaseAttack(result.attackGained);
-    this._player.increaseDefence(result.defenceGained);
-    this._player.increaseEvade(result.evadeGained);
-    this._status = result.status;
     return result;
   }
 
   buySpecialEquipment(): ShopPurchaseResult {
-    if (!this._player) {
-      return {
-        success: false,
-        offerId: 'specialEquipment',
-        reason: 'noClass',
-        goldRemaining: 0,
-        goldSpent: 0,
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
-        status: 'Choose a class first.',
-      };
-    }
-
-    const merchant = this.activeShop?.merchant;
-    if (!merchant) {
-      return {
-        success: false,
-        offerId: 'specialEquipment',
-        reason: 'noShop',
-        goldRemaining: this._player.gold,
-        goldSpent: 0,
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
-        status: 'There is no merchant here.',
-      };
-    }
-
-    const result = applySpecialEquipmentPurchase(
-      merchant,
-      this._player.classId,
-      this._player.gold,
-      shopStatSnapshot(this._player),
-      this.specialEquipmentOwned,
-    );
-    if (!result.success) {
+    const result = this.shopSession.buySpecialEquipment(this._player);
+    if (this._player && this.shopSession.isOpen) {
       this._status = result.status;
-      return result;
     }
-
-    this._player.trySpendGold(result.goldSpent);
-    this._player.increaseMaxHealth(result.maxHealthGained);
-    this._player.increaseAttack(result.attackGained);
-    this._player.increaseDefence(result.defenceGained);
-    this._player.increaseEvade(result.evadeGained);
-    this.specialEquipmentOwned = true;
-    this._status = result.status;
     return result;
   }
 
   leaveShop(): { row: number; col: number } | null {
-    const shop = this.activeShop;
-    if (!shop) {
+    const merchant = this.shopSession.merchant;
+    if (!merchant) {
       return null;
     }
 
-    const { row, col, id } = shop.merchant;
-    shop.merchant.markUsed();
+    const { row, col, id } = merchant;
+    merchant.markUsed();
     if (this.world.tileContent(row, col)?.id === id) {
       this.world.clearContent(row, col);
     }
-    this.activeShop = null;
+    this.shopSession.close();
     this._status = 'You leave the merchant behind.';
     return { row, col };
   }
 
   /** Close an open shop without consuming the merchant (death / restart). */
   dismissOpenShop(): void {
-    this.activeShop = null;
+    this.shopSession.close();
   }
 
   applyEvade(target: EncounterTarget, evadeChance?: number): void {
@@ -792,9 +664,7 @@ export class GameState {
     this._distance = 0;
     this._status = '';
     this._runOver = false;
-    this.activeShop = null;
-    this.shopProgress = createShopProgress();
-    this.specialEquipmentOwned = false;
+    this.shopSession.reset();
     this.pendingLevelUps.length = 0;
     this.activeCombatTargetId = null;
   }
@@ -900,7 +770,7 @@ export class GameState {
    * closest visible enemy one legal cardinal tile toward the player.
    */
   private resolveLandedAlarmTrap(): TrapResolution | null {
-    if (this._runOver || this.activeShop || !this._player) {
+    if (this._runOver || this.shopSession.isOpen || !this._player) {
       return null;
     }
 
@@ -992,7 +862,7 @@ export class GameState {
    * Shop rows have no other content, so encounters should not fire here.
    */
   private openShopForCurrentTile(): boolean {
-    if (this._runOver || this.activeShop || !this._player) {
+    if (this._runOver || this.shopSession.isOpen || !this._player) {
       return false;
     }
 
@@ -1005,7 +875,7 @@ export class GameState {
       return false;
     }
 
-    this.activeShop = createActiveShop(merchant);
+    this.shopSession.open(merchant);
     this._status = 'A travelling merchant beckons.';
     return true;
   }

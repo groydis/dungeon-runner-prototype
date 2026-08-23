@@ -8,6 +8,14 @@ import {
 } from './enemies';
 
 describe('enemy definitions', () => {
+  it('gives every enemy definition a typed render key matching its type', () => {
+    for (const type of Object.keys(ENEMY_DEFINITIONS) as Array<
+      keyof typeof ENEMY_DEFINITIONS
+    >) {
+      expect(getEnemyDefinition(type).renderKey).toBe(type);
+    }
+  });
+
   it('defines Crypt Guard and Bone Brute with the specified data', () => {
     expect(ENEMY_DEFINITIONS.cryptGuard).toEqual({
       type: 'cryptGuard',

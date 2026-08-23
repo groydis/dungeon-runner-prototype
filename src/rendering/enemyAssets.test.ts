@@ -64,6 +64,14 @@ describe('enemy asset mapping', () => {
     }
   });
 
+  it('consumes the definition-layer EnemyRenderKey instead of redefining it', () => {
+    expect(source).toMatch(
+      /import \{ type EnemyRenderKey \} from ['"]\.\.\/game\/definitions\/enemies['"]/,
+    );
+    expect(source).toMatch(/export type \{ EnemyRenderKey \}/);
+    expect(source).not.toMatch(/export type EnemyRenderKey = EnemyType/);
+  });
+
   it('does not own a second Rig_Medium animation URL table', () => {
     expect(source).not.toMatch(/Rig_Medium_General/);
     expect(source).not.toMatch(/Rig_Medium_MovementBasic/);
