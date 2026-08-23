@@ -107,6 +107,9 @@ editable source remains
 
 | Target under `environment/kaykit/dungeon/` | Runtime status |
 |---|---|
-| `floor_tile_small.glb` | Active base floor |
-| `floor_tile_small_broken_A.glb` | Active deterministic variant |
-| `floor_tile_small_broken_B.glb` | Active deterministic variant |
+| `floor_tile_large.glb` | Active geometric base floor, scaled to one logical cell |
+| `floor_wood_large.glb` | Active Merchant/safe-tile floor |
+| `floor_tile_big_spikes.glb` | Active Alarm/Trip floor; its separate `spikes` node is animated at runtime |
+| `floor_tile_small.glb` | Retained previous base-floor export; not loaded by the current runtime |
+| `floor_tile_small_broken_A.glb` | Retained previous broken-floor export; not loaded by the current runtime |
+| `floor_tile_small_broken_B.glb` | Retained previous broken-floor export; not loaded by the current runtime |

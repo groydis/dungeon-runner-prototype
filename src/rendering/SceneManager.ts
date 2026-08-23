@@ -64,9 +64,12 @@ import {
 } from './enemyAssets';
 import {
   DUNGEON_FLOOR_KEYS,
+  dungeonFloorRotation,
   dungeonFloorVariant,
   fitDungeonFloorModel,
+  fitDungeonTrapModel,
   loadDungeonFloorTemplate,
+  loadDungeonTrapTemplate,
   type DungeonFloorAssetKey,
 } from './environmentAssets';
 import {
@@ -117,6 +120,7 @@ interface RowView {
   group: Group;
   tiles: Mesh[];
   floorModels: Partial<Record<DungeonFloorAssetKey, Group>>[];
+  floorAssetKeys: (DungeonFloorAssetKey | null)[];
   hitPlanes: Mesh[];
   enemySlots: Record<EnemyRenderKey, EnemySlot>[];
   golds: Mesh[];
@@ -181,6 +185,9 @@ interface ProjectileFx {
   start: Vector3;
   end: Vector3;
 }
+
+const TRAP_SPIKE_RETRACTION = 1.35;
+const TRAP_SPIKE_IDLE_EXTENSION = 0.22;
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -392,6 +399,7 @@ export class SceneManager {
 
     this.buildRowPool();
     void this.installDungeonFloorModels();
+    void this.installDungeonTrapModels();
     const player = this.createPlayer();
     this.playerMesh = player.group;
     this.playerBody = player.body;
@@ -753,6 +761,12 @@ export class SceneManager {
     if (!group) {
       return;
     }
+    const rise = 1 - (1 - Math.min(1, t / 0.42)) ** 3;
+    if (this.setTrapSpikeExtension(group, rise)) {
+      group.scale.setScalar(1);
+      this.setTrapOpacity(group, 1);
+      return;
+    }
     const flash = 1 + Math.sin(t * Math.PI) * 0.55;
     group.scale.setScalar(flash);
     this.setTrapOpacity(group, 1 - t * 0.85);
@@ -1062,6 +1076,7 @@ export class SceneManager {
       const group = new Group();
       const tiles: Mesh[] = [];
       const floorModels: Partial<Record<DungeonFloorAssetKey, Group>>[] = [];
+      const floorAssetKeys: (DungeonFloorAssetKey | null)[] = [];
       const hitPlanes: Mesh[] = [];
       const enemySlots: Record<EnemyRenderKey, EnemySlot>[] = [];
       const golds: Mesh[] = [];
@@ -1110,6 +1125,7 @@ export class SceneManager {
         group.add(tile, hit, ...Object.values(variants).map((slot) => slot.group), gold, potion, trap, merchant);
         tiles.push(tile);
         floorModels.push({});
+        floorAssetKeys.push(dungeonFloorVariant(i, col));
         hitPlanes.push(hit);
         enemySlots.push(variants);
         golds.push(gold);
@@ -1123,6 +1139,7 @@ export class SceneManager {
         group,
         tiles,
         floorModels,
+        floorAssetKeys,
         hitPlanes,
         enemySlots,
         golds,
@@ -1160,12 +1177,49 @@ export class SceneManager {
     }
   }
 
-  private applyDungeonFloorVariant(view: RowView, col: number): void {
-    const selected = dungeonFloorVariant(view.assignedRow, col);
+  private async installDungeonTrapModels(): Promise<void> {
+    try {
+      const template = await loadDungeonTrapTemplate();
+      for (const view of this.rowViews) {
+        for (const trap of view.traps) {
+          const model = template.clone(true);
+          cloneMeshMaterials(model);
+          const spikes = fitDungeonTrapModel(model);
+          model.name = 'dungeonTrap-spikes';
+          model.userData.role = 'kaykitTrap';
+          trap.add(model);
+
+          for (const child of trap.children) {
+            if (child.userData.role === 'fallback') {
+              child.visible = false;
+            }
+          }
+          trap.userData.spikeNode = spikes;
+          trap.userData.spikeExtendedY = spikes.position.y;
+          trap.userData.spikeRetractedY =
+            spikes.position.y - TRAP_SPIKE_RETRACTION;
+          this.resetTrapGroup(trap, this.trapColFromGroup(trap));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit dungeon spike trap model', error);
+    }
+  }
+
+  private applyDungeonFloorVariant(
+    view: RowView,
+    col: number,
+    selected: DungeonFloorAssetKey | null = view.floorAssetKeys[col],
+  ): void {
+    view.floorAssetKeys[col] = selected;
     for (const key of DUNGEON_FLOOR_KEYS) {
       const model = view.floorModels[col][key];
       if (model) {
         model.visible = key === selected;
+        model.rotation.y =
+          key === 'stone'
+            ? dungeonFloorRotation(view.assignedRow, col)
+            : 0;
       }
     }
   }
@@ -1216,7 +1270,13 @@ export class SceneManager {
           ? this.floorMaterialA
           : this.floorMaterialB;
       mesh.position.y = highlighted ? 0.05 : 0;
-      this.applyDungeonFloorVariant(view, col);
+      const floorAssetKey =
+        tile?.content.type === 'trap'
+          ? null
+          : tile?.content.type === 'shop'
+            ? 'wood'
+            : dungeonFloorVariant(view.assignedRow, col);
+      this.applyDungeonFloorVariant(view, col, floorAssetKey);
       const occupant =
         tile?.content.type === 'monster' && tile.monster ? tile.monster : undefined;
       for (const key of ENEMY_RENDER_KEYS) {
@@ -1481,18 +1541,20 @@ export class SceneManager {
     const plate = new Mesh(plateGeo, this.trapPlateMaterial.clone());
     plate.rotation.x = -Math.PI / 2;
     plate.position.y = 0.085;
-    plate.userData.role = 'plate';
+    plate.userData.role = 'fallback';
 
     const rune = new Mesh(runeGeo, this.trapRuneMaterial.clone());
     rune.rotation.x = -Math.PI / 2;
     rune.position.y = 0.095;
-    rune.userData.role = 'rune';
+    rune.userData.role = 'fallback';
 
     const markA = new Mesh(markGeo, this.trapRuneMaterial.clone());
     markA.position.set(0, 0.1, 0);
+    markA.userData.role = 'fallback';
     const markB = new Mesh(markGeo, this.trapRuneMaterial.clone());
     markB.rotation.y = Math.PI / 2;
     markB.position.set(0, 0.1, 0);
+    markB.userData.role = 'fallback';
 
     group.add(plate, rune, markA, markB);
     group.visible = false;
@@ -1509,24 +1571,52 @@ export class SceneManager {
     group.scale.setScalar(1);
     this.setTrapOpacity(group, 1);
     this.setTrapEmissive(group, 0.85);
+    this.setTrapSpikeExtension(group, TRAP_SPIKE_IDLE_EXTENSION);
   }
 
   private setTrapOpacity(group: Group, opacity: number): void {
-    for (const child of group.children) {
-      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
-      if (material) {
+    group.traverse((child) => {
+      if (!('isMesh' in child) || !child.isMesh) {
+        return;
+      }
+      const mesh = child as Mesh;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        material.transparent = opacity < 1 || material.transparent;
         material.opacity = opacity;
       }
-    }
+    });
   }
 
   private setTrapEmissive(group: Group, intensity: number): void {
-    for (const child of group.children) {
-      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
-      if (material) {
-        material.emissiveIntensity = intensity;
+    group.traverse((child) => {
+      if (!('isMesh' in child) || !child.isMesh) {
+        return;
       }
+      const mesh = child as Mesh;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        if (material instanceof MeshStandardMaterial) {
+          material.emissiveIntensity = intensity;
+        }
+      }
+    });
+  }
+
+  private setTrapSpikeExtension(group: Group, extension: number): boolean {
+    const spikes = group.userData.spikeNode as Object3D | undefined;
+    const retractedY = group.userData.spikeRetractedY as number | undefined;
+    const extendedY = group.userData.spikeExtendedY as number | undefined;
+    if (!spikes || retractedY === undefined || extendedY === undefined) {
+      return false;
     }
+    const amount = Math.min(1, Math.max(0, extension));
+    spikes.position.y = retractedY + (extendedY - retractedY) * amount;
+    return true;
   }
 
   private trapColFromGroup(group: Group): number {
@@ -1556,7 +1646,9 @@ export class SceneManager {
         const phase = elapsedSec * 3.1 + view.assignedRow + col;
         const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(phase));
         this.setTrapEmissive(trap, pulse);
-        trap.position.y = Math.sin(phase * 0.7) * 0.012;
+        if (!this.setTrapSpikeExtension(trap, TRAP_SPIKE_IDLE_EXTENSION)) {
+          trap.position.y = Math.sin(phase * 0.7) * 0.012;
+        }
       }
     }
   }
@@ -2261,6 +2353,18 @@ function findEquipmentMount(
     found = skinned.skeleton.bones.find((bone) => names.includes(bone.name));
   });
   return found;
+}
+
+function cloneMeshMaterials(root: Group): void {
+  root.traverse((child) => {
+    if (!('isMesh' in child) || !child.isMesh) {
+      return;
+    }
+    const mesh = child as Mesh;
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map((material) => material.clone())
+      : mesh.material.clone();
+  });
 }
 
 function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
