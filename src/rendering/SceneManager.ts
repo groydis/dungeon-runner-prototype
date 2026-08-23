@@ -20,6 +20,7 @@ import {
   SRGBColorSpace,
   Scene,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
   type AnimationAction,
   type Camera,
@@ -30,6 +31,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
   COLLECT_FX_SEC,
   COMBAT_HIT_SEC,
+  ENCOUNTER_FX_SEC,
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
   ROW_POOL_SIZE,
@@ -53,8 +55,10 @@ import {
   ENEMY_RENDER_KEYS,
   enemyAttackClip,
   enemyModelUrl,
+  enemySpawnClip,
   fitEnemyModel,
   isEnemyRenderKey,
+  loadEnemyClips,
   loadEnemyTemplate,
   type EnemyRenderKey,
 } from './enemyAssets';
@@ -74,17 +78,23 @@ import {
   type PlayerClipMap,
 } from './playerAssets';
 import {
+  NO_EQUIPMENT_UPGRADES,
   PLAYER_WEAPON_MOUNT_NAME,
   loadPlayerEquipmentTemplate,
   playerEquipmentLoadout,
   playerEquipmentMountNames,
   playerEquipmentUrl,
+  playerProjectileKind,
+  type PlayerEquipmentUpgradeLevels,
   type PlayerEquipmentVisual,
 } from './playerEquipment';
+import { type RigMediumClipMap } from './rigMediumAnimations';
 import {
-  loadRigMediumClips,
-  type RigMediumClipMap,
-} from './rigMediumAnimations';
+  fitCombatProjectile,
+  loadCombatProjectileTemplate,
+  PROJECTILE_POOL_SIZE,
+  type CombatProjectileKind,
+} from './combatPresentationAssets';
 
 interface EnemySlot {
   key: EnemyRenderKey;
@@ -100,6 +110,7 @@ interface EnemySlot {
   loadToken: number;
   occupantId: string | null;
   dying: boolean;
+  attackSequence: number;
 }
 
 interface RowView {
@@ -165,6 +176,12 @@ interface DropSpawnFx {
   baseY: number;
 }
 
+interface ProjectileFx {
+  group: Group;
+  start: Vector3;
+  end: Vector3;
+}
+
 export class SceneManager {
   readonly scene = new Scene();
   readonly renderer: WebGLRenderer;
@@ -180,6 +197,10 @@ export class SceneManager {
   private playerModelMaterials: MeshStandardMaterial[] = [];
   private playerRenderKey: PlayerRenderKey | null = null;
   private playerEquipmentMounts: Group[] = [];
+  private playerEquipmentUpgrades: PlayerEquipmentUpgradeLevels =
+    NO_EQUIPMENT_UPGRADES;
+  private playerEquipmentLoadToken = 0;
+  private playerAttackSequence = 0;
   private playerLoadToken = 0;
   private playerMoving = false;
   private playerDead = false;
@@ -189,6 +210,8 @@ export class SceneManager {
   private readonly caveRatMaterial: MeshStandardMaterial;
   private readonly cryptGuardMaterial: MeshStandardMaterial;
   private readonly boneBruteMaterial: MeshStandardMaterial;
+  private readonly skeletonMageMaterial: MeshStandardMaterial;
+  private readonly necromancerMaterial: MeshStandardMaterial;
   private readonly goldMaterial: MeshStandardMaterial;
   private readonly potionMaterial: MeshStandardMaterial;
   private readonly merchantStallMaterial: MeshStandardMaterial;
@@ -210,6 +233,14 @@ export class SceneManager {
   private trapConsumeFx: TrapConsumeFx[] = [];
   private enemyAdvanceFx: EnemyAdvanceFx | null = null;
   private dropSpawnFx: DropSpawnFx | null = null;
+  private readonly projectilePools: Partial<
+    Record<CombatProjectileKind, Group[]>
+  > = {};
+  private readonly projectilePoolPromises = new Map<
+    CombatProjectileKind,
+    Promise<void>
+  >();
+  private activeProjectile: ProjectileFx | null = null;
   private clock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -263,6 +294,24 @@ export class SceneManager {
       color: 0xdc5a28,
       roughness: 0.42,
       metalness: 0.1,
+      transparent: true,
+      opacity: 1,
+    });
+    this.skeletonMageMaterial = new MeshStandardMaterial({
+      color: 0x7656c7,
+      emissive: 0x47318f,
+      emissiveIntensity: 0.28,
+      roughness: 0.4,
+      metalness: 0.12,
+      transparent: true,
+      opacity: 1,
+    });
+    this.necromancerMaterial = new MeshStandardMaterial({
+      color: 0x34204f,
+      emissive: 0x9b45d6,
+      emissiveIntensity: 0.48,
+      roughness: 0.34,
+      metalness: 0.16,
       transparent: true,
       opacity: 1,
     });
@@ -366,6 +415,10 @@ export class SceneManager {
       return;
     }
     this.playerRenderKey = renderKey;
+    if (!renderKey) {
+      this.playerEquipmentUpgrades = NO_EQUIPMENT_UPGRADES;
+      this.playerAttackSequence = 0;
+    }
     this.playerLoadToken += 1;
     this.playerMoving = false;
     this.playerDead = false;
@@ -373,7 +426,44 @@ export class SceneManager {
     if (!renderKey) {
       return;
     }
+    const projectileKind = playerProjectileKind(
+      renderKey,
+      this.playerEquipmentUpgrades,
+    );
+    if (projectileKind) {
+      void this.prepareProjectilePool(projectileKind);
+    }
     void this.installPlayerModel(renderKey, this.playerLoadToken);
+  }
+
+  setPlayerEquipmentUpgradeLevels(
+    upgrades: PlayerEquipmentUpgradeLevels,
+  ): void {
+    const normalized = {
+      sharpened: Math.max(0, upgrades.sharpened),
+      armoured: Math.max(0, upgrades.armoured),
+    };
+    if (
+      normalized.sharpened === this.playerEquipmentUpgrades.sharpened &&
+      normalized.armoured === this.playerEquipmentUpgrades.armoured
+    ) {
+      return;
+    }
+    this.playerEquipmentUpgrades = normalized;
+    const projectileKind = playerProjectileKind(
+      this.playerRenderKey,
+      this.playerEquipmentUpgrades,
+    );
+    if (projectileKind) {
+      void this.prepareProjectilePool(projectileKind);
+    }
+    if (this.playerModel && this.playerRenderKey) {
+      void this.installPlayerEquipmentLoadout(
+        this.playerModel,
+        this.playerRenderKey,
+        this.playerLoadToken,
+      );
+    }
   }
 
   setPlayerMoving(moving: boolean): void {
@@ -390,16 +480,35 @@ export class SceneManager {
     if (this.playerDead) {
       return;
     }
-    this.playPlayerOneShot(this.playerClips.hit, 'hit');
+    this.playPlayerOneShot(
+      this.playerRenderKey === 'knight'
+        ? (this.playerClips.blockHit ?? this.playerClips.hit)
+        : this.playerClips.hit,
+      this.playerRenderKey === 'knight' ? 'block' : 'hit',
+    );
   }
 
   playPlayerAttack(): void {
     if (this.playerDead) {
       return;
     }
+    const clip = playerAttackClip(
+      this.playerRenderKey,
+      this.playerClips,
+      this.playerAttackSequence,
+      this.playerEquipmentUpgrades.sharpened,
+    );
+    this.playerAttackSequence += 1;
+    this.playPlayerOneShot(clip, 'attack');
+  }
+
+  playPlayerPickup(kind: CollectibleKind): void {
+    if (this.playerDead) {
+      return;
+    }
     this.playPlayerOneShot(
-      playerAttackClip(this.playerRenderKey, this.playerClips),
-      'attack',
+      kind === 'potion' ? this.playerClips.useItem : this.playerClips.pickup,
+      kind === 'potion' ? 'item' : 'pickup',
     );
   }
 
@@ -431,7 +540,27 @@ export class SceneManager {
     if (!slot || slot.dying) {
       return;
     }
-    this.playEnemyOneShot(slot, enemyAttackClip(slot.key, slot.clips), 'attack');
+    const clip = enemyAttackClip(slot.key, slot.clips, slot.attackSequence);
+    slot.attackSequence += 1;
+    this.playEnemyOneShot(slot, clip, 'attack');
+  }
+
+  playEnemyTaunt(target: {
+    id: string;
+    row: number;
+    col: number;
+    renderKey: string;
+  }): void {
+    const slot = this.findEnemySlot(
+      target.row,
+      target.col,
+      target.renderKey,
+      target.id,
+    );
+    if (!slot || slot.dying) {
+      return;
+    }
+    this.playEnemyOneShot(slot, slot.clips.skeletonTaunt, 'taunt');
   }
 
   playEnemyDeath(target: { id: string; row: number; col: number; renderKey: string }): void {
@@ -777,6 +906,9 @@ export class SceneManager {
       monsterBaseY: monsterBaseY(mesh),
       playerBaseX: laneWorldX(playerCol),
     };
+    if (entry.attacker === 'player') {
+      this.launchPlayerProjectile(mesh);
+    }
   }
 
   updateCombatHit(t: number): void {
@@ -789,6 +921,14 @@ export class SceneManager {
     const towardMonster = fx.monsterBaseX - fx.playerBaseX;
     const playerMaterials = this.playerFlashMaterials();
     const monsterMaterials = this.enemyFlashMaterials(fx.monsterMesh);
+    if (this.activeProjectile) {
+      const travel = Math.min(1, t * 1.35);
+      this.activeProjectile.group.position.lerpVectors(
+        this.activeProjectile.start,
+        this.activeProjectile.end,
+        travel,
+      );
+    }
 
     if (fx.attacker === 'player') {
       const reach = fx.isSurpriseStrike ? 0.72 : 0.42;
@@ -829,6 +969,7 @@ export class SceneManager {
       this.flashPlayerMaterials(this.enemyFlashMaterials(fx.monsterMesh), 0x000000, 0);
       this.playerMesh.position.x = fx.playerBaseX;
     }
+    this.releaseActiveProjectile();
     this.combatHit = null;
   }
 
@@ -855,6 +996,7 @@ export class SceneManager {
     this.collectFx = [];
     this.resetTrapConsumeFx();
     this.resetMerchantLeaveFx();
+    this.releaseActiveProjectile();
   }
 
   endEncounterFx(): void {
@@ -879,6 +1021,11 @@ export class SceneManager {
     this.removePlayerModel();
     for (const view of this.rowViews) {
       this.releaseRowEnemySlots(view);
+    }
+    for (const pool of Object.values(this.projectilePools)) {
+      for (const projectile of pool ?? []) {
+        projectile.removeFromParent();
+      }
     }
     this.renderer.dispose();
   }
@@ -1274,6 +1421,20 @@ export class SceneManager {
         this.boneBruteMaterial,
         0.52,
       ),
+      skeletonMage: this.createEnemySlot(
+        'skeletonMage',
+        col,
+        cryptGuardGeo,
+        this.skeletonMageMaterial,
+        0.58,
+      ),
+      necromancer: this.createEnemySlot(
+        'necromancer',
+        col,
+        cryptGuardGeo,
+        this.necromancerMaterial,
+        0.6,
+      ),
     };
   }
 
@@ -1304,6 +1465,7 @@ export class SceneManager {
       loadToken: 0,
       occupantId: null,
       dying: false,
+      attackSequence: 0,
     };
   }
 
@@ -1557,11 +1719,10 @@ export class SceneManager {
     key: PlayerRenderKey,
     token: number,
   ): Promise<void> {
-    const loadout = playerEquipmentLoadout(key);
     try {
       const [template, clips] = await Promise.all([
         loadPlayerTemplate(key),
-        loadPlayerClips(),
+        loadPlayerClips(key),
       ]);
       if (token !== this.playerLoadToken || this.playerRenderKey !== key) {
         return;
@@ -1569,17 +1730,7 @@ export class SceneManager {
       const model = cloneSkinned(template) as Group;
       fitPlayerModel(model);
       this.attachPlayerModel(model, clips);
-      await Promise.all(
-        loadout.map((visual) =>
-          this.installPlayerEquipment(
-            model,
-            visual,
-            loadPlayerEquipmentTemplate(visual.assetKey),
-            key,
-            token,
-          ),
-        ),
-      );
+      await this.installPlayerEquipmentLoadout(model, key, token);
     } catch (error) {
       if (token !== this.playerLoadToken) {
         return;
@@ -1592,17 +1743,41 @@ export class SceneManager {
     }
   }
 
+  private async installPlayerEquipmentLoadout(
+    model: Group,
+    key: PlayerRenderKey,
+    playerToken: number,
+  ): Promise<void> {
+    const equipmentToken = ++this.playerEquipmentLoadToken;
+    this.removePlayerEquipment();
+    const loadout = playerEquipmentLoadout(key, this.playerEquipmentUpgrades);
+    await Promise.all(
+      loadout.map((visual) =>
+        this.installPlayerEquipment(
+          model,
+          visual,
+          loadPlayerEquipmentTemplate(visual.assetKey),
+          key,
+          playerToken,
+          equipmentToken,
+        ),
+      ),
+    );
+  }
+
   private async installPlayerEquipment(
     model: Group,
     loadout: PlayerEquipmentVisual,
     templatePromise: Promise<Group>,
     key: PlayerRenderKey,
-    token: number,
+    playerToken: number,
+    equipmentToken: number,
   ): Promise<void> {
     try {
       const weaponTemplate = await templatePromise;
       if (
-        token !== this.playerLoadToken ||
+        playerToken !== this.playerLoadToken ||
+        equipmentToken !== this.playerEquipmentLoadToken ||
         this.playerRenderKey !== key ||
         this.playerModel !== model
       ) {
@@ -1610,7 +1785,10 @@ export class SceneManager {
       }
       this.attachPlayerEquipment(model, weaponTemplate, loadout);
     } catch (error) {
-      if (token !== this.playerLoadToken) {
+      if (
+        playerToken !== this.playerLoadToken ||
+        equipmentToken !== this.playerEquipmentLoadToken
+      ) {
         return;
       }
       console.error(
@@ -1661,6 +1839,7 @@ export class SceneManager {
   }
 
   private removePlayerModel(): void {
+    this.playerEquipmentLoadToken += 1;
     this.removePlayerEquipment();
     this.playerMixer?.stopAllAction();
     this.playerMixer = null;
@@ -1673,6 +1852,66 @@ export class SceneManager {
       this.playerModel = null;
     }
     this.playerBody.visible = true;
+  }
+
+  private prepareProjectilePool(kind: CombatProjectileKind): Promise<void> {
+    if (this.projectilePools[kind]) {
+      return Promise.resolve();
+    }
+    const cached = this.projectilePoolPromises.get(kind);
+    if (cached) {
+      return cached;
+    }
+    const pending = loadCombatProjectileTemplate(kind)
+      .then((template) => {
+        const pool: Group[] = [];
+        for (let i = 0; i < PROJECTILE_POOL_SIZE; i += 1) {
+          const wrapper = new Group();
+          wrapper.name = `${kind}Projectile-${i}`;
+          const model = template.clone(true);
+          fitCombatProjectile(model);
+          wrapper.add(model);
+          wrapper.visible = false;
+          this.scene.add(wrapper);
+          pool.push(wrapper);
+        }
+        this.projectilePools[kind] = pool;
+      })
+      .catch((error) => {
+        console.error(`Failed to load ${kind} projectile`, error);
+      });
+    this.projectilePoolPromises.set(kind, pending);
+    return pending;
+  }
+
+  private launchPlayerProjectile(target: Group): void {
+    const kind = playerProjectileKind(
+      this.playerRenderKey,
+      this.playerEquipmentUpgrades,
+    );
+    if (!kind) {
+      return;
+    }
+    const projectile = this.projectilePools[kind]?.find((entry) => !entry.visible);
+    if (!projectile) {
+      void this.prepareProjectilePool(kind);
+      return;
+    }
+    const start = this.playerMesh.getWorldPosition(new Vector3());
+    start.y += 0.5;
+    const end = target.getWorldPosition(new Vector3());
+    end.y += 0.5;
+    projectile.position.copy(start);
+    projectile.lookAt(end);
+    projectile.visible = true;
+    this.activeProjectile = { group: projectile, start, end };
+  }
+
+  private releaseActiveProjectile(): void {
+    if (this.activeProjectile) {
+      this.activeProjectile.group.visible = false;
+    }
+    this.activeProjectile = null;
   }
 
   private playPlayerLocomotion(immediate: boolean): void {
@@ -1699,19 +1938,20 @@ export class SceneManager {
 
   private playPlayerOneShot(
     clip: PlayerClipMap[keyof PlayerClipMap],
-    kind: 'attack' | 'hit' | 'death',
+    kind: 'attack' | 'hit' | 'block' | 'pickup' | 'item' | 'death',
   ): void {
     const mixer = this.playerMixer;
     if (!mixer || !clip) {
       return;
     }
     this.playerLoopAction?.fadeOut(0.08);
+    this.playerOneShotAction?.fadeOut(0.04);
     const action = mixer.clipAction(clip);
     action.setLoop(LoopOnce, 1);
     action.clampWhenFinished = true;
     if (kind !== 'death') {
       action.setEffectiveTimeScale(
-        Math.max(1, clip.duration / (COMBAT_HIT_SEC * 0.9)),
+        Math.max(1, clip.duration / (oneShotDuration(kind) * 0.9)),
       );
     }
     action.reset().fadeIn(0.06).play();
@@ -1722,6 +1962,9 @@ export class SceneManager {
         return;
       }
       mixer.removeEventListener('finished', onFinished);
+      if (this.playerOneShotAction !== action) {
+        return;
+      }
       if (token !== this.playerLoadToken || kind === 'death' || this.playerDead) {
         return;
       }
@@ -1784,7 +2027,7 @@ export class SceneManager {
     try {
       const [template, clips] = await Promise.all([
         loadEnemyTemplate(key),
-        loadRigMediumClips(),
+        loadEnemyClips(key),
       ]);
       if (
         token !== slot.loadToken ||
@@ -1828,7 +2071,7 @@ export class SceneManager {
       );
       return;
     }
-    this.playEnemyLocomotion(slot, false, true);
+    this.playEnemyOneShot(slot, enemySpawnClip(slot.key, clips), 'spawn');
   }
 
   private detachEnemyModel(slot: EnemySlot): void {
@@ -1849,6 +2092,7 @@ export class SceneManager {
     slot.loadToken += 1;
     slot.occupantId = null;
     slot.dying = false;
+    slot.attackSequence = 0;
     this.detachEnemyModel(slot);
     slot.group.visible = false;
     slot.group.position.set(laneWorldX(slot.col), monsterBaseY(slot.group), 0);
@@ -1894,7 +2138,7 @@ export class SceneManager {
   private playEnemyOneShot(
     slot: EnemySlot,
     clip: RigMediumClipMap[keyof RigMediumClipMap],
-    kind: 'attack' | 'hit' | 'death',
+    kind: 'attack' | 'hit' | 'taunt' | 'spawn' | 'death',
   ): void {
     const mixer = slot.mixer;
     if (!mixer || !clip) {
@@ -1904,12 +2148,13 @@ export class SceneManager {
       return;
     }
     slot.loopAction?.fadeOut(0.08);
+    slot.oneShotAction?.fadeOut(0.04);
     const action = mixer.clipAction(clip);
     action.setLoop(LoopOnce, 1);
     action.clampWhenFinished = true;
     if (kind !== 'death') {
       action.setEffectiveTimeScale(
-        Math.max(1, clip.duration / (COMBAT_HIT_SEC * 0.9)),
+        Math.max(1, clip.duration / (oneShotDuration(kind) * 0.9)),
       );
     }
     action.reset().fadeIn(0.06).play();
@@ -1921,6 +2166,9 @@ export class SceneManager {
         return;
       }
       mixer.removeEventListener('finished', onFinished);
+      if (slot.oneShotAction !== action) {
+        return;
+      }
       if (token !== slot.loadToken || slot.occupantId !== occupantId) {
         return;
       }
@@ -2034,4 +2282,23 @@ function collectStandardMaterials(root: Group): MeshStandardMaterial[] {
 
 function monsterBaseY(object: Group): number {
   return typeof object.userData.baseY === 'number' ? object.userData.baseY : 0.46;
+}
+
+function oneShotDuration(
+  kind:
+    | 'attack'
+    | 'hit'
+    | 'block'
+    | 'pickup'
+    | 'item'
+    | 'taunt'
+    | 'spawn',
+): number {
+  if (kind === 'pickup' || kind === 'item') {
+    return COLLECT_FX_SEC;
+  }
+  if (kind === 'taunt' || kind === 'spawn') {
+    return ENCOUNTER_FX_SEC;
+  }
+  return COMBAT_HIT_SEC;
 }

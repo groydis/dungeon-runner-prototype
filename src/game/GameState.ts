@@ -412,6 +412,10 @@ export class GameState {
     );
   }
 
+  getShopProgressSnapshot(): Readonly<ShopProgress> {
+    return freezeReadModel({ ...this.shopProgress });
+  }
+
   canBuyShopOffer(offerId: ShopOfferId): boolean {
     if (!this._player || !this.activeShop) {
       return false;

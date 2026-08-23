@@ -15,7 +15,13 @@ import source from './enemyAssets.ts?raw';
 
 describe('enemy asset mapping', () => {
   it('covers every current enemy render key with a KayKit skeleton GLB', () => {
-    expect([...ENEMY_RENDER_KEYS]).toEqual(['caveRat', 'cryptGuard', 'boneBrute']);
+    expect([...ENEMY_RENDER_KEYS]).toEqual([
+      'caveRat',
+      'cryptGuard',
+      'boneBrute',
+      'skeletonMage',
+      'necromancer',
+    ]);
     expect(Object.keys(ENEMY_MODEL_URLS).sort()).toEqual(
       [...ENEMY_RENDER_KEYS].sort(),
     );
@@ -23,12 +29,15 @@ describe('enemy asset mapping', () => {
       caveRat: '/models/enemies/kaykit/Skeleton_Minion.glb',
       cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
       boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+      skeletonMage: '/models/enemies/kaykit/Skeleton_Mage.glb',
+      necromancer: '/models/enemies/kaykit/Necromancer.glb',
     });
-    expect(ENEMY_MODEL_URLS.caveRat).not.toContain('Skeleton_Mage');
     expect(ENEMY_ATTACK_CLIPS).toEqual({
-      caveRat: 'attackUnarmed',
-      cryptGuard: 'attack1H',
-      boneBrute: 'attack2H',
+      caveRat: ['attackUnarmed', 'attackUnarmedKick'],
+      cryptGuard: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
+      boneBrute: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+      skeletonMage: ['magicShoot', 'magicSpellcasting'],
+      necromancer: ['magicSummon'],
     });
     for (const key of ENEMY_RENDER_KEYS) {
       expect(isEnemyRenderKey(key)).toBe(true);

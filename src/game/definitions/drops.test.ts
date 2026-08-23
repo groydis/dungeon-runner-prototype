@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ENEMY_DROP_TABLE,
+  ELITE_ENEMY_DROP_TABLE,
   ENEMY_DEFINITIONS,
   enemyDropCollectibleId,
   rollEnemyDrop,
 } from './enemies';
 
 describe('enemy drop tables', () => {
-  it('gives Cave Rat, Crypt Guard, and Bone Brute the shared 60/25/15 table', () => {
+  it('gives normal enemies the shared 60/25/15 table and elite its own table', () => {
     expect(DEFAULT_ENEMY_DROP_TABLE).toEqual([
       { item: 'none', weight: 60 },
       { item: 'gold', weight: 25 },
@@ -17,9 +18,15 @@ describe('enemy drop tables', () => {
       DEFAULT_ENEMY_DROP_TABLE.reduce((sum, entry) => sum + entry.weight, 0),
     ).toBe(100);
 
-    for (const type of ['caveRat', 'cryptGuard', 'boneBrute'] as const) {
+    for (const type of [
+      'caveRat',
+      'cryptGuard',
+      'boneBrute',
+      'skeletonMage',
+    ] as const) {
       expect(ENEMY_DEFINITIONS[type].dropTable).toBe(DEFAULT_ENEMY_DROP_TABLE);
     }
+    expect(ENEMY_DEFINITIONS.necromancer.dropTable).toBe(ELITE_ENEMY_DROP_TABLE);
   });
 
   it('selects none, gold, and potion from deterministic roll values', () => {

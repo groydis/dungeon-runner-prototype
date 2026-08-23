@@ -22,15 +22,30 @@ export const PLAYER_MODEL_URLS: Record<PlayerRenderKey, string> = {
 export const PLAYER_ANIMATION_URLS = RIG_MEDIUM_ANIMATION_URLS;
 export const PLAYER_CLIP_NAMES = RIG_MEDIUM_CLIP_NAMES;
 export type PlayerClipMap = RigMediumClipMap;
-export type PlayerAttackClipId = 'attack1H' | 'attack2H';
+export type PlayerAttackClipId =
+  | 'attack1H'
+  | 'attack1HChop'
+  | 'attack1HHorizontal'
+  | 'attack1HStab'
+  | 'attack2H'
+  | 'attack2HSlice'
+  | 'attack2HSpin'
+  | 'attack2HStab'
+  | 'bowRelease'
+  | 'ranged1HShoot'
+  | 'ranged2HShoot'
+  | 'magicShoot'
+  | 'magicSpellcasting';
 
-/** Ranger bow and Mage magic clips stay reserved until ranged gameplay exists. */
+/** Per-class attack cycles; ranged clips are loaded only for Ranger and Mage. */
 export const PLAYER_ATTACK_CLIPS: {
-  readonly [K in PlayerRenderKey]?: PlayerAttackClipId;
+  readonly [K in PlayerRenderKey]: readonly PlayerAttackClipId[];
 } = {
-  rogue: 'attack1H',
-  knight: 'attack1H',
-  barbarian: 'attack2H',
+  rogue: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
+  ranger: ['bowRelease'],
+  mage: ['magicShoot', 'magicSpellcasting'],
+  knight: ['attack1H', 'attack1HHorizontal', 'attack1HStab'],
+  barbarian: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
 };
 
 /** Target in-world height so KayKit adventurers match the old capsule. */
@@ -52,16 +67,27 @@ export function loadPlayerTemplate(key: PlayerRenderKey): Promise<Group> {
   return loadGltfScene(playerModelUrl(key));
 }
 
-export function loadPlayerClips(): Promise<PlayerClipMap> {
-  return loadRigMediumClips();
+export function loadPlayerClips(key: PlayerRenderKey): Promise<PlayerClipMap> {
+  return loadRigMediumClips({ includeRanged: key === 'ranger' || key === 'mage' });
 }
 
 export function playerAttackClip(
   key: PlayerRenderKey | null | undefined,
   clips: PlayerClipMap,
+  sequenceIndex = 0,
+  sharpenedLevel = 0,
 ) {
-  const clipId = key ? PLAYER_ATTACK_CLIPS[key] : undefined;
-  return clipId ? clips[clipId] : undefined;
+  if (key === 'ranger' && sharpenedLevel > 0) {
+    return sharpenedLevel === 1
+      ? clips.ranged1HShoot
+      : clips.ranged2HShoot;
+  }
+  const choices = key ? PLAYER_ATTACK_CLIPS[key] : undefined;
+  if (!choices || choices.length === 0) {
+    return undefined;
+  }
+  const clipId = choices[sequenceIndex % choices.length];
+  return clips[clipId];
 }
 
 export function fitPlayerModel(root: Object3D): void {

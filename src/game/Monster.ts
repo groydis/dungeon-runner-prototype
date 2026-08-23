@@ -55,6 +55,10 @@ export class Monster {
     return this.definition.experience;
   }
 
+  get elite(): boolean {
+    return this.definition.elite;
+  }
+
   get encounterResolved(): boolean {
     return this._encounterResolved;
   }

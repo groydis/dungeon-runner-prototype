@@ -14,22 +14,35 @@ export interface EncounterPoolBand {
 export const EARLY_ENEMY_POOL_MIN_ROW = 5;
 export const MID_ENEMY_POOL_MIN_ROW = 20;
 export const LATE_ENEMY_POOL_MIN_ROW = 40;
+export const ELITE_ENEMY_POOL_MIN_ROW = 60;
 
 /** Inclusive lower bounds. The highest matching minRow wins. */
 export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
   {
+    minRow: ELITE_ENEMY_POOL_MIN_ROW,
+    entries: [
+      { item: 'caveRat', weight: 25 },
+      { item: 'cryptGuard', weight: 30 },
+      { item: 'boneBrute', weight: 22 },
+      { item: 'skeletonMage', weight: 15 },
+      { item: 'necromancer', weight: 8 },
+    ],
+  },
+  {
     minRow: LATE_ENEMY_POOL_MIN_ROW,
     entries: [
-      { item: 'caveRat', weight: 50 },
-      { item: 'cryptGuard', weight: 35 },
-      { item: 'boneBrute', weight: 15 },
+      { item: 'caveRat', weight: 40 },
+      { item: 'cryptGuard', weight: 30 },
+      { item: 'boneBrute', weight: 20 },
+      { item: 'skeletonMage', weight: 10 },
     ],
   },
   {
     minRow: MID_ENEMY_POOL_MIN_ROW,
     entries: [
-      { item: 'caveRat', weight: 75 },
+      { item: 'caveRat', weight: 65 },
       { item: 'cryptGuard', weight: 25 },
+      { item: 'skeletonMage', weight: 10 },
     ],
   },
   {

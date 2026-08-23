@@ -10,9 +10,9 @@ You choose a class on launch, then start in the centre lane at the near end of t
 
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
-- Floor tiles are simple dark stone boxes.
+- Floor tiles use three KayKit dungeon GLBs over pooled dark-box loading/failure fallbacks.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
-- Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, gold, health potions, or Alarm Traps. Those three enemies use KayKit Skeleton models (Minion / Rogue / Warrior) with the old placeholders as a loading fallback.
+- Rows can contain empty lanes, Cave Rats, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
 - Adjacent lane (same row) = roll Evade vs that enemy’s Perception to slip past, or take a Surprise Attack.
@@ -33,7 +33,7 @@ Included:
 - Smooth lane-change, hop, and board-scroll animation
 - Row recycling: the row that leaves the screen is reused as the new far row
 - A demo Cave Rat after a 3-row safe opening, then weighted procedural rows
-- Distance-scaled enemy pools (Cave Rat, Crypt Guard, Bone Brute)
+- Distance-scaled enemy pools (Cave Rat, Crypt Guard, Bone Brute, Skeleton Mage, elite Necromancer)
 - Gold and potion pickups with run-scoped gold and healing
 - Alarm Traps from row 8 that pull one visible enemy closer
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
@@ -141,10 +141,11 @@ src/
     SceneManager.ts       Scene, lights, recycled row meshes, player/hit FX
     playerAssets.ts       KayKit player GLB URLs
     playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
+    combatPresentationAssets.ts KayKit pooled projectile registry and fitting
     enemyAssets.ts        KayKit Skeleton enemy GLB URLs and per-model fits
     rigMediumAnimations.ts Shared Rig_Medium clip loader/cache
     environmentAssets.ts  KayKit dungeon-floor GLBs and deterministic variants
-    reservedKaykitAssets.ts Lazy URLs for future characters/enemies/equipment
+    reservedKaykitAssets.ts Lazy URLs for retained future characters/equipment
     CameraController.ts   Elevated follow camera
   styles/
     main.css              Full-viewport HUD, class-select, shop, level-up, and game-over overlays
@@ -164,9 +165,10 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Cave Rat attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
-- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts a dagger, bow, staff, sword/shield, or two-handed axe on the authored hand slots. Equipment remains visual-only and never changes class rules or GameState.
-- **Enemy presentation** uses KayKit Skeleton GLBs for Cave Rat, Crypt Guard, and Bone Brute. `enemyAssets.ts` maps existing enemy render keys to model URLs. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
-- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. Player and enemy rendering reuse one clip cache for general, movement, melee, and skeleton-specific clips. Players and enemies play compatible attack clips during combat; Ranger bow and Mage magic bundles remain reserved until ranged gameplay exists.
+- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots and derives visual weapon/shield tiers from successful Sharpened and Armoured shop purchases. Equipment remains visual-only; the shop rules still own all stat changes.
+- **Enemy presentation** maps five enemy render keys to KayKit GLBs. Skeleton Mage is a normal ranged enemy from row 20; Necromancer is a rare elite from row 60. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only.
+- **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. General, basic movement, melee, and skeleton clips share one cache. Ranger, Mage, Skeleton Mage, and Necromancer lazily add the ranged bundle. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
+- **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Dungeon floors** use three self-contained KayKit GLBs over the pooled box fallbacks. Broken variants are selected deterministically from row/column and do not affect generation or saved game state.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
@@ -246,9 +248,10 @@ Safety guarantees:
   - 5% one monster + one Alarm Trap
 - The monster on a monster, monster-plus-loot, or monster-plus-trap row is then chosen from the distance pool:
   - Rows `5–19`: 100% Cave Rat
-  - Rows `20–39`: 75% Cave Rat, 25% Crypt Guard
-  - Rows `40+`: 50% Cave Rat, 35% Crypt Guard, 15% Bone Brute
-- All three enemies use the same encounter and combat rules and the same first-version drop table. Only stats and placeholder look differ.
+  - Rows `20–39`: 65% Cave Rat, 25% Crypt Guard, 10% Skeleton Mage
+  - Rows `40–59`: 40% Cave Rat, 30% Crypt Guard, 20% Bone Brute, 10% Skeleton Mage
+  - Rows `60+`: 25% Cave Rat, 30% Crypt Guard, 22% Bone Brute, 15% Skeleton Mage, 8% elite Necromancer
+- All enemies use the same deterministic encounter/combat rules. Necromancer is marked elite and has a stronger drop table; its summoning and resurrection are presentation-only for now.
 - Every generated row has at least one empty lane. There is never a three-wide monster wall.
 - At most one monster, at most one collectible, and at most one trap per row.
 - Two entities never share a tile.
@@ -267,18 +270,20 @@ Gold and potions:
 - A potion heals `4` HP, capped at max HP, and is consumed even at full health.
   - Heal: `You drink a potion and restore [N] HP.`
   - Full: `You find a potion, but are already at full health.`
-- Pickup meshes pop/fade in place and do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
+- Pickup meshes pop/fade in place while the character plays `PickUp` or `Use_Item`; they do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
 - Defeated enemies can drop gold or a potion onto their cleared tile. The drop is a normal collectible and is **not** granted automatically. You only receive it by landing on that tile later.
 
 ## Enemy drops
 
-All three current enemies share this drop table (defined on `EnemyDefinition`, not in GameState or rendering):
+The four normal enemies share this drop table (defined on `EnemyDefinition`, not in GameState or rendering):
 
 | Result | Weight |
 |---|---:|
 | No drop | 60% |
 | Gold | 25% |
 | Potion | 15% |
+
+The elite Necromancer uses 20% no drop, 50% gold, and 30% potion.
 
 A drop is rolled only after a player combat victory, once the monster is removed. Evade, death, Alarm Trap movement, and other removals never roll.
 
@@ -320,7 +325,7 @@ The renderer plays a short trap flash, then a one-tile enemy slide, then any com
 
 ## Player classes
 
-Classes are starting stats and presentation only. They do not add spells, ranged attacks, crits, blocking, rage, or inventory. Their class-appropriate KayKit equipment and melee animation choices are visual-only.
+Classes are starting stats and presentation only. Ranger arrows, Mage spells, and Knight blocks are visual playback of the same automatic-combat formula; they do not yet add mechanical range, spell rules, block mitigation, crits, rage, or inventory.
 
 | ID | Class | Max HP | ATK | DEF | EVA | Playstyle |
 |---|---|---:|---:|---:|---:|---|
@@ -370,6 +375,7 @@ Rules:
 - Vitality never heals current HP.
 - EVA has a hard maximum of 20. Merchant Evasive and level-up Evasive both stop there.
 - A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats can still be bought.
+- Successful Sharpened purchases also advance class-specific visual weapon tiers: Rogue dagger→axe, Ranger bow→crossbows, Mage staff→wand/spellbook, and Barbarian axe→two-handed swords. Successful Armoured purchases advance the Knight through the retained shield variants. These swaps do not add stats beyond the existing shop purchase.
 - Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
 
 Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, Merchant prices and purchase counts, merchant entities, and meshes.
@@ -412,8 +418,10 @@ Starting stats:
 | Cave Rat   | 8  | 3      | 0       | Perception 0% |
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
+| Skeleton Mage | 15 | 7   | 0       | Perception 8% |
+| Necromancer (elite) | 34 | 9 | 2    | Perception 15% |
 
-Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. KayKit Skeleton GLBs map Minion to Cave Rat as an approved stand-in, Rogue to Crypt Guard, and Warrior to Bone Brute. The original placeholder meshes remain loading/failure fallbacks. Unique abilities are still future work. Damage is:
+Each monster is spawned from `ENEMY_DEFINITIONS` and gets a fresh stats clone. KayKit Skeleton GLBs map Minion to Cave Rat as an approved stand-in, Rogue to Crypt Guard, Warrior to Bone Brute, and Mage to Skeleton Mage; Necromancer uses its supplied GLB. The original placeholder meshes remain loading/failure fallbacks. Unique mechanical abilities are still future work. Damage is:
 
 ```text
 damage = Math.max(1, attacker.attack - defender.defence)
@@ -427,10 +435,13 @@ damage = Math.max(1, attacker.attack - defender.defence)
 
 A Cave Rat has 8 HP and 0 defence. Damage therefore depends on the selected class’s attack (a Ranger hit deals 6; a Mage hit deals 8). A surprise opener is `Math.ceil(normalDamage * 1.5)`.
 
-The fight is resolved immediately in game logic. The renderer then plays each log entry for about 300 ms:
+The fight is resolved immediately in game logic. A short skeleton taunt introduces combat, then the renderer plays each log entry for about 300 ms:
 
 - Player hit: player lunges, monster recoils/flashes
 - Monster hit: monster lunges, player recoils/flashes
+- Ranger hit: a pooled bow or crossbow arrow crosses to the target
+- Knight damage: the authored block-hit reaction plays
+- Necromancer attack: the authored summon clip plays; its spawn uses resurrection
 - Surprise strike: a stronger gold lunge/flash
 - HP text and bar update after every entry
 
@@ -449,6 +460,8 @@ XP is run-scoped. The player starts each run at **level 1** with **0 XP**. Only 
 | Cave Rat | 1 |
 | Crypt Guard | 2 |
 | Bone Brute | 4 |
+| Skeleton Mage | 4 |
+| Necromancer | 10 |
 
 Levels use cumulative thresholds. Append more rows to `LEVEL_XP_THRESHOLDS` to extend the cap.
 

@@ -74,6 +74,7 @@ export class Game {
 
   private animation: MoveAnimation | null = null;
   private encounterFxElapsed: number | null = null;
+  private combatPrelude: Extract<EncounterEvent, { kind: 'combat' }> | null = null;
   private pendingEvents: EncounterEvent[] = [];
   private combatPlayback: CombatPlayback | null = null;
   private trapPlayback: TrapPlayback | null = null;
@@ -218,6 +219,7 @@ export class Game {
     this.scene.setPlayerVisual(laneWorldX(player.col), 0);
 
     if (resolution.pickup) {
+      this.scene.playPlayerPickup(resolution.pickup.kind);
       this.scene.beginCollectFx(resolution.pickup);
     }
     if (resolution.shop) {
@@ -302,6 +304,13 @@ export class Game {
       return;
     }
 
+    this.combatPrelude = event;
+    this.scene.playEnemyTaunt(event.monster);
+    this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
+    this.encounterFxElapsed = 0;
+  }
+
+  private beginCombat(event: Extract<EncounterEvent, { kind: 'combat' }>): void {
     const result = this.state.createCombatResult(event);
     this.combatPlayback = {
       result,
@@ -327,6 +336,12 @@ export class Game {
 
     this.scene.endEncounterFx();
     this.encounterFxElapsed = null;
+    if (this.combatPrelude) {
+      const event = this.combatPrelude;
+      this.combatPrelude = null;
+      this.beginCombat(event);
+      return;
+    }
     this.playNextPendingEvent();
   }
 
@@ -474,6 +489,7 @@ export class Game {
   private returnToClassSelection(): void {
     this.animation = null;
     this.encounterFxElapsed = null;
+    this.combatPrelude = null;
     this.combatPlayback = null;
     this.trapPlayback = null;
     this.dropSpawnElapsed = null;
@@ -493,7 +509,14 @@ export class Game {
     if (!this.state.shopOpen) {
       return;
     }
-    this.state.buyShopOffer(offerId);
+    const result = this.state.buyShopOffer(offerId);
+    if (result.success) {
+      const progress = this.state.getShopProgressSnapshot();
+      this.scene.setPlayerEquipmentUpgradeLevels({
+        sharpened: progress.sharpened,
+        armoured: progress.armoured,
+      });
+    }
     this.updateHud();
   }
 

@@ -2,6 +2,7 @@ import { Box3, type Group, type Object3D } from 'three';
 import { type EnemyType } from '../game/definitions/enemies';
 import {
   loadGltfScene,
+  loadRigMediumClips,
   type RigMediumClipMap,
 } from './rigMediumAnimations';
 
@@ -11,21 +12,42 @@ export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
   'caveRat',
   'cryptGuard',
   'boneBrute',
+  'skeletonMage',
+  'necromancer',
 ];
 
 export const ENEMY_MODEL_URLS: Record<EnemyRenderKey, string> = {
   caveRat: '/models/enemies/kaykit/Skeleton_Minion.glb',
   cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
   boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+  skeletonMage: '/models/enemies/kaykit/Skeleton_Mage.glb',
+  necromancer: '/models/enemies/kaykit/Necromancer.glb',
 };
+
+export type EnemyAttackClipId =
+  | 'attackUnarmed'
+  | 'attackUnarmedKick'
+  | 'attack1H'
+  | 'attack1HChop'
+  | 'attack1HHorizontal'
+  | 'attack1HStab'
+  | 'attack2H'
+  | 'attack2HSlice'
+  | 'attack2HSpin'
+  | 'attack2HStab'
+  | 'magicShoot'
+  | 'magicSpellcasting'
+  | 'magicSummon';
 
 export const ENEMY_ATTACK_CLIPS: Record<
   EnemyRenderKey,
-  'attackUnarmed' | 'attack1H' | 'attack2H'
+  readonly EnemyAttackClipId[]
 > = {
-  caveRat: 'attackUnarmed',
-  cryptGuard: 'attack1H',
-  boneBrute: 'attack2H',
+  caveRat: ['attackUnarmed', 'attackUnarmedKick'],
+  cryptGuard: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
+  boneBrute: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+  skeletonMage: ['magicShoot', 'magicSpellcasting'],
+  necromancer: ['magicSummon'],
 };
 
 export interface EnemyModelFit {
@@ -39,6 +61,8 @@ export const ENEMY_MODEL_FITS: Record<EnemyRenderKey, EnemyModelFit> = {
   caveRat: { height: 0.78, wrapperY: 0.46, yaw: 0 },
   cryptGuard: { height: 0.96, wrapperY: 0.58, yaw: 0 },
   boneBrute: { height: 1.08, wrapperY: 0.52, yaw: 0 },
+  skeletonMage: { height: 0.96, wrapperY: 0.58, yaw: 0 },
+  necromancer: { height: 1.06, wrapperY: 0.6, yaw: 0 },
 };
 
 export function isEnemyRenderKey(value: string): value is EnemyRenderKey {
@@ -53,8 +77,25 @@ export function loadEnemyTemplate(key: EnemyRenderKey): Promise<Group> {
   return loadGltfScene(enemyModelUrl(key));
 }
 
-export function enemyAttackClip(key: EnemyRenderKey, clips: RigMediumClipMap) {
-  return clips[ENEMY_ATTACK_CLIPS[key]];
+export function loadEnemyClips(key: EnemyRenderKey): Promise<RigMediumClipMap> {
+  return loadRigMediumClips({
+    includeRanged: key === 'skeletonMage' || key === 'necromancer',
+  });
+}
+
+export function enemyAttackClip(
+  key: EnemyRenderKey,
+  clips: RigMediumClipMap,
+  sequenceIndex = 0,
+) {
+  const choices = ENEMY_ATTACK_CLIPS[key];
+  return clips[choices[sequenceIndex % choices.length]];
+}
+
+export function enemySpawnClip(key: EnemyRenderKey, clips: RigMediumClipMap) {
+  return key === 'necromancer'
+    ? clips.skeletonResurrect
+    : clips.skeletonSpawn;
 }
 
 export function fitEnemyModel(root: Object3D, key: EnemyRenderKey): void {

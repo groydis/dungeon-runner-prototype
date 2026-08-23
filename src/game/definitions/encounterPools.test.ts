@@ -23,7 +23,7 @@ describe('encounter pool boundaries', () => {
     expect(pickEnemyTypeForRow(19, () => 0.99)).toBe('caveRat');
   });
 
-  it('begins allowing Crypt Guard at row 20', () => {
+  it('begins allowing Crypt Guard and Skeleton Mage at row 20', () => {
     expect(encounterPoolForRow(19).some((entry) => entry.item === 'cryptGuard')).toBe(
       false,
     );
@@ -32,6 +32,18 @@ describe('encounter pool boundaries', () => {
     );
     expect(encounterPoolForRow(39).some((entry) => entry.item === 'boneBrute')).toBe(
       false,
+    );
+    expect(encounterPoolForRow(20).some((entry) => entry.item === 'skeletonMage')).toBe(
+      true,
+    );
+  });
+
+  it('reserves the elite Necromancer for row 60+', () => {
+    expect(encounterPoolForRow(59).some((entry) => entry.item === 'necromancer')).toBe(
+      false,
+    );
+    expect(encounterPoolForRow(60).some((entry) => entry.item === 'necromancer')).toBe(
+      true,
     );
   });
 
@@ -45,14 +57,16 @@ describe('encounter pool boundaries', () => {
 describe('weighted enemy selection', () => {
   it('selects each mid-band branch with a deterministic roll', () => {
     expect(pickEnemyTypeForRow(20, () => 0)).toBe('caveRat');
-    expect(pickEnemyTypeForRow(20, () => 0.75)).toBe('cryptGuard');
-    expect(pickEnemyTypeForRow(39, () => 0.99)).toBe('cryptGuard');
+    expect(pickEnemyTypeForRow(20, () => 0.7)).toBe('cryptGuard');
+    expect(pickEnemyTypeForRow(39, () => 0.99)).toBe('skeletonMage');
   });
 
   it('selects each late-band branch with a deterministic roll', () => {
     expect(pickEnemyTypeForRow(40, () => 0)).toBe('caveRat');
     expect(pickEnemyTypeForRow(40, () => 0.5)).toBe('cryptGuard');
-    expect(pickEnemyTypeForRow(40, () => 0.85)).toBe('boneBrute');
+    expect(pickEnemyTypeForRow(40, () => 0.8)).toBe('boneBrute');
+    expect(pickEnemyTypeForRow(40, () => 0.99)).toBe('skeletonMage');
+    expect(pickEnemyTypeForRow(60, () => 0.99)).toBe('necromancer');
   });
 });
 

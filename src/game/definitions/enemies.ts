@@ -2,7 +2,12 @@ import { type CombatStats, createCombatStats } from '../Combatant';
 import { deepFreeze, type DeepReadonly } from '../freeze';
 import { pickWeighted, type Rng } from '../random';
 
-export type EnemyType = 'caveRat' | 'cryptGuard' | 'boneBrute';
+export type EnemyType =
+  | 'caveRat'
+  | 'cryptGuard'
+  | 'boneBrute'
+  | 'skeletonMage'
+  | 'necromancer';
 
 export type EnemyDropKind = 'none' | 'gold' | 'potion';
 
@@ -17,6 +22,13 @@ export const DEFAULT_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> =
     { item: 'none', weight: 60 },
     { item: 'gold', weight: 25 },
     { item: 'potion', weight: 15 },
+  ]);
+
+export const ELITE_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> =
+  deepFreeze([
+    { item: 'none', weight: 20 },
+    { item: 'gold', weight: 50 },
+    { item: 'potion', weight: 30 },
   ]);
 
 export interface EnemyDropResult {
@@ -35,6 +47,7 @@ export interface EnemyDefinition {
   /** Percent subtracted from player Evade on a side pass. */
   readonly perception: number;
   readonly experience: number;
+  readonly elite: boolean;
   readonly renderKey: string;
   readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
 }
@@ -57,6 +70,7 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     },
     perception: 0,
     experience: 1,
+    elite: false,
     renderKey: 'caveRat',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
@@ -71,6 +85,7 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     },
     perception: 5,
     experience: 2,
+    elite: false,
     renderKey: 'cryptGuard',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
   },
@@ -85,8 +100,39 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     },
     perception: 10,
     experience: 4,
+    elite: false,
     renderKey: 'boneBrute',
     dropTable: DEFAULT_ENEMY_DROP_TABLE,
+  },
+  skeletonMage: {
+    type: 'skeletonMage',
+    name: 'Skeleton Mage',
+    startingStats: {
+      maxHealth: 15,
+      health: 15,
+      attack: 7,
+      defence: 0,
+    },
+    perception: 8,
+    experience: 4,
+    elite: false,
+    renderKey: 'skeletonMage',
+    dropTable: DEFAULT_ENEMY_DROP_TABLE,
+  },
+  necromancer: {
+    type: 'necromancer',
+    name: 'Necromancer',
+    startingStats: {
+      maxHealth: 34,
+      health: 34,
+      attack: 9,
+      defence: 2,
+    },
+    perception: 15,
+    experience: 10,
+    elite: true,
+    renderKey: 'necromancer',
+    dropTable: ELITE_ENEMY_DROP_TABLE,
   },
 });
 

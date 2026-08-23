@@ -15,6 +15,7 @@ describe('enemy definitions', () => {
       startingStats: { maxHealth: 12, health: 12, attack: 4, defence: 1 },
       perception: 5,
       experience: 2,
+      elite: false,
       renderKey: 'cryptGuard',
       dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
@@ -24,9 +25,29 @@ describe('enemy definitions', () => {
       startingStats: { maxHealth: 20, health: 20, attack: 6, defence: 1 },
       perception: 10,
       experience: 4,
+      elite: false,
       renderKey: 'boneBrute',
       dropTable: ENEMY_DEFINITIONS.caveRat.dropTable,
     });
+  });
+
+  it('defines Skeleton Mage as normal and Necromancer as an elite', () => {
+    expect(ENEMY_DEFINITIONS.skeletonMage).toMatchObject({
+      name: 'Skeleton Mage',
+      elite: false,
+      experience: 4,
+      renderKey: 'skeletonMage',
+    });
+    expect(ENEMY_DEFINITIONS.necromancer).toMatchObject({
+      name: 'Necromancer',
+      elite: true,
+      experience: 10,
+      renderKey: 'necromancer',
+    });
+    expect(createMonster('elite', 'necromancer', 60, 1).elite).toBe(true);
+    expect(ENEMY_DEFINITIONS.necromancer.dropTable).not.toBe(
+      ENEMY_DEFINITIONS.caveRat.dropTable,
+    );
   });
 
   it('awards 1 / 2 / 4 XP on Cave Rat, Crypt Guard, and Bone Brute', () => {
@@ -79,5 +100,7 @@ describe('enemy definitions', () => {
     );
     expect(factory('cryptGuard')).toEqual(createEnemyStats('cryptGuard'));
     expect(factory('boneBrute')).toEqual(createEnemyStats('boneBrute'));
+    expect(factory('skeletonMage')).toEqual(createEnemyStats('skeletonMage'));
+    expect(factory('necromancer')).toEqual(createEnemyStats('necromancer'));
   });
 });

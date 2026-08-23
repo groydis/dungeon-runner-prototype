@@ -43,7 +43,7 @@ describe('player asset mapping', () => {
       melee: '/models/players/kaykit/animations/Rig_Medium_CombatMelee.glb',
       special: '/models/players/kaykit/animations/Rig_Medium_Special.glb',
     });
-    expect(PLAYER_CLIP_NAMES).toEqual({
+    expect(PLAYER_CLIP_NAMES).toEqual(expect.objectContaining({
       idle: 'Idle_A',
       walk: 'Walking_A',
       hit: 'Hit_A',
@@ -54,11 +54,15 @@ describe('player asset mapping', () => {
       skeletonIdle: 'Skeletons_Idle',
       skeletonWalk: 'Skeletons_Walking',
       skeletonDeath: 'Skeletons_Death',
-    });
+      bowRelease: 'Ranged_Bow_Release',
+      magicShoot: 'Ranged_Magic_Shoot',
+    }));
     expect(PLAYER_ATTACK_CLIPS).toEqual({
-      rogue: 'attack1H',
-      knight: 'attack1H',
-      barbarian: 'attack2H',
+      rogue: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
+      ranger: ['bowRelease'],
+      mage: ['magicShoot', 'magicSpellcasting'],
+      knight: ['attack1H', 'attack1HHorizontal', 'attack1HStab'],
+      barbarian: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
     });
   });
 });

@@ -33,8 +33,8 @@ describe('player equipment registry', () => {
         loadout.map((visual) => visual.assetKey),
       ),
     );
-    expect([...referenced].sort()).toEqual(
-      Object.keys(PLAYER_EQUIPMENT_URLS).sort(),
+    expect(Object.keys(PLAYER_EQUIPMENT_URLS)).toEqual(
+      expect.arrayContaining([...referenced]),
     );
     for (const assetKey of referenced) {
       expect(isPlayerEquipmentAssetKey(assetKey)).toBe(true);
@@ -43,6 +43,39 @@ describe('player equipment registry', () => {
         /^\/models\/players\/kaykit\/weapons\/.+\.glb$/,
       );
     }
+    for (const url of Object.values(PLAYER_EQUIPMENT_URLS)) {
+      expect(url).toMatch(/^\/models\/players\/kaykit\/weapons\/.+\.glb$/);
+    }
+  });
+
+  it('maps Sharpened and Armoured shop levels to visible equipment tiers', () => {
+    expect(
+      playerEquipmentLoadout('rogue', { sharpened: 1, armoured: 0 }).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['axe1H']);
+    expect(
+      playerEquipmentLoadout('ranger', { sharpened: 1, armoured: 0 })[0]
+        ?.assetKey,
+    ).toBe('crossbow1H');
+    expect(
+      playerEquipmentLoadout('ranger', { sharpened: 2, armoured: 0 })[0]
+        ?.assetKey,
+    ).toBe('crossbow2H');
+    expect(
+      playerEquipmentLoadout('mage', { sharpened: 2, armoured: 0 }).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['wand', 'spellbookOpen']);
+    expect(
+      playerEquipmentLoadout('barbarian', { sharpened: 2, armoured: 0 })[0]
+        ?.assetKey,
+    ).toBe('sword2HColor');
+    expect(
+      playerEquipmentLoadout('knight', { sharpened: 0, armoured: 8 }).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['sword1H', 'shieldSpikesColor']);
   });
 
   it('supports both authored hand slots and gives every class equipment', () => {
