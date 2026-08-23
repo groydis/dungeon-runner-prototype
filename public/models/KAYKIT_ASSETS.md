@@ -20,6 +20,7 @@ No target uses Draco or KTX compression.
 | `players/kaykit/Mage.glb` | `KayKit Adventurers 2.0/Characters/gltf/Mage.glb` | Supplied GLB | Active `mage` |
 | `players/kaykit/Knight.glb` | `KayKit Adventurers 2.0/Characters/gltf/Knight.glb` | Supplied GLB | Active `knight` |
 | `players/kaykit/Barbarian.glb` | `KayKit Adventurers 2.0/Characters/gltf/Barbarian.glb` | Supplied GLB | Active `barbarian` |
+| `players/kaykit/Lorekeeper.glb` | `KayKit Mystery Monthly Series 6 (1.1)/1 - July 2025 - Lorekeeper/characters/Lorekeeper.glb` | Supplied self-contained GLB | Active playable `lorekeeper` |
 | `players/kaykit/Rogue.glb` | `KayKit Adventurers 2.0/Characters/gltf/Rogue.glb` | Supplied GLB | Reserved unhooded variant |
 | `players/kaykit/Druid.glb` | `KayKit Adventurers 2.0/Characters/gltf/Druid.glb` | Supplied GLB | Reserved future class |
 
@@ -66,7 +67,7 @@ class texture. The common editable source is
 |---|---|
 | `dagger.glb` | Active Rogue right hand |
 | `bow_withString.glb` | Active Ranger right hand |
-| `staff.glb` | Active Mage right hand |
+| `staff.glb` | Active Mage and Lorekeeper right hand |
 | `sword_1handed.glb` | Active Knight right hand |
 | `shield_badge.glb` | Active Knight left hand |
 | `axe_2handed.glb` | Active Barbarian right hand |
@@ -88,11 +89,11 @@ class texture. The common editable source is
 | `shield_spikes_color.glb` | Active Knight Armoured tier |
 | `shield_square.glb` | Active Knight Armoured tier |
 | `shield_square_color.glb` | Active Knight Armoured tier |
-| `spellbook_closed.glb` | Active Mage Sharpened tier 1 |
-| `spellbook_open.glb` | Active Mage Sharpened tier 2+ |
+| `spellbook_closed.glb` | Active Mage and Lorekeeper Sharpened tier 1 |
+| `spellbook_open.glb` | Active Mage and Lorekeeper Sharpened tier 2+ |
 | `sword_2handed.glb` | Active Barbarian Sharpened tier 1 |
 | `sword_2handed_color.glb` | Active Barbarian Sharpened tier 2+ |
-| `wand.glb` | Active Mage Sharpened tier 1+ |
+| `wand.glb` | Active Mage and Lorekeeper Sharpened tier 1+ |
 
 ## Collectibles
 
@@ -106,6 +107,16 @@ library.
 | `potion_small_red.glb` | Active pooled health pickup |
 | `potion_medium_red.glb` | Reserved future healing tier; not loaded |
 | `potion_large_red.glb` | Reserved future healing tier; not loaded |
+
+## Merchants
+
+| Target under `public/models/` | Exact source | Operation | Runtime status |
+|---|---|---|---|
+| `merchants/kaykit/Hoarder.glb` | `KayKit Mystery Monthly Series 6 (1.1)/8 - February 2026 - Hoarder/characters/Hoarder.glb` | Supplied self-contained GLB | Active pooled Travelling Merchant; backpack, raised face mask, and front-pouch sword are required visible meshes; shared `Rig_Medium` idle clip |
+
+The optional standalone Lorekeeper and Hoarder props, alternate textures, and
+editable Blender sources remain only in the purchased KayKit collection and
+were not copied into the game.
 
 ## Deliberately not retained
 

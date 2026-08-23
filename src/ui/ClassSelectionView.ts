@@ -31,6 +31,7 @@ export class ClassSelectionView {
       mage: requireElement(root, '#class-select-mage') as HTMLButtonElement,
       knight: requireElement(root, '#class-select-knight') as HTMLButtonElement,
       barbarian: requireElement(root, '#class-select-barbarian') as HTMLButtonElement,
+      lorekeeper: requireElement(root, '#class-select-lorekeeper') as HTMLButtonElement,
     };
     this.names = {
       rogue: requireElement(root, '#class-rogue-name'),
@@ -38,6 +39,7 @@ export class ClassSelectionView {
       mage: requireElement(root, '#class-mage-name'),
       knight: requireElement(root, '#class-knight-name'),
       barbarian: requireElement(root, '#class-barbarian-name'),
+      lorekeeper: requireElement(root, '#class-lorekeeper-name'),
     };
     this.descs = {
       rogue: requireElement(root, '#class-rogue-desc'),
@@ -45,6 +47,7 @@ export class ClassSelectionView {
       mage: requireElement(root, '#class-mage-desc'),
       knight: requireElement(root, '#class-knight-desc'),
       barbarian: requireElement(root, '#class-barbarian-desc'),
+      lorekeeper: requireElement(root, '#class-lorekeeper-desc'),
     };
     this.stats = {
       rogue: requireElement(root, '#class-rogue-stats'),
@@ -52,6 +55,7 @@ export class ClassSelectionView {
       mage: requireElement(root, '#class-mage-stats'),
       knight: requireElement(root, '#class-knight-stats'),
       barbarian: requireElement(root, '#class-barbarian-stats'),
+      lorekeeper: requireElement(root, '#class-lorekeeper-stats'),
     };
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
   }

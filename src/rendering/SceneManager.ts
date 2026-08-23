@@ -23,6 +23,7 @@ import {
   SRGBColorSpace,
   Scene,
   SphereGeometry,
+  SpotLight,
   Vector3,
   WebGLRenderer,
   type AnimationAction,
@@ -72,6 +73,7 @@ import {
   dungeonFloorRotation,
   dungeonFloorVariant,
   dungeonWallTorchSide,
+  dungeonWallTransmitsLight,
   dungeonWallVariant,
   fitDungeonFloorModel,
   fitDungeonTrapModel,
@@ -98,6 +100,11 @@ import {
   fitPotionModel,
   loadPotionTemplate,
 } from './potionAssets';
+import {
+  fitMerchantModel,
+  loadMerchantClips,
+  loadMerchantTemplate,
+} from './merchantAssets';
 import {
   NO_EQUIPMENT_UPGRADES,
   PLAYER_WEAPON_MOUNT_NAME,
@@ -142,7 +149,15 @@ interface DungeonWallSlot {
   models: Partial<Record<DungeonWallAssetKey, Group>>;
   assetKey: DungeonWallAssetKey;
   torchModel: Group | null;
-  torchGlow: Group | null;
+  torchGlow: DungeonTorchGlow | null;
+  windowLight: Group;
+}
+
+interface DungeonTorchGlow {
+  group: Group;
+  core: Mesh;
+  halo: Mesh;
+  light: PointLight;
 }
 
 interface RowView {
@@ -195,6 +210,11 @@ interface MerchantLeaveFx {
   baseY: number;
 }
 
+interface MerchantPresentation {
+  model: Group | null;
+  mixer: AnimationMixer | null;
+}
+
 interface TrapConsumeFx {
   group: Group;
   startedAt: number;
@@ -227,6 +247,8 @@ const COMBAT_FLASH_RED = 0xff5a4a;
 const TORCH_LIGHT_COLOR = 0xff7a32;
 const TORCH_LIGHT_INTENSITY = 3.4;
 const TORCH_LIGHT_DISTANCE = TILE_PITCH * 2.8;
+const WINDOW_BEAM_COLOR = 0xffd69a;
+const WINDOW_LIGHT_REACH = TILE_PITCH * 1.12;
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -276,6 +298,10 @@ export class SceneManager {
   private combatHit: CombatHitFx | null = null;
   private collectFx: CollectFx[] = [];
   private merchantLeaveFx: MerchantLeaveFx[] = [];
+  private readonly merchantPresentations = new WeakMap<
+    Group,
+    MerchantPresentation
+  >();
   private trapTrigger: Group | null = null;
   private trapConsumeFx: TrapConsumeFx[] = [];
   private enemyAdvanceFx: EnemyAdvanceFx | null = null;
@@ -447,6 +473,7 @@ export class SceneManager {
     void this.installDungeonWallModels();
     void this.installDungeonTrapModels();
     void this.installPotionModels();
+    void this.installMerchantModels();
     const player = this.createPlayer();
     this.playerMesh = player.group;
     this.playerBody = player.body;
@@ -725,7 +752,9 @@ export class SceneManager {
     this.updateTrapIdle(elapsedSec);
     this.updateTrapConsumeFx(elapsedSec);
     this.updateMerchantIdle(elapsedSec);
+    this.updateMerchantMixers(dt);
     this.updateMerchantLeaveFx(elapsedSec);
+    this.updateDungeonTorchFlicker(elapsedSec);
   }
 
   beginCollectFx(pickup: PickupResult): void {
@@ -1270,7 +1299,8 @@ export class SceneManager {
       0,
     );
     placeholder.name = `dungeonWallFallback-${side}`;
-    group.add(placeholder);
+    const windowLight = this.createDungeonWindowLight(side);
+    group.add(placeholder, windowLight);
     return {
       side,
       group,
@@ -1279,7 +1309,45 @@ export class SceneManager {
       assetKey: 'stone',
       torchModel: null,
       torchGlow: null,
+      windowLight,
     };
+  }
+
+  private createDungeonWindowLight(side: DungeonWallSide): Group {
+    const roadEdge = Math.abs(laneWorldX(LANE_COUNT - 1)) + TILE_SIZE / 2;
+    const direction = side === 'left' ? 1 : -1;
+    const source = new Vector3(
+      direction * -(roadEdge + TILE_PITCH * 0.14),
+      0.071 + TILE_PITCH * 0.72,
+      0,
+    );
+    const end = new Vector3(
+      source.x + direction * WINDOW_LIGHT_REACH,
+      0.071 + TILE_PITCH * 0.12,
+      0,
+    );
+
+    const group = new Group();
+    group.name = `dungeonWindowLight-${side}`;
+    group.visible = false;
+
+    const target = new Group();
+    target.name = 'dungeonWindowLightTarget';
+    target.position.copy(end);
+    const light = new SpotLight(
+      WINDOW_BEAM_COLOR,
+      2.7,
+      source.distanceTo(end) + TILE_PITCH * 0.35,
+      0.24,
+      1,
+      2,
+    );
+    light.name = 'dungeonWindowSpotLight';
+    light.position.copy(source);
+    light.target = target;
+    light.castShadow = false;
+    group.add(light, target);
+    return group;
   }
 
   private async installDungeonFloorModels(): Promise<void> {
@@ -1341,8 +1409,8 @@ export class SceneManager {
           slot.torchModel = torch;
 
           const glow = this.createDungeonWallTorchGlow(torch, side);
-          glow.visible = false;
-          slot.group.add(glow);
+          glow.group.visible = false;
+          slot.group.add(glow.group);
           slot.torchGlow = glow;
         }
         this.applyDungeonWallPresentation(view);
@@ -1355,7 +1423,7 @@ export class SceneManager {
   private createDungeonWallTorchGlow(
     torch: Group,
     side: DungeonWallSide,
-  ): Group {
+  ): DungeonTorchGlow {
     torch.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(torch);
     const width = Math.max(bounds.max.x - bounds.min.x, 0.001);
@@ -1397,7 +1465,38 @@ export class SceneManager {
     light.name = 'torchPointLight';
     light.position.y = 0.025;
     glow.add(halo, core, light);
-    return glow;
+    return { group: glow, core, halo, light };
+  }
+
+  private updateDungeonTorchFlicker(elapsedSec: number): void {
+    for (const view of this.rowViews) {
+      if (!view.group.visible) {
+        continue;
+      }
+      for (const side of ['left', 'right'] as const) {
+        const glow = view.walls[side].torchGlow;
+        if (!glow?.group.visible) {
+          continue;
+        }
+
+        const seed = view.assignedRow * 1.917 + (side === 'left' ? 0.37 : 2.41);
+        const slow = Math.sin(elapsedSec * 2.15 + seed);
+        const medium = Math.sin(elapsedSec * 6.7 + seed * 1.73);
+        const quick = Math.sin(elapsedSec * 12.9 + seed * 2.29);
+        const brightness = 0.9 + slow * 0.055 + medium * 0.035 + quick * 0.018;
+        const volume = 0.98 + slow * 0.035 + medium * 0.022;
+
+        glow.light.intensity = TORCH_LIGHT_INTENSITY * brightness;
+        glow.core.scale.setScalar(0.98 + (volume - 0.98) * 0.45);
+        glow.halo.scale.set(
+          volume * (1 + quick * 0.012),
+          volume * (1 - quick * 0.018),
+          volume,
+        );
+        glow.core.position.y = medium * 0.004 + quick * 0.002;
+        glow.halo.position.y = slow * 0.006 + quick * 0.003;
+      }
+    }
   }
 
   private async installDungeonTrapModels(): Promise<void> {
@@ -1447,6 +1546,44 @@ export class SceneManager {
     }
   }
 
+  private async installMerchantModels(): Promise<void> {
+    try {
+      const [template, clips] = await Promise.all([
+        loadMerchantTemplate(),
+        loadMerchantClips(),
+      ]);
+      for (const view of this.rowViews) {
+        for (const merchant of view.merchants) {
+          const model = cloneSkinned(template) as Group;
+          cloneMeshMaterials(model);
+          model.name = 'kaykitMerchant-Hoarder';
+          fitMerchantModel(model);
+          merchant.add(model);
+
+          for (const child of merchant.children) {
+            if (
+              child.userData.role === 'fallback' ||
+              child.userData.fallback === true
+            ) {
+              child.visible = false;
+            }
+          }
+
+          const mixer = new AnimationMixer(model);
+          const idle = clips.idle;
+          if (idle) {
+            const action = mixer.clipAction(idle);
+            action.setLoop(LoopRepeat, Infinity);
+            action.play();
+          }
+          this.merchantPresentations.set(merchant, { model, mixer });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit Hoarder merchant model', error);
+    }
+  }
+
   private applyDungeonFloorVariant(
     view: RowView,
     col: number,
@@ -1478,11 +1615,13 @@ export class SceneManager {
         }
       }
       slot.placeholder.visible = !slot.models[selected];
+      slot.windowLight.visible =
+        Boolean(slot.models[selected]) && dungeonWallTransmitsLight(selected);
       if (slot.torchModel) {
         slot.torchModel.visible = torchSide === side;
       }
       if (slot.torchGlow) {
-        slot.torchGlow.visible = torchSide === side;
+        slot.torchGlow.group.visible = torchSide === side;
       }
     }
   }
@@ -2010,18 +2149,23 @@ export class SceneManager {
 
     const stall = new Mesh(stallGeo, this.merchantStallMaterial.clone());
     stall.position.set(0.14, 0.18, 0.02);
+    stall.userData.role = 'fallback';
 
     const pillar = new Mesh(pillarGeo, this.merchantPillarMaterial.clone());
     pillar.position.set(-0.05, 0.45, 0);
+    pillar.userData.role = 'fallback';
 
     const lantern = new Mesh(lanternGeo, this.merchantLanternMaterial.clone());
     lantern.position.set(-0.05, 0.78, 0);
     lantern.userData.role = 'lantern';
+    lantern.userData.fallback = true;
 
     const hood = new Mesh(hoodGeo, this.merchantHoodMaterial.clone());
     hood.position.set(-0.05, 0.9, 0);
+    hood.userData.role = 'fallback';
 
     group.add(stall, pillar, lantern, hood);
+    this.merchantPresentations.set(group, { model: null, mixer: null });
     group.visible = false;
     return group;
   }
@@ -2029,13 +2173,7 @@ export class SceneManager {
   private resetMerchantGroup(group: Group, col: number): void {
     group.position.set(laneWorldX(col), 0, 0);
     group.scale.setScalar(1);
-    for (const child of group.children) {
-      const mesh = child as Mesh;
-      const material = mesh.material as MeshStandardMaterial | undefined;
-      if (material) {
-        material.opacity = 1;
-      }
-    }
+    this.setMerchantOpacity(group, 1);
   }
 
   private isMerchantLeaving(group: Group): boolean {
@@ -2052,6 +2190,10 @@ export class SceneManager {
         if (!merchant.visible || this.isMerchantLeaving(merchant)) {
           continue;
         }
+        if (this.merchantPresentations.get(merchant)?.model) {
+          merchant.position.y = 0;
+          continue;
+        }
         const phase = elapsedSec * 2.2 + view.assignedRow + col;
         merchant.position.y = Math.sin(phase) * 0.045;
         const lantern = merchant.children.find(
@@ -2061,6 +2203,20 @@ export class SceneManager {
           const material = lantern.material as MeshStandardMaterial;
           material.emissiveIntensity = 0.7 + 0.5 * (0.5 + 0.5 * Math.sin(phase * 1.6));
         }
+      }
+    }
+  }
+
+  private updateMerchantMixers(dt: number): void {
+    for (const view of this.rowViews) {
+      if (!view.group.visible) {
+        continue;
+      }
+      for (const merchant of view.merchants) {
+        if (!merchant.visible) {
+          continue;
+        }
+        this.merchantPresentations.get(merchant)?.mixer?.update(dt);
       }
     }
   }
@@ -2094,12 +2250,19 @@ export class SceneManager {
   }
 
   private setMerchantOpacity(group: Group, opacity: number): void {
-    for (const child of group.children) {
-      const material = (child as Mesh).material as MeshStandardMaterial | undefined;
-      if (material) {
+    group.traverse((child) => {
+      if (!('isMesh' in child) || !child.isMesh) {
+        return;
+      }
+      const mesh = child as Mesh;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        material.transparent = opacity < 1 || material.transparent;
         material.opacity = opacity;
       }
-    }
+    });
   }
 
   private merchantColFromGroup(group: Group): number {

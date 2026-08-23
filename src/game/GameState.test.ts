@@ -542,6 +542,23 @@ describe('alarm item consumption', () => {
 });
 
 describe('alarm encounters', () => {
+  it('keeps an adjacent enemy off the player tile and starts a front-on encounter', () => {
+    const state = trapState({
+      8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
+      9: [emptyRow()[0], monsterLane('adjacent-guard', 'cryptGuard'), emptyRow()[2]],
+    });
+    walkTo(state, 7, 1);
+
+    const resolution = state.resolveCompletedMove(1);
+
+    expect(resolution.trap?.enemyMove).toBeUndefined();
+    expect(state.getMonsterAt(8, 1)).toBeUndefined();
+    expect(state.getMonsterAt(9, 1)?.id).toBe('adjacent-guard');
+    expect(resolution.encounters).toEqual([
+      expect.objectContaining({ kind: 'combat', approach: 'frontOn' }),
+    ]);
+  });
+
   it('includes a trap-moved enemy in the same turn when it enters range', () => {
     const state = trapState({
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
@@ -1792,5 +1809,4 @@ function summarizeEncounters(encounters: EncounterEvent[]) {
       : { kind: event.kind, approach: event.approach, monsterId: event.monster.id },
   );
 }
-
 

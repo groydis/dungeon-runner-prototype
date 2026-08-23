@@ -17,6 +17,7 @@ export const PLAYER_MODEL_URLS: Record<PlayerRenderKey, string> = {
   mage: '/models/players/kaykit/Mage.glb',
   knight: '/models/players/kaykit/Knight.glb',
   barbarian: '/models/players/kaykit/Barbarian.glb',
+  lorekeeper: '/models/players/kaykit/Lorekeeper.glb',
 };
 
 export const PLAYER_ANIMATION_URLS = RIG_MEDIUM_ANIMATION_URLS;
@@ -46,6 +47,7 @@ export const PLAYER_ATTACK_CLIPS: {
   mage: ['magicShoot', 'magicSpellcasting'],
   knight: ['attack1H', 'attack1HHorizontal', 'attack1HStab'],
   barbarian: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+  lorekeeper: ['magicSpellcasting', 'magicShoot'],
 };
 
 /** Target in-world height so KayKit adventurers match the old capsule. */
@@ -68,7 +70,10 @@ export function loadPlayerTemplate(key: PlayerRenderKey): Promise<Group> {
 }
 
 export function loadPlayerClips(key: PlayerRenderKey): Promise<PlayerClipMap> {
-  return loadRigMediumClips({ includeRanged: key === 'ranger' || key === 'mage' });
+  return loadRigMediumClips({
+    includeRanged:
+      key === 'ranger' || key === 'mage' || key === 'lorekeeper',
+  });
 }
 
 export function playerAttackClip(

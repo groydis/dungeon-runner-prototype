@@ -79,6 +79,23 @@ describe('alarm enemy advance', () => {
     ).toEqual({ row: 9, col: 0 });
   });
 
+  it('never advances onto the player tile when already adjacent', () => {
+    expect(
+      chooseEnemyAdvanceStep(
+        { row: 9, col: 1 },
+        { row: 8, col: 1 },
+        () => true,
+      ),
+    ).toBeNull();
+    expect(
+      chooseEnemyAdvanceStep(
+        { row: 8, col: 2 },
+        { row: 8, col: 1 },
+        () => true,
+      ),
+    ).toBeNull();
+  });
+
   it('returns no move when every closer cardinal tile is invalid', () => {
     expect(
       chooseEnemyAdvanceStep({ row: 10, col: 1 }, { row: 8, col: 1 }, () => false),

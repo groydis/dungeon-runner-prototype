@@ -34,16 +34,18 @@ const CLASS_PACKAGES: Record<
   mage: { name: 'Mage', maxHealth: 16, attack: 8, defence: 0, evade: 2 },
   knight: { name: 'Knight', maxHealth: 26, attack: 4, defence: 3, evade: 0 },
   barbarian: { name: 'Barbarian', maxHealth: 28, attack: 7, defence: 0, evade: 0 },
+  lorekeeper: { name: 'Lorekeeper', maxHealth: 22, attack: 5, defence: 2, evade: 2 },
 };
 
 describe('player class definitions', () => {
-  it('lists exactly the five agreed classes', () => {
+  it('lists all six playable classes', () => {
     expect(PLAYER_CLASS_IDS).toEqual([
       'rogue',
       'ranger',
       'mage',
       'knight',
       'barbarian',
+      'lorekeeper',
     ]);
     expect(Object.keys(PLAYER_CLASS_DEFINITIONS)).toEqual([...PLAYER_CLASS_IDS]);
   });

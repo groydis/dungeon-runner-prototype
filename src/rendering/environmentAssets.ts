@@ -51,6 +51,10 @@ export const DUNGEON_FLOOR_KEYS = Object.freeze(
 export const DUNGEON_WALL_KEYS = Object.freeze(
   Object.keys(DUNGEON_WALL_URLS) as DungeonWallAssetKey[],
 );
+export const DUNGEON_WALL_LIGHT_KEYS = Object.freeze([
+  'gated',
+  'archedGated',
+] as const satisfies readonly DungeonWallAssetKey[]);
 
 const DUNGEON_WALL_VARIANTS: readonly DungeonWallAssetKey[] = Object.freeze([
   'stone',
@@ -131,6 +135,13 @@ export function dungeonWallTorchSide(row: number): DungeonWallSide | null {
     return null;
   }
   return Math.floor((row - 4) / 7) % 2 === 0 ? 'left' : 'right';
+}
+
+/** Windowed and gated modules receive a rendering-only exterior light beam. */
+export function dungeonWallTransmitsLight(key: DungeonWallAssetKey): boolean {
+  return DUNGEON_WALL_LIGHT_KEYS.includes(
+    key as (typeof DUNGEON_WALL_LIGHT_KEYS)[number],
+  );
 }
 
 /** Fit a KayKit tile over one logical cell and align its top with the fallback. */

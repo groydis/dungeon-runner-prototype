@@ -11,9 +11,11 @@ You choose a class on launch, then start in the centre lane at the near end of t
 Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decoration. In this prototype:
 
 - Floor tiles use a rotated KayKit geometric-stone GLB, with a wood floor for Merchant tiles and an animated KayKit spike assembly for Alarm/Trip tiles. Pooled dark-box and rune meshes remain loading/failure fallbacks.
-- Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, scaffolds, and periodically mounted torches with warm emissive glows and short-range pooled lights.
+- Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, and scaffolds. Gated openings cast a restrained warm light spill, while periodically mounted torches add gently flickering emissive glows and short-range pooled lights.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
 - Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium and large red variants are retained for future healing tiers but are not loaded.
+- Lorekeeper is a playable balanced magic class using the KayKit Lorekeeper GLB, shared `Rig_Medium` clips, and the existing staff equipment progression.
+- Travelling Merchants use the fully equipped KayKit Hoarder GLB—backpack, raised face mask, and front-pouch sword—with the shared `Rig_Medium` idle animation. The previous stylised stall figure remains its loading/failure fallback.
 - Rows can contain empty lanes, Skeleton Minions, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
 - A monster can attack from the four cardinal tiles around it, not from diagonals.
 - Same lane (in front or behind) = a normal front-on fight.
@@ -88,7 +90,7 @@ Query-string helpers (no on-screen debug UI):
 
 There is no keyboard movement and no combat input.
 
-- On launch, **Choose Your Class** lists all five classes with flavour text, a compact `HP / ATK / DEF / EVA` line, and a Select button. The board, highlights, shops, and level-ups stay locked until you pick one.
+- On launch, **Choose Your Class** lists all six classes with flavour text, a compact `HP / ATK / DEF / EVA` line, and a Select button. The board, highlights, shops, and level-ups stay locked until you pick one.
 - **Tap or click** a glowing tile in the next row. You always advance exactly one row.
 - You may move at most one lane sideways per step:
   - Left lane → left or centre
@@ -147,6 +149,7 @@ src/
     enemyAssets.ts        KayKit Skeleton enemy GLB URLs and per-model fits
     rigMediumAnimations.ts Shared Rig_Medium clip loader/cache
     environmentAssets.ts  KayKit dungeon-floor/wall GLBs and deterministic variants
+    merchantAssets.ts     Equipped KayKit Hoarder merchant model and fit
     potionAssets.ts       Active and reserved KayKit health-potion GLBs
     reservedKaykitAssets.ts Lazy URLs for retained future characters/equipment
     CameraController.ts   Elevated follow camera
@@ -173,8 +176,9 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. General, basic movement, melee, and skeleton clips share one cache. Ranger, Mage, Skeleton Mage, and Necromancer lazily add the ranged bundle. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
 - **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
+- **Merchant presentation** mounts the fully equipped KayKit Hoarder in each pooled merchant slot, explicitly requiring its backpack, raised face-mask, and front-pouch sword meshes, and plays the shared `Rig_Medium` idle clip. The existing leave/shrink/fade sequence operates on the wrapper, while the previous geometric merchant remains a loading/failure fallback.
 - **Dungeon floors** use self-contained KayKit GLBs over pooled box fallbacks. The large geometric stone tile is the normal floor and receives deterministic quarter-turn rotations to break up repetition without adding pooled models. Merchant tiles use the large wood floor, and Alarm/Trip tiles use a separately loaded spike assembly whose named spike node rises during the trigger effect. These choices remain presentation-only and do not affect generation or saved game state.
-- **Dungeon walls** are part of the same recycled row pool: each logical row owns a left and right section just beyond the outer lanes. A deterministic row/side hash selects mostly plain masonry with occasional damaged, windowed, gated, decorated, or scaffold variants; mounted torches recur every seven rows and alternate sides. Each visible torch owns a small emissive flame treatment and a shadowless, short-range warm point light inside the same pool. Wall selection has no collision, generation, or saved-state role, and simple stone boxes remain loading/failure fallbacks.
+- **Dungeon walls** are part of the same recycled row pool: each logical row owns a left and right section just beyond the outer lanes. A deterministic row/side hash selects mostly plain masonry with occasional damaged, windowed, gated, decorated, or scaffold variants. Gated openings activate a narrow, shadowless warm spotlight from just outside the wall; closed and boarded windows remain dark. Mounted torches recur every seven rows and alternate sides with a small emissive flame and short-range point light. Their light intensity, halo volume, and tiny vertical flame offset use layered deterministic sine waves for restrained irregular flicker without consuming gameplay RNG. All lighting stays in the recycled wall slots. Wall selection has no collision, generation, or saved-state role, and simple stone boxes remain loading/failure fallbacks.
 
 Game rules stay under `src/game`. Meshes, cameras, and materials stay under `src/rendering`.
 
@@ -316,7 +320,7 @@ Landing on one:
 4. Vertical toward the player is tried first; a horizontal step toward the player’s lane is the fallback.
 5. The enemy may enter gold, potion, or Alarm Trap tiles and immediately crush them. It gains no gold, healing, buff, or extra alarm pull.
 6. Merchant/shop tiles are impassable. An enemy cannot enter, consume, or destroy a Merchant.
-7. The enemy may step onto the player’s tile. It cannot leave the three lanes, move diagonally, or step onto another enemy.
+7. The enemy cannot step onto the player’s tile, leave the three lanes, move diagonally, or step onto another enemy. If it is already cardinal-adjacent, it stays in that valid attack position.
 8. After the optional advance, the existing cardinal-plus encounter rules run immediately.
 
 Closest-enemy ties are deterministic: lower Manhattan, then lower row distance, then lower column distance, then stable enemy id. If no eligible enemy is visible, the trap still disappears: `You trigger an Alarm Trap… but nothing answers.`
@@ -330,7 +334,7 @@ The renderer plays a short trap flash, then a one-tile enemy slide, then any com
 
 ## Player classes
 
-Classes are starting stats and presentation only. Ranger arrows, Mage spells, and Knight blocks are visual playback of the same automatic-combat formula; they do not yet add mechanical range, spell rules, block mitigation, crits, rage, or inventory.
+Classes are starting stats and presentation only. Ranger arrows, Mage and Lorekeeper spells, and Knight blocks are visual playback of the same automatic-combat formula; they do not yet add mechanical range, spell rules, block mitigation, crits, rage, or inventory.
 
 | ID | Class | Max HP | ATK | DEF | EVA | Playstyle |
 |---|---|---:|---:|---:|---:|---|
@@ -339,6 +343,7 @@ Classes are starting stats and presentation only. Ranger arrows, Mage spells, an
 | `mage` | Mage | 16 | 8 | 0 | 2 | Fragile but devastating without needing magic abilities yet. |
 | `knight` | Knight | 26 | 4 | 3 | 0 | Armoured and dependable under sustained damage. |
 | `barbarian` | Barbarian | 28 | 7 | 0 | 0 | Huge health and damage, with no defensive tricks. |
+| `lorekeeper` | Lorekeeper | 22 | 5 | 2 | 2 | A seasoned scholar balancing resilience, armour, and magic. |
 
 `src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, Merchant prices, pending level-ups, entities, or RNG state.
 
@@ -530,6 +535,6 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 
 Private prototype. Add a license before publishing.
 
-Player Adventurers, Skeleton enemies, and shared `Rig_Medium` animations are **KayKit** by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Player characters, merchants, Skeleton enemies, environment assets, and shared `Rig_Medium` animations are **KayKit** by [Kay Lousberg](https://kaylousberg.com), released as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 Exact source paths, export decisions, runtime targets, and future reservations are recorded in [`public/models/KAYKIT_ASSETS.md`](public/models/KAYKIT_ASSETS.md).

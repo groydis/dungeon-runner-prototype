@@ -24,6 +24,7 @@ describe('player asset mapping', () => {
       mage: '/models/players/kaykit/Mage.glb',
       knight: '/models/players/kaykit/Knight.glb',
       barbarian: '/models/players/kaykit/Barbarian.glb',
+      lorekeeper: '/models/players/kaykit/Lorekeeper.glb',
     });
     for (const key of PLAYER_RENDER_KEYS) {
       expect(isPlayerRenderKey(key)).toBe(true);
@@ -63,6 +64,7 @@ describe('player asset mapping', () => {
       mage: ['magicShoot', 'magicSpellcasting'],
       knight: ['attack1H', 'attack1HHorizontal', 'attack1HStab'],
       barbarian: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+      lorekeeper: ['magicSpellcasting', 'magicShoot'],
     });
   });
 });

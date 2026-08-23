@@ -122,6 +122,7 @@ export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
     },
   ],
   barbarian: [{ assetKey: 'axe2H', ...RIGHT_HAND_DEFAULT }],
+  lorekeeper: [{ assetKey: 'staff', ...RIGHT_HAND_DEFAULT }],
 };
 
 export function isPlayerEquipmentAssetKey(
@@ -160,7 +161,7 @@ export function playerEquipmentLoadout(
           : 'crossbow2H';
     return [{ assetKey, ...RIGHT_HAND_DEFAULT }];
   }
-  if (key === 'mage') {
+  if (key === 'mage' || key === 'lorekeeper') {
     const loadout: PlayerEquipmentVisual[] = [
       {
         assetKey: sharpened > 0 ? 'wand' : 'staff',

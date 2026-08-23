@@ -83,6 +83,9 @@ export function chooseEnemyAdvanceStep(
     if (dest.col < 0 || dest.col >= LANE_COUNT) {
       continue;
     }
+    if (dest.row === player.row && dest.col === player.col) {
+      continue;
+    }
     if (manhattan(dest, player) >= current) {
       continue;
     }

@@ -7,11 +7,13 @@ import {
   DUNGEON_TRAP_SPIKE_NODE_NAME,
   DUNGEON_TRAP_URL,
   DUNGEON_WALL_KEYS,
+  DUNGEON_WALL_LIGHT_KEYS,
   DUNGEON_WALL_TORCH_URL,
   DUNGEON_WALL_URLS,
   dungeonFloorRotation,
   dungeonFloorVariant,
   dungeonWallTorchSide,
+  dungeonWallTransmitsLight,
   dungeonWallVariant,
   fitDungeonWallModel,
 } from './environmentAssets';
@@ -74,6 +76,20 @@ describe('dungeon environment assets', () => {
     expect(dungeonWallTorchSide(4)).toBe('left');
     expect(dungeonWallTorchSide(11)).toBe('right');
     expect(dungeonWallTorchSide(18)).toBe('left');
+  });
+
+  it('limits exterior light beams to windowed and gated wall modules', () => {
+    expect([...DUNGEON_WALL_LIGHT_KEYS]).toEqual([
+      'gated',
+      'archedGated',
+    ]);
+    for (const key of DUNGEON_WALL_KEYS) {
+      expect(dungeonWallTransmitsLight(key)).toBe(
+        DUNGEON_WALL_LIGHT_KEYS.includes(
+          key as (typeof DUNGEON_WALL_LIGHT_KEYS)[number],
+        ),
+      );
+    }
   });
 
   it('fits wall modules continuously outside the three-lane road', () => {

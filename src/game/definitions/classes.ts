@@ -6,14 +6,16 @@ export type PlayerClassId =
   | 'ranger'
   | 'mage'
   | 'knight'
-  | 'barbarian';
+  | 'barbarian'
+  | 'lorekeeper';
 
 export type PlayerRenderKey =
   | 'rogue'
   | 'ranger'
   | 'mage'
   | 'knight'
-  | 'barbarian';
+  | 'barbarian'
+  | 'lorekeeper';
 
 export const PLAYER_CLASS_IDS: readonly PlayerClassId[] = [
   'rogue',
@@ -21,6 +23,7 @@ export const PLAYER_CLASS_IDS: readonly PlayerClassId[] = [
   'mage',
   'knight',
   'barbarian',
+  'lorekeeper',
 ];
 
 export const PLAYER_RENDER_KEYS: readonly PlayerRenderKey[] = [
@@ -29,6 +32,7 @@ export const PLAYER_RENDER_KEYS: readonly PlayerRenderKey[] = [
   'mage',
   'knight',
   'barbarian',
+  'lorekeeper',
 ];
 
 export interface PlayerClassDefinition {
@@ -109,6 +113,14 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     startingStats: classStats(28, 7, 0),
     startingEvade: 0,
     renderKey: 'barbarian',
+  },
+  lorekeeper: {
+    id: 'lorekeeper',
+    name: 'Lorekeeper',
+    description: 'A seasoned scholar balancing resilience, armour, and magic.',
+    startingStats: classStats(22, 5, 2),
+    startingEvade: 2,
+    renderKey: 'lorekeeper',
   },
 });
 

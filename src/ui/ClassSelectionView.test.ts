@@ -23,7 +23,7 @@ describe('class HUD text', () => {
 });
 
 describe('class-selection overlay', () => {
-  it('renders all five classes with flavour, stats, and accessible Select labels', () => {
+  it('renders all six classes with flavour, stats, and accessible Select labels', () => {
     const root = createClassSelectRoot();
     const overlay = new ClassSelectionView(root);
     const view = buildClassSelectionView();

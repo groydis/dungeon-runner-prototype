@@ -27,6 +27,9 @@ describe('player equipment registry', () => {
       barbarian: [
         expect.objectContaining({ assetKey: 'axe2H', mount: 'handslot.r' }),
       ],
+      lorekeeper: [
+        expect.objectContaining({ assetKey: 'staff', mount: 'handslot.r' }),
+      ],
     });
     const referenced = new Set(
       Object.values(PLAYER_EQUIPMENT_LOADOUTS).flatMap((loadout) =>
@@ -64,6 +67,11 @@ describe('player equipment registry', () => {
     ).toBe('crossbow2H');
     expect(
       playerEquipmentLoadout('mage', { sharpened: 2, armoured: 0 }).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['wand', 'spellbookOpen']);
+    expect(
+      playerEquipmentLoadout('lorekeeper', { sharpened: 2, armoured: 0 }).map(
         (visual) => visual.assetKey,
       ),
     ).toEqual(['wand', 'spellbookOpen']);
