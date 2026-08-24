@@ -39,8 +39,9 @@
     <div id="app">
       <canvas id="game-canvas"></canvas>
       <nav id="site-nav" class="site-nav" aria-label="Site">
-        <a href="/" id="nav-home">Home</a>
-        <a href="/about" id="nav-about">About</a>
+        <a href="/" id="nav-home" data-page="home" data-current="true">Home</a>
+        <a href="/classes" id="nav-classes" data-page="classes" data-current="true">Classes</a>
+        <a href="/about" id="nav-about" data-page="about" data-current="true">About</a>
       </nav>
       <div
         id="landing"
@@ -65,6 +66,36 @@
             <p class="landing-kicker">THE ROAD BELOW AWAITS</p>
             <h1 id="landing-title">THE <span class="title-lock">HOLLOW MILE</span></h1>
             <p class="landing-status">Coming soon to iOS</p>
+            <form class="waitlist waitlist-compact" data-waitlist novalidate>
+              <label class="waitlist-sr" for="waitlist-email-home">Email for iOS launch news</label>
+              <div class="waitlist-row">
+                <input
+                  id="waitlist-email-home"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  inputmode="email"
+                  enterkeyhint="send"
+                  maxlength="254"
+                  required
+                  placeholder="you@example.com"
+                />
+                <button type="submit">Notify me</button>
+              </div>
+              <input
+                class="waitlist-honeypot"
+                name="website"
+                type="text"
+                tabindex="-1"
+                autocomplete="off"
+                aria-hidden="true"
+              />
+              <p class="waitlist-hint">
+                Launch news only.
+                <a href="/privacy" data-page="privacy">Privacy</a>
+              </p>
+              <p class="waitlist-status" role="status"></p>
+            </form>
           </div>
           <div class="landing-actions">
             <p class="landing-tagline">
@@ -87,9 +118,48 @@
           <h1 id="about-title">About</h1>
           <p class="about-status">Coming soon to iOS</p>
           <p class="about-browser">
-            <a href="/" id="about-play">Play for free in your browser now.</a>
+            <a href="/" id="about-play" data-page="home">Play for free in your browser now.</a>
           </p>
         </header>
+        <section class="about-section" aria-labelledby="about-waitlist-title">
+          <h2 id="about-waitlist-title">iOS waitlist</h2>
+          <p>
+            Leave your email and we’ll tell you when The Hollow Mile is on the
+            App Store. You can also email
+            <a class="about-email" href="mailto:hello@hollowmile.com">hello@hollowmile.com</a>
+            for launch news.
+          </p>
+          <form class="waitlist" data-waitlist novalidate>
+            <label class="waitlist-label" for="waitlist-email-about">Email</label>
+            <div class="waitlist-row">
+              <input
+                id="waitlist-email-about"
+                name="email"
+                type="email"
+                autocomplete="email"
+                inputmode="email"
+                enterkeyhint="send"
+                maxlength="254"
+                required
+                placeholder="you@example.com"
+              />
+              <button type="submit">Notify me</button>
+            </div>
+            <input
+              class="waitlist-honeypot"
+              name="website"
+              type="text"
+              tabindex="-1"
+              autocomplete="off"
+              aria-hidden="true"
+            />
+            <p class="waitlist-hint">
+              We only use this address to email you when the iOS app is out.
+              <a href="/privacy" data-page="privacy">Privacy</a>
+            </p>
+            <p class="waitlist-status" role="status"></p>
+          </form>
+        </section>
         <section class="about-section" aria-labelledby="about-game-title">
           <h2 id="about-game-title">The game</h2>
           <p>
@@ -102,6 +172,11 @@
             alarm that pulls the dead closer. Combat is automatic. Survival is
             not. Spend gold with a travelling merchant, choose how you grow, and
             see how far the road below will take you.
+          </p>
+          <p>
+            Six kinds of traveller take that road. Meet them on the
+            <a href="/classes" data-page="classes">Classes</a>
+            page.
           </p>
         </section>
         <section class="about-section" aria-labelledby="about-contact-title">
@@ -128,6 +203,216 @@
           </ul>
         </section>
       </article>
+      <article
+        id="classes"
+        class="about"
+        hidden
+        role="main"
+        aria-labelledby="classes-title"
+      >
+        <header class="about-header">
+          <p class="about-kicker">THE HOLLOW MILE</p>
+          <h1 id="classes-title">Classes</h1>
+          <p class="about-status">
+            Six walk the road below. The mile does not ask which.
+          </p>
+        </header>
+        <div class="class-showcase">
+          <div class="class-featured">
+            <img
+              id="class-featured-image"
+              src="/images/classes/rogue.png"
+              width="480"
+              height="480"
+              alt="A hooded rogue on a stone dais, dagger in hand."
+              decoding="async"
+            />
+          </div>
+          <div class="class-picks" role="group" aria-label="Choose a class">
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="true"
+              data-name="Rogue"
+              data-still="/images/classes/rogue.png"
+              data-motion="/images/classes/rogue.webp"
+              data-alt="A hooded rogue on a stone dais, dagger in hand."
+              data-lore="They move where the torches do not. The dead look slow if you already know which way they turn. A small blade, a held breath, and the way ahead is empty."
+            >
+              <img src="/images/classes/rogue.png" width="480" height="480" alt="" />
+              <span>Rogue</span>
+            </button>
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="false"
+              data-name="Ranger"
+              data-still="/images/classes/ranger.png"
+              data-motion="/images/classes/ranger.webp"
+              data-alt="A ranger on a stone dais, bow drawn."
+              data-lore="Used to weather and distance. Down here they read scuff on stone the way they once read grass. The bow speaks once. That is usually enough."
+            >
+              <img src="/images/classes/ranger.png" width="480" height="480" alt="" />
+              <span>Ranger</span>
+            </button>
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="false"
+              data-name="Mage"
+              data-still="/images/classes/mage.png"
+              data-motion="/images/classes/mage.webp"
+              data-alt="A mage in a wide purple hat, standing on a dungeon dais with a crooked staff."
+              data-lore="They came hunting the old fire still sealed in the masonry. The mile is cruel to thin bones, so they let the air take the fight. What they touch does not last."
+            >
+              <img src="/images/classes/mage.png" width="480" height="480" alt="" />
+              <span>Mage</span>
+            </button>
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="false"
+              data-name="Knight"
+              data-still="/images/classes/knight.png"
+              data-motion="/images/classes/knight.webp"
+              data-alt="An armoured knight on a stone dais, sword raised and shield ready."
+              data-lore="Oath and iron. They take the blow meant for the lane, and the next, and the one after that. The shield is a door they refuse to let close."
+            >
+              <img src="/images/classes/knight.png" width="480" height="480" alt="" />
+              <span>Knight</span>
+            </button>
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="false"
+              data-name="Barbarian"
+              data-still="/images/classes/barbarian.png"
+              data-motion="/images/classes/barbarian.webp"
+              data-alt="A barbarian in a bear pelt, greataxe in both hands."
+              data-lore="The bear tried this road first. They wear what remains. No prayer, no sidestep — only a way through, cut until the stone gives."
+            >
+              <img src="/images/classes/barbarian.png" width="480" height="480" alt="" />
+              <span>Barbarian</span>
+            </button>
+            <button
+              type="button"
+              data-class-pick
+              aria-pressed="false"
+              data-name="Lorekeeper"
+              data-still="/images/classes/lorekeeper.png"
+              data-motion="/images/classes/lorekeeper.webp"
+              data-alt="A lorekeeper with glasses and a wooden staff, standing on a dungeon dais."
+              data-lore="They keep the names the dungeon misplaced. A book at the hip, a staff that still remembers green things. They walk the mile to write it down, not to win it."
+            >
+              <img src="/images/classes/lorekeeper.png" width="480" height="480" alt="" />
+              <span>Lorekeeper</span>
+            </button>
+          </div>
+          <h2 id="class-featured-name">Rogue</h2>
+          <p id="class-featured-lore">
+            They move where the torches do not. The dead look slow if you
+            already know which way they turn. A small blade, a held breath,
+            and the way ahead is empty.
+          </p>
+        </div>
+        <p class="class-gallery-credit">
+          Characters from
+          <a
+            href="https://kaylousberg.itch.io/kaykit-complete"
+            target="_blank"
+            rel="noopener noreferrer"
+          >KayKit</a>
+          by Kay Lousberg
+        </p>
+      </article>
+      <article
+        id="privacy"
+        class="about"
+        hidden
+        role="main"
+        aria-labelledby="privacy-title"
+      >
+        <header class="about-header">
+          <p class="about-kicker">THE HOLLOW MILE</p>
+          <h1 id="privacy-title">Privacy</h1>
+          <p class="about-status">Last updated 24 August 2026</p>
+        </header>
+        <section class="about-section">
+          <p>
+            The Hollow Mile is made by Greyden Scott. This page covers
+            hollowmile.com and the forthcoming iOS app. Questions:
+            <a class="about-email" href="mailto:hello@hollowmile.com">hello@hollowmile.com</a>.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="privacy-waitlist-title">
+          <h2 id="privacy-waitlist-title">iOS waitlist</h2>
+          <p>
+            If you join the waitlist, we store the email address you submit so
+            we can tell you when the iOS app is available. We do not use it for
+            other marketing, and we do not sell it. Duplicate signups are
+            ignored. Email us to be removed.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="privacy-telemetry-title">
+          <h2 id="privacy-telemetry-title">Play telemetry</h2>
+          <p>
+            When a browser run ends in death, the site may record the player
+            level at that moment. That value is stored without accounts,
+            cookies, IP addresses, class, distance, or other identifiers. It is
+            used only to balance the game.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="privacy-host-title">
+          <h2 id="privacy-host-title">Hosting</h2>
+          <p>
+            The site is hosted on Cloudflare. Cloudflare may process requests
+            as needed to serve the pages and APIs. We do not run advertising
+            trackers or a public analytics dashboard.
+          </p>
+        </section>
+      </article>
+      <article
+        id="support"
+        class="about"
+        hidden
+        role="main"
+        aria-labelledby="support-title"
+      >
+        <header class="about-header">
+          <p class="about-kicker">THE HOLLOW MILE</p>
+          <h1 id="support-title">Support</h1>
+        </header>
+        <section class="about-section">
+          <p>
+            Email
+            <a class="about-email" href="mailto:hello@hollowmile.com">hello@hollowmile.com</a>.
+            We read every message.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="support-play-title">
+          <h2 id="support-play-title">Play in the browser</h2>
+          <p>
+            The Hollow Mile is playable for free at
+            <a href="/" data-page="home">hollowmile.com</a>.
+            If the dungeon fails to load, try another browser or a stronger
+            connection, then write to us with what you saw.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="support-ios-title">
+          <h2 id="support-ios-title">iOS</h2>
+          <p>
+            The App Store version is not out yet. Join the waitlist on the
+            <a href="/" data-page="home">home page</a>
+            or email us for launch news. When the app ships, this page remains
+            the place to ask for help.
+          </p>
+        </section>
+      </article>
+      <footer id="site-legal" class="site-legal">
+        <a href="/privacy" data-page="privacy" data-current="true">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="/support" data-page="support" data-current="true">Support</a>
+      </footer>
       <div
         id="loading-screen"
         class="loading-screen"
@@ -395,14 +680,21 @@
     <script>
       (function () {
         var path = location.pathname.replace(/\/+$/, "") || "/";
-        if (path !== "/about") {
+        var pages = {
+          "/classes": { id: "classes", title: "Classes — The Hollow Mile" },
+          "/about": { id: "about", title: "About — The Hollow Mile" },
+          "/privacy": { id: "privacy", title: "Privacy — The Hollow Mile" },
+          "/support": { id: "support", title: "Support — The Hollow Mile" }
+        };
+        var page = pages[path];
+        if (!page) {
           return;
         }
         var landing = document.getElementById("landing");
-        var about = document.getElementById("about");
+        var el = document.getElementById(page.id);
         if (landing) landing.hidden = true;
-        if (about) about.hidden = false;
-        document.title = "About — The Hollow Mile";
+        if (el) el.hidden = false;
+        document.title = page.title;
       })();
     </script>
     <script type="module" src="/src/main.ts"></script>

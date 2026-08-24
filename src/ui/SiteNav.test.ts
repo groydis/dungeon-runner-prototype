@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { SiteNav } from './SiteNav';
 
 describe('site nav', () => {
-  it('routes Home and About without following the link', () => {
+  it('routes data-page links without following them', () => {
     const root = createNavRoot();
     const visits: string[] = [];
-    const nav = new SiteNav(
-      () => visits.push('home'),
-      () => visits.push('about'),
-      root,
-    );
+    const nav = new SiteNav((page) => visits.push(page), root);
 
     root.element('nav-home').click();
     root.element('nav-about').click();
@@ -23,6 +19,9 @@ describe('site nav', () => {
 
     nav.hide();
     expect(root.element('site-nav').hidden).toBe(true);
+    expect(root.element('site-legal').hidden).toBe(true);
+    nav.show();
+    expect(root.element('site-legal').hidden).toBe(false);
     nav.dispose();
   });
 });
@@ -32,12 +31,26 @@ function createNavRoot(): ParentNode & {
 } {
   const nodes = new Map<string, FakeElement>();
   nodes.set('site-nav', new FakeElement());
-  nodes.set('nav-home', new FakeElement());
-  nodes.set('nav-about', new FakeElement());
+  nodes.set('site-legal', new FakeElement());
+  const home = new FakeElement();
+  home.setAttribute('data-page', 'home');
+  home.setAttribute('data-current', 'true');
+  const about = new FakeElement();
+  about.setAttribute('data-page', 'about');
+  about.setAttribute('data-current', 'true');
+  nodes.set('nav-home', home);
+  nodes.set('nav-about', about);
   nodes.get('site-nav')!.hidden = false;
+  nodes.get('site-legal')!.hidden = false;
   return {
     querySelector(selector: string) {
       return nodes.get(selector.slice(1)) as unknown as HTMLElement | null;
+    },
+    querySelectorAll(selector: string) {
+      if (selector !== '[data-page]') {
+        return [] as unknown as NodeListOf<Element>;
+      }
+      return [home, about] as unknown as NodeListOf<Element>;
     },
     element(id: string) {
       const node = nodes.get(id);
@@ -95,10 +108,11 @@ class FakeElement {
   click(): void {
     const event = {
       type: 'click',
+      currentTarget: this,
       preventDefault: () => {
         this.defaultPrevented = true;
       },
-    } as Event;
+    } as unknown as Event;
     this.dispatchEvent(event);
   }
 }

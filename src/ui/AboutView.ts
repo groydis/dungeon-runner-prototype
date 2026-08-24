@@ -1,22 +1,8 @@
-import { requireElement } from './dom';
+import { PageOverlay } from './PageOverlay';
 
 /** Standalone About page shown at /about. */
-export class AboutView {
-  private readonly pageEl: HTMLElement;
-
+export class AboutView extends PageOverlay {
   constructor(root: ParentNode = document) {
-    this.pageEl = requireElement(root, '#about');
-  }
-
-  show(): void {
-    this.pageEl.hidden = false;
-  }
-
-  hide(): void {
-    this.pageEl.hidden = true;
-  }
-
-  get hidden(): boolean {
-    return Boolean(this.pageEl.hidden);
+    super(root, '#about');
   }
 }

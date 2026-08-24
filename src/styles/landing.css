@@ -6,7 +6,7 @@
   align-items: stretch;
   justify-content: center;
   padding: calc(56px + var(--safe-top)) calc(24px + var(--safe-right))
-    calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
+    calc(52px + var(--safe-bottom)) calc(24px + var(--safe-left));
   overflow: hidden;
   background: #121316;
   color: var(--hud);
@@ -80,6 +80,21 @@
   font-size: clamp(0.92rem, 2.4vw, 1.1rem);
   letter-spacing: 0.04em;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+}
+
+.landing .waitlist-compact {
+  margin: 12px auto 0;
+  max-width: 22rem;
+  text-align: left;
+}
+
+.landing .waitlist-hint,
+.landing .waitlist-status {
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+}
+
+.landing .waitlist-hint a:hover {
+  color: var(--ui-brown-light);
 }
 
 .title-lock {

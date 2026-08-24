@@ -53,6 +53,8 @@ Included:
 - Universal run caps shared by Merchant upgrades and level-up rewards
 - Death overlay; Restart Run returns to class selection without reloading the page
 - Anonymous death telemetry: player level at death is posted to a Cloudflare D1 table (no accounts, cookies, or other identifiers)
+- iOS waitlist: emails stored in the same D1 database, plus public Privacy and Support pages
+- Class gallery at `/classes`: idle portraits and lore for the six playable classes
 - Responsive full-screen layout for phone and desktop
 
 Not included:
@@ -74,7 +76,7 @@ npm run dev
 
 Then open the local URL Vite prints (typically `http://localhost:5173`). The title screen is first; **Play** loads the dungeon. The dev server binds to `0.0.0.0`, so you can also load it from a phone on the same network.
 
-Death telemetry needs the Worker and D1, so it is silent under `npm run dev` / `pnpm dev`. To record locally:
+Death telemetry and the iOS waitlist need the Worker and D1, so both are silent under `npm run dev` / `pnpm dev`. The waitlist form shows an error and points at `hello@hollowmile.com`. To record locally:
 
 ```bash
 npm run db:migrate:local
@@ -102,7 +104,9 @@ Connect the GitHub repo in **Workers & Pages → Import a repository**, then use
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 
-`wrangler.jsonc` names the Worker `hollow-mile`, serves `./dist` as static assets, and runs the Worker first on `/api/*` so death telemetry can write to D1. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+`wrangler.jsonc` names the Worker `hollow-mile`, serves `./dist` as static assets, and runs the Worker first on `/api/*` so death telemetry and the waitlist can write to D1. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+
+Public pages: [Classes](https://hollowmile.com/classes), [Privacy](https://hollowmile.com/privacy), [Support](https://hollowmile.com/support). Privacy and Support are the App Store privacy-policy and support links.
 
 Apply the D1 schema once per environment:
 
@@ -114,6 +118,7 @@ Inspect anonymous death levels:
 
 ```bash
 npx wrangler d1 execute hollow-mile-telemetry --remote --command "SELECT player_level, COUNT(*) AS deaths FROM run_deaths GROUP BY player_level ORDER BY player_level"
+npx wrangler d1 execute hollow-mile-telemetry --remote --command "SELECT COUNT(*) AS signups FROM ios_waitlist"
 ```
 
 Pushes to the production branch publish automatically. Pull requests get preview deployments.
@@ -150,6 +155,8 @@ src/
   main.ts                 Entry point: landing Play, then canvas + game loop bootstrap
   telemetry/
     runDeath.ts           Anonymous death-level payload, POST helper, and Worker handler
+  waitlist/
+    iosWaitlist.ts        iOS waitlist payload, POST helper, and Worker handler
   game/
     Game.ts               Animation, input, and view/render orchestration
     GameState.ts          Single-run aggregate and public rule boundary
@@ -183,6 +190,11 @@ src/
   ui/
     LoadingView.ts        Boot progress and loading-screen transition
     LandingView.ts        Title screen and Play
+    AboutView.ts          About overlay
+    PageOverlay.ts        Privacy / Support overlays
+    SiteNav.ts            Home / Classes / About / legal links
+    ClassesGallery.ts     One looping class portrait at a time
+    WaitlistForms.ts      iOS waitlist signup
     HudView.ts            Class, distance, level, XP, gold, attack, evade, HP, status
     ClassSelectionView.ts Choose Your Class overlay
     GameOverView.ts       Death overlay and Restart Run
@@ -210,8 +222,8 @@ src/
     landing.css           Title screen and Play
 public/                   Static assets
 worker/
-  index.ts                D1 death-telemetry POST /api/telemetry/deaths
-migrations/               D1 schema (anonymous player_level at death)
+  index.ts                D1 POST /api/telemetry/deaths and /api/waitlist
+migrations/               D1 schema (run_deaths, ios_waitlist)
 ```
 
 ## Architecture
@@ -227,6 +239,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. Overlay previews share `PreviewStage` for transparent renderer, resize, visibility-aware render, and dispose. `ClassSelectionPreview.ts` still owns carousel models, load tokens, and idle playback. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
 - **Death telemetry** records only the player level at death. `Game.ts` posts `{ level }` to `/api/telemetry/deaths` with `credentials: 'omit'`. The Worker writes `player_level` and a server timestamp to D1. No class, distance, cookies, IPs, or other identifiers are stored.
+- **iOS waitlist** posts `{ email }` to `/api/waitlist`. The Worker stores a normalised address in `ios_waitlist` (`INSERT OR IGNORE`, so duplicates still succeed). A filled honeypot field is discarded with the same 204. No IP is stored. Privacy and Support pages live at `/privacy` and `/support`. The class gallery lives at `/classes`.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
 - **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the capped stat package and run-scoped ownership.

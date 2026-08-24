@@ -1,56 +1,61 @@
 import { requireElement } from './dom';
-import { type SitePage } from './siteRoute';
+import { isSitePage, type SitePage } from './siteRoute';
 
-/** Home / About links. Hidden once Play starts the run. */
+/** Home / Classes / About / legal links. Hidden once Play starts the run. */
 export class SiteNav {
   private readonly navEl: HTMLElement;
-  private readonly homeLink: HTMLAnchorElement;
-  private readonly aboutLink: HTMLAnchorElement;
-  private readonly aboutPlayLink: HTMLAnchorElement | null;
-  private readonly onHomeClick = (event: Event): void => {
+  private readonly legalEl: HTMLElement | null;
+  private readonly pageLinks: HTMLElement[];
+  private readonly onPageClick = (event: Event): void => {
+    const link = event.currentTarget as HTMLElement | null;
+    const page = link?.getAttribute?.('data-page');
+    if (!isSitePage(page)) {
+      return;
+    }
     event.preventDefault();
-    this.homeHandler();
-  };
-  private readonly onAboutClick = (event: Event): void => {
-    event.preventDefault();
-    this.aboutHandler();
+    this.onNavigate(page);
   };
 
   constructor(
-    private readonly homeHandler: () => void,
-    private readonly aboutHandler: () => void,
+    private readonly onNavigate: (page: SitePage) => void,
     root: ParentNode = document,
   ) {
     this.navEl = requireElement(root, '#site-nav');
-    this.homeLink = requireElement(root, '#nav-home') as HTMLAnchorElement;
-    this.aboutLink = requireElement(root, '#nav-about') as HTMLAnchorElement;
-    this.aboutPlayLink = root.querySelector('#about-play');
-    this.homeLink.addEventListener('click', this.onHomeClick);
-    this.aboutLink.addEventListener('click', this.onAboutClick);
-    this.aboutPlayLink?.addEventListener('click', this.onHomeClick);
+    this.legalEl = root.querySelector('#site-legal');
+    this.pageLinks = Array.from(root.querySelectorAll<HTMLElement>('[data-page]'));
+    for (const link of this.pageLinks) {
+      link.addEventListener('click', this.onPageClick);
+    }
   }
 
   setActive(page: SitePage): void {
-    if (page === 'home') {
-      this.homeLink.setAttribute('aria-current', 'page');
-      this.aboutLink.removeAttribute('aria-current');
-      return;
+    for (const link of this.pageLinks) {
+      const marksCurrent = link.getAttribute('data-current') === 'true';
+      if (marksCurrent && link.getAttribute('data-page') === page) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
     }
-    this.aboutLink.setAttribute('aria-current', 'page');
-    this.homeLink.removeAttribute('aria-current');
   }
 
   hide(): void {
     this.navEl.hidden = true;
+    if (this.legalEl) {
+      this.legalEl.hidden = true;
+    }
   }
 
   show(): void {
     this.navEl.hidden = false;
+    if (this.legalEl) {
+      this.legalEl.hidden = false;
+    }
   }
 
   dispose(): void {
-    this.homeLink.removeEventListener('click', this.onHomeClick);
-    this.aboutLink.removeEventListener('click', this.onAboutClick);
-    this.aboutPlayLink?.removeEventListener('click', this.onHomeClick);
+    for (const link of this.pageLinks) {
+      link.removeEventListener('click', this.onPageClick);
+    }
   }
 }
