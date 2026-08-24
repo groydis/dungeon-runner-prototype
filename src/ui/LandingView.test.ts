@@ -22,6 +22,10 @@ describe('landing overlay', () => {
     overlay.hide();
     expect(overlay.hidden).toBe(true);
     expect(root.element('landing').hidden).toBe(true);
+
+    overlay.show();
+    expect(overlay.hidden).toBe(false);
+    expect(root.element('landing').hidden).toBe(false);
     overlay.dispose();
   });
 });

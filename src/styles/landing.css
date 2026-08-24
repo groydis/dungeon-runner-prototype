@@ -5,7 +5,7 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right))
+  padding: calc(56px + var(--safe-top)) calc(24px + var(--safe-right))
     calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
   overflow: hidden;
   background: #121316;
@@ -74,6 +74,14 @@
   text-shadow: 0 2px 22px rgba(0, 0, 0, 0.72);
 }
 
+.landing-status {
+  margin: 12px 0 0;
+  color: #c7bfb5;
+  font-size: clamp(0.92rem, 2.4vw, 1.1rem);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+}
+
 .title-lock {
   white-space: nowrap;
 }
@@ -117,6 +125,14 @@
 #landing-play:focus-visible {
   outline: 2px solid #d4c2ad;
   outline-offset: 3px;
+}
+
+.landing-browser {
+  margin: 14px 0 0;
+  color: #c7bfb5;
+  font-size: clamp(0.88rem, 2.2vw, 1rem);
+  line-height: 1.4;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
 }
 
 .loading-screen {

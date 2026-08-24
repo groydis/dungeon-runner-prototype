@@ -38,6 +38,10 @@
   <body>
     <div id="app">
       <canvas id="game-canvas"></canvas>
+      <nav id="site-nav" class="site-nav" aria-label="Site">
+        <a href="/" id="nav-home">Home</a>
+        <a href="/about" id="nav-about">About</a>
+      </nav>
       <div
         id="landing"
         class="landing"
@@ -60,15 +64,70 @@
           <div class="landing-copy">
             <p class="landing-kicker">THE ROAD BELOW AWAITS</p>
             <h1 id="landing-title">THE <span class="title-lock">HOLLOW MILE</span></h1>
+            <p class="landing-status">Coming soon to iOS</p>
           </div>
           <div class="landing-actions">
             <p class="landing-tagline">
               Choose a class. Advance one row at a time. Survive the dungeon.
             </p>
             <button type="button" id="landing-play">PLAY</button>
+            <p class="landing-browser">Play for free in your browser now.</p>
           </div>
         </div>
       </div>
+      <article
+        id="about"
+        class="about"
+        hidden
+        role="main"
+        aria-labelledby="about-title"
+      >
+        <header class="about-header">
+          <p class="about-kicker">THE HOLLOW MILE</p>
+          <h1 id="about-title">About</h1>
+          <p class="about-status">Coming soon to iOS</p>
+          <p class="about-browser">
+            <a href="/" id="about-play">Play for free in your browser now.</a>
+          </p>
+        </header>
+        <section class="about-section" aria-labelledby="about-game-title">
+          <h2 id="about-game-title">The game</h2>
+          <p>
+            The Hollow Mile is a mobile-first, tile-based dungeon roguelite.
+            Pick a class, tap a glowing tile, and advance one row at a time
+            through a three-lane dungeon. You are not free to roam.
+          </p>
+          <p>
+            Every step is a choice: fight, evade, take the gold, or trip an
+            alarm that pulls the dead closer. Combat is automatic. Survival is
+            not. Spend gold with a travelling merchant, choose how you grow, and
+            see how far the road below will take you.
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="about-contact-title">
+          <h2 id="about-contact-title">Contact</h2>
+          <p>
+            <a class="about-email" href="mailto:hello@hollowmile.com">hello@hollowmile.com</a>
+          </p>
+        </section>
+        <section class="about-section" aria-labelledby="about-projects-title">
+          <h2 id="about-projects-title">Other projects</h2>
+          <ul class="about-projects">
+            <li>
+              <a href="https://squaredstiff.app/" target="_blank" rel="noopener noreferrer">Squared Stiff</a>
+              <span>A horror-inspired infinite maze for iOS</span>
+            </li>
+            <li>
+              <a href="https://geocolour.app/" target="_blank" rel="noopener noreferrer">GeoColour</a>
+              <span>Field colour reference for iPhone</span>
+            </li>
+            <li>
+              <a href="https://greyden.dev" target="_blank" rel="noopener noreferrer">greyden.dev</a>
+              <span>Personal site</span>
+            </li>
+          </ul>
+        </section>
+      </article>
       <div
         id="loading-screen"
         class="loading-screen"
@@ -333,6 +392,19 @@
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var path = location.pathname.replace(/\/+$/, "") || "/";
+        if (path !== "/about") {
+          return;
+        }
+        var landing = document.getElementById("landing");
+        var about = document.getElementById("about");
+        if (landing) landing.hidden = true;
+        if (about) about.hidden = false;
+        document.title = "About — The Hollow Mile";
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

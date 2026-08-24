@@ -26,6 +26,10 @@ export class LandingView {
     this.overlayEl.hidden = true;
   }
 
+  show(): void {
+    this.overlayEl.hidden = false;
+  }
+
   get hidden(): boolean {
     return Boolean(this.overlayEl.hidden);
   }
