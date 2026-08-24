@@ -1,7 +1,13 @@
 import { type AlarmConsumedKind } from './alarm';
 import { type CollectibleKind } from './Collectible';
 import { type CombatStats } from './Combatant';
-import { LANE_COUNT, ROW_POOL_SIZE, START_COL, START_ROW } from './config';
+import {
+  LANE_COUNT,
+  ROW_POOL_SIZE,
+  START_COL,
+  START_ROW,
+  TRAILING_ROW_COUNT,
+} from './config';
 import { type PlayerClassId, type PlayerRenderKey } from './definitions/classes';
 import { type EnemyRenderKey, type EnemyType } from './definitions/enemies';
 import { deepFreeze, type DeepReadonly } from './freeze';
@@ -145,9 +151,10 @@ export function createBoardSnapshotFromTiles(
   const originRow = view.hasSelectedClass ? view.playerRow : START_ROW;
   const originCol = view.hasSelectedClass ? view.playerCol : START_COL;
   const rowCount = view.rowCount ?? ROW_POOL_SIZE;
+  const firstRow = originRow - TRAILING_ROW_COUNT;
   const rows: BoardRowSnapshot[] = [];
   for (let i = 0; i < rowCount; i += 1) {
-    const row = originRow + i;
+    const row = firstRow + i;
     const tiles: TileSnapshot[] = [];
     for (let col = 0; col < LANE_COUNT; col += 1) {
       tiles.push(

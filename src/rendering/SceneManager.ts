@@ -39,9 +39,11 @@ import {
   ENEMY_DEATH_FADE_SEC,
   LANE_COUNT,
   MERCHANT_LEAVE_FX_SEC,
+  PLAYER_WORLD_Z,
   ROW_POOL_SIZE,
   TILE_PITCH,
   TILE_SIZE,
+  TRAILING_ROW_COUNT,
   laneWorldX,
   rowWorldZ,
 } from '../game/config';
@@ -489,7 +491,7 @@ export class SceneManager {
   }
 
   setPlayerVisual(colX: number, hopY: number): void {
-    this.playerMesh.position.set(colX, 0.62 + hopY, 0);
+    this.playerMesh.position.set(colX, 0.62 + hopY, PLAYER_WORLD_Z);
   }
 
   setPlayerRenderKey(renderKey: PlayerRenderKey | null): void {
@@ -692,7 +694,7 @@ export class SceneManager {
     presentation: { interactive: boolean },
   ): void {
     for (let i = 0; i < this.rowViews.length; i += 1) {
-      const row = snapshot.originRow + i;
+      const row = snapshot.originRow - TRAILING_ROW_COUNT + i;
       this.bindRow(this.rowViews[i], row, snapshot);
     }
     this.refreshHighlights(snapshot, presentation);
@@ -706,8 +708,12 @@ export class SceneManager {
    * instead of allocating more meshes.
    */
   recycleDepartingRow(leftBehindRow: number, snapshot: BoardSnapshot): void {
-    const farRow = snapshot.playerRow + ROW_POOL_SIZE - 1;
-    const view = this.rowViews.find((rowView) => rowView.assignedRow === leftBehindRow);
+    const departingRow = leftBehindRow - TRAILING_ROW_COUNT;
+    const farRow =
+      snapshot.playerRow + ROW_POOL_SIZE - TRAILING_ROW_COUNT - 1;
+    const view = this.rowViews.find(
+      (rowView) => rowView.assignedRow === departingRow,
+    );
     if (view) {
       this.bindRow(view, farRow, snapshot);
     }
@@ -736,8 +742,8 @@ export class SceneManager {
     for (const view of this.rowViews) {
       const z = rowWorldZ(view.assignedRow, anchorRow, this.scrollZ);
       view.group.position.z = z;
-      // Hide tiles once they pass the player toward the camera so recycle pops stay off-screen.
-      view.group.visible = z < TILE_PITCH * 0.55;
+      // Hide tiles once they pass the trailing slot toward the camera so recycle pops stay off-screen.
+      view.group.visible = z < PLAYER_WORLD_Z + TILE_PITCH * 1.55;
     }
   }
 

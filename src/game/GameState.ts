@@ -103,6 +103,7 @@ export interface HudSnapshot {
   distance: number;
   gold: number;
   attack: number;
+  defence: number;
   evade: number;
   level: number;
   experience: number;
@@ -207,6 +208,7 @@ export class GameState {
         distance: 0,
         gold: 0,
         attack: 0,
+        defence: 0,
         evade: 0,
         level: 1,
         experience: 0,
@@ -222,6 +224,7 @@ export class GameState {
       distance: this._distance,
       gold: this._player.gold,
       attack: stats.attack,
+      defence: stats.defence,
       evade: this._player.evade,
       level: this._player.level,
       experience: this._player.experience,

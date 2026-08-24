@@ -151,6 +151,14 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
+.hud-top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 12rem;
+}
+
 .hud-top h1 {
   margin: 0;
   font-size: clamp(1.25rem, 4.6vw, 1.85rem);
@@ -158,53 +166,8 @@ body {
   font-weight: 600;
 }
 
-#distance,
-#class-name,
-#gold,
-#attack,
-#evade,
-#level,
-#experience {
-  margin: 6px 0 0;
-  color: var(--hud-accent);
-  font-size: clamp(0.95rem, 3.4vw, 1.15rem);
-}
-
-.hud-progress {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 1.1rem;
-}
-
-#class-name,
-#level {
-  color: #c6b6a2;
-}
-
-#experience {
-  color: #ad9679;
-}
-
-.hud-resources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 1.1rem;
-}
-
-#gold {
-  color: #bea078;
-}
-
-#attack {
-  color: #b8a796;
-}
-
-#evade {
-  color: #a99d90;
-}
-
 .health {
-  margin-top: 10px;
+  width: 100%;
   max-width: 14rem;
 }
 
@@ -228,6 +191,44 @@ body {
   border-radius: inherit;
   background: #865e4c;
   transform-origin: left center;
+}
+
+.hud-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+}
+
+.hud-stats p {
+  margin: 0;
+  color: var(--hud-accent);
+  font-size: clamp(0.95rem, 3.4vw, 1.15rem);
+  line-height: 1.25;
+}
+
+#level {
+  color: #c6b6a2;
+}
+
+#experience {
+  color: #ad9679;
+}
+
+#gold {
+  color: #bea078;
+}
+
+#attack {
+  color: #b8a796;
+}
+
+#defence {
+  color: #aeb4a4;
+}
+
+#evade {
+  color: #a99d90;
 }
 
 .hud-bottom {

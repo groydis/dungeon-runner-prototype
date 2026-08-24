@@ -1,12 +1,18 @@
 export const LANE_COUNT = 3;
 export const VISIBLE_ROWS = 8;
 
+/** Floor rows kept behind the player so the near edge of the screen stays filled. */
+export const TRAILING_ROW_COUNT = 1;
+
 /** Extra pooled rows so the departing row can scroll off-screen and a new far row can fade in. */
 export const ROW_POOL_SIZE = VISIBLE_ROWS + 2;
 
 export const TILE_SIZE = 1.18;
 export const TILE_GAP = 0.1;
 export const TILE_PITCH = TILE_SIZE + TILE_GAP;
+
+/** Sit the player one row closer to the camera so the trailing floor row fills the near edge. */
+export const PLAYER_WORLD_Z = TRAILING_ROW_COUNT * TILE_PITCH;
 
 export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
@@ -67,5 +73,5 @@ export function laneWorldX(col: number): number {
 }
 
 export function rowWorldZ(row: number, playerRow: number, scrollZ = 0): number {
-  return (row - playerRow) * -TILE_PITCH + scrollZ;
+  return (row - playerRow) * -TILE_PITCH + scrollZ + PLAYER_WORLD_Z;
 }

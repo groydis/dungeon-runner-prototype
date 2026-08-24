@@ -142,8 +142,8 @@ describe('class-selection overlay', () => {
   });
 });
 
-describe('HUD class line', () => {
-  it('renders the selected class name and starting combat stats', () => {
+describe('HUD combat stats', () => {
+  it('renders HP under the title and a side list of run stats', () => {
     const root = createHudRoot();
     const hud = new HudView(root);
     const ranger = getPlayerClassDefinition('ranger');
@@ -152,6 +152,7 @@ describe('HUD class line', () => {
       distance: 0,
       gold: 0,
       attack: ranger.startingStats.attack,
+      defence: ranger.startingStats.defence,
       evade: ranger.startingEvade,
       level: 1,
       experience: 0,
@@ -161,8 +162,12 @@ describe('HUD class line', () => {
       status: '',
     });
 
-    expect(root.text('class-name')).toBe('CLASS: Ranger');
+    expect(root.text('distance')).toBe('Distance: 0');
+    expect(root.text('level')).toBe('LVL: 1');
+    expect(root.text('experience')).toBe('XP: 0 / 3');
+    expect(root.text('gold')).toBe('G: 0');
     expect(root.text('attack')).toBe(`ATK: ${ranger.startingStats.attack}`);
+    expect(root.text('defence')).toBe(`ARM: ${ranger.startingStats.defence}`);
     expect(root.text('evade')).toBe(`EVA: ${ranger.startingEvade}`);
     expect(root.text('evade')).not.toContain('%');
     expect(root.text('health-text')).toBe(
@@ -224,9 +229,9 @@ function createHudRoot(): ParentNode & {
 } {
   const ids = [
     'distance',
-    'class-name',
     'gold',
     'attack',
+    'defence',
     'evade',
     'level',
     'experience',
