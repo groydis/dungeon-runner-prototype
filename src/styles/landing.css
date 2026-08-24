@@ -47,7 +47,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: min(40rem, 100%);
+  width: 100%;
   text-align: center;
 }
 
@@ -61,13 +61,21 @@
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
 }
 
+.landing-card h1,
+.loading-card h1 {
+  line-height: 0.98;
+}
+
 .landing-card h1 {
   margin: 5px 0 0;
   color: var(--hud);
-  font-size: clamp(2.35rem, 8vw, 4.8rem);
-  line-height: 0.94;
+  font-size: clamp(2.15rem, 8vw, 4.8rem);
   letter-spacing: 0.045em;
   text-shadow: 0 2px 22px rgba(0, 0, 0, 0.72);
+}
+
+.title-lock {
+  white-space: nowrap;
 }
 
 .landing-tagline {
