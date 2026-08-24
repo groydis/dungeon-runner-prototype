@@ -12,7 +12,22 @@
       name="description"
       content="The Hollow Mile — a mobile-first, tile-based dungeon roguelite."
     />
+    <meta property="og:title" content="The Hollow Mile" />
+    <meta
+      property="og:description"
+      content="Choose a class. Advance one row at a time. Survive the dungeon."
+    />
+    <meta property="og:image" content="/images/website-hero.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/images/website-hero.jpg" />
     <title>The Hollow Mile</title>
+    <link
+      rel="preload"
+      as="image"
+      href="/images/website-hero.jpg"
+      imagesrcset="/images/website-hero-1280.jpg 1280w, /images/website-hero.jpg 1920w"
+      imagesizes="100vw"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,13 +44,29 @@
         role="main"
         aria-labelledby="landing-title"
       >
+        <img
+          class="landing-hero"
+          src="/images/website-hero.jpg"
+          srcset="/images/website-hero-1280.jpg 1280w, /images/website-hero.jpg 1920w"
+          sizes="100vw"
+          width="1920"
+          height="1080"
+          alt="A knight and dungeon skeletons standing in a torchlit stone hall."
+          fetchpriority="high"
+          decoding="async"
+        />
+        <div class="landing-veil" aria-hidden="true"></div>
         <div class="landing-card">
-          <p class="landing-kicker">THE ROAD BELOW AWAITS</p>
-          <h1 id="landing-title">THE HOLLOW MILE</h1>
-          <p class="landing-tagline">
-            Choose a class. Advance one row at a time. Survive the dungeon.
-          </p>
-          <button type="button" id="landing-play">PLAY</button>
+          <div class="landing-copy">
+            <p class="landing-kicker">THE ROAD BELOW AWAITS</p>
+            <h1 id="landing-title">THE HOLLOW MILE</h1>
+          </div>
+          <div class="landing-actions">
+            <p class="landing-tagline">
+              Choose a class. Advance one row at a time. Survive the dungeon.
+            </p>
+            <button type="button" id="landing-play">PLAY</button>
+          </div>
         </div>
       </div>
       <div

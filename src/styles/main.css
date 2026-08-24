@@ -64,7 +64,7 @@ body {
   justify-content: center;
   padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right))
     calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
-  background: #242627;
+  background: #121316;
   color: var(--hud);
   opacity: 1;
   transition: opacity 220ms ease;
