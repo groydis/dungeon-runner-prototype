@@ -39,6 +39,7 @@ import {
   preloadClassGameplayAssets,
 } from '../rendering/preloadAssets';
 import { SceneManager } from '../rendering/SceneManager';
+import { reportRunDeath } from '../telemetry/runDeath';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
 import { GameOverView } from '../ui/GameOverView';
 import { HudView } from '../ui/HudView';
@@ -72,6 +73,7 @@ export class Game {
   private presentationGeneration = 0;
   private lastTimeMs = 0;
   private running = false;
+  private deathReported = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -508,6 +510,7 @@ export class Game {
       this.levelUp.hide();
       this.state.dismissOpenShop();
       this.state.dismissLevelUp();
+      this.reportAnonymousDeath();
       this.gameOver.show(this.state.distance);
       this.setPhase({ kind: 'gameOver' });
       return;
@@ -549,8 +552,17 @@ export class Game {
     this.updateHud();
   }
 
+  private reportAnonymousDeath(): void {
+    if (this.deathReported) {
+      return;
+    }
+    this.deathReported = true;
+    reportRunDeath(this.state.getHudSnapshot().level);
+  }
+
   private returnToClassSelection(): void {
     this.presentationGeneration += 1;
+    this.deathReported = false;
     this.pendingEvents = [];
     this.scene.clearTransientFx();
     this.shop.hide();

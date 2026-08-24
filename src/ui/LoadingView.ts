@@ -18,6 +18,11 @@ export class LoadingView {
     this.percentEl = requireElement(root, '#loading-percent');
   }
 
+  show(): void {
+    delete this.overlayEl.dataset.state;
+    this.overlayEl.hidden = false;
+  }
+
   update(progress: AssetPreloadProgress): void {
     const percent = Math.max(0, Math.min(100, progress.percent));
     this.statusEl.textContent = progress.label;

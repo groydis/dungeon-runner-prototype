@@ -43,6 +43,7 @@ Included:
 - Cardinal-plus encounters: front-on fight, evade, or Surprise Attack
 - Automatic combat with a short playback of each hit
 - Six player classes that set starting HP, attack, defence, and Evade
+- A full-screen title screen; **Play** starts the existing load and class-select flow
 - A measured boot loader that caches the complete class carousel and opening-dungeon presentation before play
 - A full-screen **Choose Your Class** carousel with animated KayKit model previews; board input stays locked until a class is selected
 - HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
@@ -51,6 +52,7 @@ Included:
 - One-time class equipment offers from KayKit Fantasy Weapons Bits: each class sees only its own named weapon/set with a live 3D product preview, receives a capped multi-stat bonus on purchase, and visibly equips it for the rest of that run
 - Universal run caps shared by Merchant upgrades and level-up rewards
 - Death overlay; Restart Run returns to class selection without reloading the page
+- Anonymous death telemetry: player level at death is posted to a Cloudflare D1 table (no accounts, cookies, or other identifiers)
 - Responsive full-screen layout for phone and desktop
 
 Not included:
@@ -59,7 +61,7 @@ Not included:
 - Damaging traps, extra trap kinds, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - Environment art beyond the current simple tiles
-- Sound, saves, accounts, or networking
+- Sound, saves, accounts, or a public telemetry dashboard
 
 ## Install and run
 
@@ -70,7 +72,14 @@ npm install
 npm run dev
 ```
 
-Then open the local URL Vite prints (typically `http://localhost:5173`). The dev server binds to `0.0.0.0`, so you can also load it from a phone on the same network.
+Then open the local URL Vite prints (typically `http://localhost:5173`). The title screen is first; **Play** loads the dungeon. The dev server binds to `0.0.0.0`, so you can also load it from a phone on the same network.
+
+Death telemetry needs the Worker and D1, so it is silent under `npm run dev` / `pnpm dev`. To record locally:
+
+```bash
+npm run db:migrate:local
+npx wrangler dev
+```
 
 Production build and local preview:
 
@@ -93,7 +102,19 @@ Connect the GitHub repo in **Workers & Pages → Import a repository**, then use
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 
-`wrangler.jsonc` names the Worker `hollow-mile` and serves `./dist` as static assets. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+`wrangler.jsonc` names the Worker `hollow-mile`, serves `./dist` as static assets, and runs the Worker first on `/api/*` so death telemetry can write to D1. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+
+Apply the D1 schema once per environment:
+
+```bash
+npm run db:migrate
+```
+
+Inspect anonymous death levels:
+
+```bash
+npx wrangler d1 execute hollow-mile-telemetry --remote --command "SELECT player_level, COUNT(*) AS deaths FROM run_deaths GROUP BY player_level ORDER BY player_level"
+```
 
 Pushes to the production branch publish automatically. Pull requests get preview deployments.
 
@@ -108,7 +129,8 @@ Query-string helpers (no on-screen debug UI):
 
 There is no keyboard movement and no combat input.
 
-- On launch, **Choose Your Class** shows one of the six classes at a time with its name, animated idle model, description, starting `HP / ATK / DEF / EVA`, and selection button. Use the on-screen arrows, the keyboard arrow keys, or a horizontal swipe to browse. The board, highlights, shops, and level-ups stay locked until you pick one.
+- On launch, a title screen with **Play**. That starts the measured boot preload, then **Choose Your Class**.
+- **Choose Your Class** shows one of the six classes at a time with its name, animated idle model, description, starting `HP / ATK / DEF / EVA`, and selection button. Use the on-screen arrows, the keyboard arrow keys, or a horizontal swipe to browse. The board, highlights, shops, and level-ups stay locked until you pick one.
 - **Tap or click** a glowing tile in the next row. You always advance exactly one row.
 - You may move at most one lane sideways per step:
   - Left lane → left or centre
@@ -125,7 +147,9 @@ Selection uses pointer events and a Three.js raycaster against invisible hit pla
 
 ```text
 src/
-  main.ts                 Entry point: canvas + game loop bootstrap
+  main.ts                 Entry point: landing Play, then canvas + game loop bootstrap
+  telemetry/
+    runDeath.ts           Anonymous death-level payload, POST helper, and Worker handler
   game/
     Game.ts               Animation, input, and view/render orchestration
     GameState.ts          Single-run aggregate and public rule boundary
@@ -158,6 +182,7 @@ src/
       encounterPools.ts   Distance-based enemy-type weights
   ui/
     LoadingView.ts        Boot progress and loading-screen transition
+    LandingView.ts        Title screen and Play
     HudView.ts            Class, distance, level, XP, gold, attack, evade, HP, status
     ClassSelectionView.ts Choose Your Class overlay
     GameOverView.ts       Death overlay and Restart Run
@@ -182,7 +207,11 @@ src/
     CameraController.ts   Elevated follow camera
   styles/
     main.css              Full-viewport HUD, class-select, shop, level-up, and game-over overlays
+    landing.css           Title screen and Play
 public/                   Static assets
+worker/
+  index.ts                D1 death-telemetry POST /api/telemetry/deaths
+migrations/               D1 schema (anonymous player_level at death)
 ```
 
 ## Architecture
@@ -192,11 +221,12 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visit, upgrade price tracks, and one-time special-equipment ownership live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress. Move, trap, turn, and combat-finish result contracts live in `turnResults.ts` so presentation code can type those payloads without importing `GameState`. `GameState` still re-exports them.
 - **RunWorld** is private to GameState. It owns the mutable board: Grid, recipes, entity maps, tile materialisation, prepare/prune, lookups, alarm movement, world reset, and snapshot construction.
 - **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster. Enemy snapshots carry a definition-layer `EnemyRenderKey`, not an unconstrained string.
-- **Game.ts** owns overlay order, animation, and input-lock state through an explicit presentation phase. Only `idle` enables board highlights and raycast input; class selection, movement, trap, encounter, combat, drop FX, shop, level-up, and game-over all lock the board. It shows **Choose Your Class** on launch and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens. Restart and dispose bump a generation token so a stale class-preload cannot reopen the board.
-- **Asset preloading** has two boundaries. `main.ts` blocks on measured carousel/opening-dungeon groups before constructing the game. While class selection is visible, `preloadAssets.ts` warms core combat, early-enemy, and Merchant promises in the background; highlighting a ranged class also requests its ranged bundle. Beginning a run waits on only the highlighted class and shows `Preparing [class]…` if that work is still outstanding. Later enemies, advanced potions, future equipment, and reserved animations remain lazy.
+- **Game.ts** owns overlay order, animation, and input-lock state through an explicit presentation phase. Only `idle` enables board highlights and raycast input; class selection, movement, trap, encounter, combat, drop FX, shop, level-up, and game-over all lock the board. It shows **Choose Your Class** after Play and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens. Restart and dispose bump a generation token so a stale class-preload cannot reopen the board.
+- **Asset preloading** has two boundaries. `main.ts` shows the title screen immediately. **Play** then blocks on measured carousel/opening-dungeon groups before constructing the game. While class selection is visible, `preloadAssets.ts` warms core combat, early-enemy, and Merchant promises in the background; highlighting a ranged class also requests its ranged bundle. Beginning a run waits on only the highlighted class and shows `Preparing [class]…` if that work is still outstanding. Later enemies, advanced potions, future equipment, and reserved animations remain lazy.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
 - **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. Overlay previews share `PreviewStage` for transparent renderer, resize, visibility-aware render, and dispose. `ClassSelectionPreview.ts` still owns carousel models, load tokens, and idle playback. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
+- **Death telemetry** records only the player level at death. `Game.ts` posts `{ level }` to `/api/telemetry/deaths` with `credentials: 'omit'`. The Worker writes `player_level` and a server timestamp to D1. No class, distance, cookies, IPs, or other identifiers are stored.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
 - **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the capped stat package and run-scoped ownership.
@@ -375,7 +405,7 @@ Classes are starting stats and presentation only. Ranger arrows, Mage and Loreke
 
 `src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, Merchant prices, pending level-ups, entities, or RNG state.
 
-**Choose Your Class** appears full-screen after the measured boot preload and after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Gameplay assets continue warming while the player browses. If the highlighted class is not ready when selected, its button temporarily reads `Preparing [class]…`. Until that class is ready and selected, the board has no legal highlights and `GameState` rejects movement.
+**Choose Your Class** appears full-screen after **Play** and the measured boot preload, and again after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Gameplay assets continue warming while the player browses. If the highlighted class is not ready when selected, its button temporarily reads `Preparing [class]…`. Until that class is ready and selected, the board has no legal highlights and `GameState` rejects movement.
 
 Universal run caps (Merchant purchases and level-up rewards share these):
 
@@ -539,7 +569,7 @@ After a winning fight the playback order is: combat log, enemy removal and drop 
 
 ## Death and restart
 
-On death the board stops. Distance is preserved. No further rows or encounters are generated.
+On death the board stops. Distance is preserved. No further rows or encounters are generated. The Worker records the player's level at death as anonymous telemetry.
 
 The overlay shows:
 

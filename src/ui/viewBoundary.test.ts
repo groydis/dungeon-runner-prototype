@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import classSource from './ClassSelectionView.ts?raw';
 import gameOverSource from './GameOverView.ts?raw';
 import hudSource from './HudView.ts?raw';
+import landingSource from './LandingView.ts?raw';
 import levelUpSource from './LevelUpOverlayView.ts?raw';
 import loadingSource from './LoadingView.ts?raw';
 import shopSource from './ShopOverlayView.ts?raw';
@@ -10,6 +11,7 @@ const viewSources = [
   classSource,
   gameOverSource,
   hudSource,
+  landingSource,
   levelUpSource,
   loadingSource,
   shopSource,

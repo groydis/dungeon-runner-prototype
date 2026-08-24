@@ -32,6 +32,10 @@ body,
   background: var(--bg);
 }
 
+#app {
+  position: relative;
+}
+
 body {
   font-family:
     "Iowan Old Style",
@@ -1312,3 +1316,4 @@ body {
     margin-top: 9px;
   }
 }
+

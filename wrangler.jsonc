@@ -1,8 +1,21 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "hollow-mile",
-  "compatibility_date": "2026-08-23",
+  "compatibility_date": "2026-08-24",
+  "main": "worker/index.ts",
+  "observability": {
+    "enabled": true,
+  },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hollow-mile-telemetry",
+      "database_id": "4227b1b5-fe47-48e6-8b46-1ee50585b553",
+    },
+  ],
 }

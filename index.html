@@ -18,8 +18,24 @@
     <div id="app">
       <canvas id="game-canvas"></canvas>
       <div
+        id="landing"
+        class="landing"
+        role="main"
+        aria-labelledby="landing-title"
+      >
+        <div class="landing-card">
+          <p class="landing-kicker">THE ROAD BELOW AWAITS</p>
+          <h1 id="landing-title">THE HOLLOW MILE</h1>
+          <p class="landing-tagline">
+            Choose a class. Advance one row at a time. Survive the dungeon.
+          </p>
+          <button type="button" id="landing-play">PLAY</button>
+        </div>
+      </div>
+      <div
         id="loading-screen"
         class="loading-screen"
+        hidden
         role="status"
         aria-live="polite"
       >
@@ -224,6 +240,7 @@
       <div
         id="class-select"
         class="class-select"
+        hidden
         role="dialog"
         aria-labelledby="class-current-name"
         aria-modal="true"
