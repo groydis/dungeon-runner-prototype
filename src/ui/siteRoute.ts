@@ -1,12 +1,12 @@
 export type SitePage = 'home' | 'classes' | 'about' | 'privacy' | 'support';
 
-const PAGE_TITLES: Record<SitePage, string> = {
-  home: 'The Hollow Mile',
-  classes: 'Classes — The Hollow Mile',
-  about: 'About — The Hollow Mile',
-  privacy: 'Privacy — The Hollow Mile',
-  support: 'Support — The Hollow Mile',
-};
+export const SITE_PAGES: readonly SitePage[] = [
+  'home',
+  'classes',
+  'about',
+  'privacy',
+  'support',
+];
 
 export function isSitePage(value: string | null | undefined): value is SitePage {
   return (
@@ -18,8 +18,20 @@ export function isSitePage(value: string | null | undefined): value is SitePage 
   );
 }
 
+export function normalisedPath(pathname: string): string {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
 export function sitePageFromPath(pathname: string): SitePage {
-  const path = pathname.replace(/\/+$/, '') || '/';
+  return exactSitePageFromPath(pathname) ?? 'home';
+}
+
+/** Known marketing routes only. Unknown paths are not treated as Home. */
+export function exactSitePageFromPath(pathname: string): SitePage | null {
+  const path = normalisedPath(pathname);
+  if (path === '/') {
+    return 'home';
+  }
   if (path === '/classes') {
     return 'classes';
   }
@@ -32,13 +44,9 @@ export function sitePageFromPath(pathname: string): SitePage {
   if (path === '/support') {
     return 'support';
   }
-  return 'home';
+  return null;
 }
 
 export function pathForSitePage(page: SitePage): string {
   return page === 'home' ? '/' : `/${page}`;
-}
-
-export function titleForSitePage(page: SitePage): string {
-  return PAGE_TITLES[page];
 }

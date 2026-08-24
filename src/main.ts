@@ -8,7 +8,8 @@ import { LoadingView } from './ui/LoadingView';
 import { PageOverlay } from './ui/PageOverlay';
 import { SiteNav } from './ui/SiteNav';
 import { WaitlistForms } from './ui/WaitlistForms';
-import { pathForSitePage, sitePageFromPath, titleForSitePage, type SitePage } from './ui/siteRoute';
+import { applySeoToDocument } from './seo/siteSeo';
+import { pathForSitePage, sitePageFromPath, type SitePage } from './ui/siteRoute';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
 if (!canvas) {
@@ -47,7 +48,7 @@ function goTo(page: SitePage): void {
 }
 
 function applyPage(page: SitePage): void {
-  document.title = titleForSitePage(page);
+  applySeoToDocument(page);
   nav.setActive(page);
   nav.show();
   landing.hide();

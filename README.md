@@ -104,7 +104,9 @@ Connect the GitHub repo in **Workers & Pages → Import a repository**, then use
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 
-`wrangler.jsonc` names the Worker `hollow-mile`, serves `./dist` as static assets, and runs the Worker first on `/api/*` so death telemetry and the waitlist can write to D1. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+`wrangler.jsonc` names the Worker `hollow-mile`, serves `./dist` as static assets, and runs the Worker first on `/api/*` plus the public HTML routes (`/`, `/classes`, `/about`, `/privacy`, `/support`). APIs write to D1; HTML routes fetch `index.html` through the assets binding and rewrite title, canonical, Open Graph, and JSON-LD so crawlers see the right page without running JavaScript. Images and other static files stay asset-first. `www.hollowmile.com` and trailing slashes 301 to the apex URL. After the first successful deploy, attach `hollowmile.com` (plus `www` if you want both) under **Custom domains**.
+
+Crawlers also get `/robots.txt`, `/sitemap.xml`, and `/favicon.svg` from `public/`. Unknown paths still fall through as the SPA and keep the Home canonical, so `/play` is not treated as its own page.
 
 Public pages: [Classes](https://hollowmile.com/classes), [Privacy](https://hollowmile.com/privacy), [Support](https://hollowmile.com/support). Privacy and Support are the App Store privacy-policy and support links.
 

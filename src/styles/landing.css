@@ -62,7 +62,7 @@
 }
 
 .landing-card h1,
-.loading-card h1 {
+.loading-card .loading-title {
   line-height: 0.98;
 }
 
@@ -168,7 +168,7 @@
   background-size: cover;
 }
 
-.loading-card h1,
+.loading-card .loading-title,
 .loading-kicker,
 #loading-status,
 #loading-percent {

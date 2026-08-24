@@ -101,7 +101,7 @@ body {
   font-size: 0.66rem;
 }
 
-.loading-card h1 {
+.loading-card .loading-title {
   margin: 5px 0 clamp(30px, 7vh, 54px);
   color: var(--hud);
   font-size: clamp(2.35rem, 8vw, 4.8rem);
@@ -163,7 +163,7 @@ body {
   max-width: 12rem;
 }
 
-.hud-top h1 {
+.hud-top .hud-title {
   margin: 0;
   font-size: clamp(1.25rem, 4.6vw, 1.85rem);
   letter-spacing: 0.03em;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-AU">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -8,19 +8,83 @@
     />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#121316" />
+    <meta name="author" content="Greyden Scott" />
     <meta
       name="description"
-      content="The Hollow Mile — a mobile-first, tile-based dungeon roguelite."
+      content="Play The Hollow Mile free in your browser. A mobile-first dungeon roguelite: choose a class, advance one row at a time, and survive the road below. Coming soon to iOS."
     />
+    <link rel="canonical" href="https://hollowmile.com/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/images/website-hero-1280.jpg" />
+    <meta property="og:site_name" content="The Hollow Mile" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_AU" />
     <meta property="og:title" content="The Hollow Mile" />
     <meta
       property="og:description"
-      content="Choose a class. Advance one row at a time. Survive the dungeon."
+      content="Play The Hollow Mile free in your browser. A mobile-first dungeon roguelite: choose a class, advance one row at a time, and survive the road below. Coming soon to iOS."
     />
-    <meta property="og:image" content="/images/website-hero.jpg" />
+    <meta property="og:url" content="https://hollowmile.com/" />
+    <meta property="og:image" content="https://hollowmile.com/images/website-hero.jpg" />
+    <meta
+      property="og:image:alt"
+      content="A knight and dungeon skeletons standing in a torchlit stone hall."
+    />
+    <meta property="og:image:width" content="1920" />
+    <meta property="og:image:height" content="1080" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/images/website-hero.jpg" />
+    <meta name="twitter:title" content="The Hollow Mile" />
+    <meta
+      name="twitter:description"
+      content="Play The Hollow Mile free in your browser. A mobile-first dungeon roguelite: choose a class, advance one row at a time, and survive the road below. Coming soon to iOS."
+    />
+    <meta name="twitter:image" content="https://hollowmile.com/images/website-hero.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="A knight and dungeon skeletons standing in a torchlit stone hall."
+    />
     <title>The Hollow Mile</title>
+    <script type="application/ld+json" id="seo-json-ld">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "The Hollow Mile",
+            "url": "https://hollowmile.com/",
+            "publisher": {
+              "@type": "Person",
+              "name": "Greyden Scott",
+              "email": "hello@hollowmile.com",
+              "url": "https://hollowmile.com/"
+            }
+          },
+          {
+            "@type": "VideoGame",
+            "name": "The Hollow Mile",
+            "url": "https://hollowmile.com/",
+            "description": "Play The Hollow Mile free in your browser. A mobile-first dungeon roguelite: choose a class, advance one row at a time, and survive the road below. Coming soon to iOS.",
+            "image": "https://hollowmile.com/images/website-hero.jpg",
+            "genre": ["Roguelike", "RolePlayingGame"],
+            "playMode": "SinglePlayer",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "Web browser",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "AUD",
+              "availability": "https://schema.org/InStock"
+            },
+            "author": {
+              "@type": "Person",
+              "name": "Greyden Scott",
+              "email": "hello@hollowmile.com",
+              "url": "https://hollowmile.com/"
+            }
+          }
+        ]
+      }
+    </script>
     <link
       rel="preload"
       as="image"
@@ -422,7 +486,7 @@
       >
         <div class="loading-card">
           <p class="loading-kicker">THE ROAD BELOW AWAITS</p>
-          <h1>THE <span class="title-lock">HOLLOW MILE</span></h1>
+          <p class="loading-title">THE <span class="title-lock">HOLLOW MILE</span></p>
           <p id="loading-status">Preparing the dungeon</p>
           <div
             id="loading-progress"
@@ -440,7 +504,7 @@
       </div>
       <div id="hud">
         <header class="hud-top">
-          <h1>The Hollow Mile</h1>
+          <p class="hud-title">The Hollow Mile</p>
           <div class="health">
             <p id="health-text">HP 20 / 20</p>
             <div

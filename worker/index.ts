@@ -8,6 +8,9 @@ import {
   IOS_WAITLIST_PATH,
   type WaitlistStore,
 } from '../src/waitlist/iosWaitlist';
+import { exactSitePageFromPath } from '../src/ui/siteRoute';
+import { redirectToCanonicalHost } from '../src/seo/hostRedirect';
+import { applySeoToHtml } from './htmlSeo';
 
 function d1DeathStore(db: D1Database): RunDeathStore {
   return {
@@ -33,6 +36,11 @@ function d1WaitlistStore(db: D1Database): WaitlistStore {
 
 export default {
   async fetch(request, env): Promise<Response> {
+    const canonical = redirectToCanonicalHost(request);
+    if (canonical) {
+      return canonical;
+    }
+
     const { pathname } = new URL(request.url);
     if (pathname === RUN_DEATH_TELEMETRY_PATH) {
       return handleRunDeathRequest(request, d1DeathStore(env.DB));
@@ -40,6 +48,13 @@ export default {
     if (pathname === IOS_WAITLIST_PATH) {
       return handleWaitlistRequest(request, d1WaitlistStore(env.DB));
     }
-    return new Response('Not found', { status: 404 });
+
+    const assets = await env.ASSETS.fetch(request);
+    const page = exactSitePageFromPath(pathname);
+    const type = assets.headers.get('content-type') ?? '';
+    if (page && type.includes('text/html')) {
+      return applySeoToHtml(assets, page);
+    }
+    return assets;
   },
 } satisfies ExportedHandler<Env>;
