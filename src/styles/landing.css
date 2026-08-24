@@ -83,8 +83,8 @@
 }
 
 .landing .waitlist-compact {
-  margin: 12px auto 0;
-  max-width: 22rem;
+  width: min(22rem, 100%);
+  margin: 0 auto;
   text-align: left;
 }
 
