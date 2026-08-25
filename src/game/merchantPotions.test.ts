@@ -19,20 +19,20 @@ describe('Merchant potion catalog', () => {
   it('keeps fixed prices and pickup heal amounts', () => {
     expect(POTION_OFFER_IDS).toEqual(['small', 'medium', 'large', 'greater']);
     expect(MERCHANT_POTION_CATALOG.small).toMatchObject({
-      price: 2,
+      price: 4,
       healAmount: 4,
       name: 'Small Potion',
     });
     expect(MERCHANT_POTION_CATALOG.medium).toMatchObject({
-      price: 4,
+      price: 8,
       healAmount: 8,
     });
     expect(MERCHANT_POTION_CATALOG.large).toMatchObject({
-      price: 6,
+      price: 12,
       healAmount: 12,
     });
     expect(MERCHANT_POTION_CATALOG.greater).toMatchObject({
-      price: 9,
+      price: 18,
       healAmount: 16,
     });
     expect(potionEffectText(8)).toBe('Restore up to 8 HP');
@@ -81,8 +81,8 @@ describe('Merchant potion purchases', () => {
     const result = applyPotionPurchase(merchant, 'medium', 20, 14, 20);
     expect(result).toMatchObject({
       success: true,
-      goldSpent: 4,
-      goldRemaining: 16,
+      goldSpent: 8,
+      goldRemaining: 12,
       healthRestored: 6,
       status: 'Bought Medium Potion. Restored 6 HP.',
     });
@@ -102,7 +102,7 @@ describe('Merchant potion purchases', () => {
     );
     expect(early?.potionOffers.map((offer) => offer.id)).toEqual(['small']);
     expect(early?.potionOffers[0]).toMatchObject({
-      cost: 2,
+      cost: 4,
       healAmount: 4,
       available: true,
     });

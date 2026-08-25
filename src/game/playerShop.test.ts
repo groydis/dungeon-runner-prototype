@@ -186,7 +186,7 @@ describe('shop inventory', () => {
     const merchant = new Merchant('merchant-14', 14, 1);
     const view = buildShopView(
       merchant,
-      10,
+      50,
       baseStats(),
       'ranger',
       false,
@@ -209,11 +209,11 @@ describe('GameState shop flow', () => {
       'small',
     ]);
     early.takeDamage(6);
-    early.addGold(2);
+    early.addGold(4);
     const damaged = early.getHudSnapshot().health;
     expect(early.buyPotionOffer('small')).toMatchObject({
       success: true,
-      goldSpent: 2,
+      goldSpent: 4,
       healthRestored: 4,
       status: 'Bought Small Potion. Restored 4 HP.',
     });
@@ -237,10 +237,10 @@ describe('GameState shop flow', () => {
     ]);
     deep.takeDamage(1);
     expect(deep.buyPotionOffer('greater').reason).toBe('unaffordable');
-    deep.addGold(9);
+    deep.addGold(18);
     expect(deep.buyPotionOffer('greater')).toMatchObject({
       success: true,
-      goldSpent: 9,
+      goldSpent: 18,
       healthRestored: 1,
     });
     expect(deep.buyPotionOffer('small').reason).toBe('fullHealth');

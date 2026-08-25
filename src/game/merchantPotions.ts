@@ -35,25 +35,25 @@ export const MERCHANT_POTION_CATALOG: Record<
     id: 'small',
     name: 'Small Potion',
     healAmount: potionHealAmount('potion'),
-    price: 2,
+    price: 4,
   },
   medium: {
     id: 'medium',
     name: 'Medium Potion',
     healAmount: potionHealAmount('potion_medium'),
-    price: 4,
+    price: 8,
   },
   large: {
     id: 'large',
     name: 'Large Potion',
     healAmount: potionHealAmount('potion_large'),
-    price: 6,
+    price: 12,
   },
   greater: {
     id: 'greater',
     name: 'Greater Potion',
     healAmount: potionHealAmount('potion_greater'),
-    price: 9,
+    price: 18,
   },
 };
 

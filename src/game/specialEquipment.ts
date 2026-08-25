@@ -29,22 +29,22 @@ const NO_GAIN = 0;
 export const SPECIAL_EQUIPMENT_BY_CLASS: Readonly<
   Record<PlayerClassId, SpecialEquipmentDefinition>
 > = Object.freeze({
-  rogue: special('venomfangDagger', 'rogue', 'Venomfang Dagger', 'A quick blade with an alchemical edge.', 6, {
+  rogue: special('venomfangDagger', 'rogue', 'Venomfang Dagger', 'A quick blade with an alchemical edge.', 50, {
     dex: 3,
   }),
-  ranger: special('moonpiercerBow', 'ranger', 'Moonpiercer Bow', 'An ornate bow balanced for a sure release.', 6, {
+  ranger: special('moonpiercerBow', 'ranger', 'Moonpiercer Bow', 'An ornate bow balanced for a sure release.', 50, {
     dex: 3,
   }),
-  mage: special('shardcallerStaff', 'mage', 'Shardcaller Staff', 'Arcane fragments orbit its crystal focus.', 7, {
+  mage: special('shardcallerStaff', 'mage', 'Shardcaller Staff', 'Arcane fragments orbit its crystal focus.', 50, {
     con: 3,
   }),
-  knight: special('frostguardArsenal', 'knight', 'Frostguard Arsenal', 'An ice-forged sword paired with a warded shield.', 8, {
+  knight: special('frostguardArsenal', 'knight', 'Frostguard Arsenal', 'An ice-forged sword paired with a warded shield.', 50, {
     def: 3,
   }),
-  barbarian: special('worldbreakerHammer', 'barbarian', 'Worldbreaker Hammer', 'A brutal stone maul made for impossible blows.', 8, {
+  barbarian: special('worldbreakerHammer', 'barbarian', 'Worldbreaker Hammer', 'A brutal stone maul made for impossible blows.', 50, {
     con: 4,
   }),
-  lorekeeper: special('verdantStaff', 'lorekeeper', 'Verdant Staff', 'Living crystal steadies both spell and scholar.', 7, {
+  lorekeeper: special('verdantStaff', 'lorekeeper', 'Verdant Staff', 'Living crystal steadies both spell and scholar.', 50, {
     def: 3,
   }),
 });
