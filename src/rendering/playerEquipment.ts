@@ -120,6 +120,48 @@ const KNIGHT_SHIELD_TIERS: readonly PlayerEquipmentAssetKey[] = [
   'shieldSpikesColor',
 ];
 
+/** Max weapon visual tiers (0-based index) driven by primary-attribute growth. */
+function maxWeaponTier(classId: PlayerRenderKey): number {
+  switch (classId) {
+    case 'rogue':
+      return 1;
+    case 'ranger':
+    case 'mage':
+    case 'lorekeeper':
+    case 'barbarian':
+      return 2;
+    case 'knight':
+      return 0;
+  }
+}
+
+/**
+ * Cosmetic weapon/shield tiers from attribute growth vs class starting values.
+ * Weapon: +1 tier per +3 in primary damage attr (dex for mage, str otherwise).
+ * Armour: +1 tier per +2 DEF growth, capped at knight shield tiers.
+ */
+export function equipmentUpgradeLevelsFromAttributes(
+  classId: PlayerRenderKey,
+  current: Readonly<{ str: number; dex: number; defence: number }>,
+  starting: Readonly<{ str: number; dex: number; defence: number }>,
+): PlayerEquipmentUpgradeLevels {
+  const primaryGrowth =
+    classId === 'mage'
+      ? current.dex - starting.dex
+      : current.str - starting.str;
+  const defenceGrowth = current.defence - starting.defence;
+  return {
+    sharpened: Math.min(
+      maxWeaponTier(classId),
+      Math.max(0, Math.floor(primaryGrowth / 3)),
+    ),
+    armoured: Math.min(
+      KNIGHT_SHIELD_TIERS.length - 1,
+      Math.max(0, Math.floor(defenceGrowth / 2)),
+    ),
+  };
+}
+
 /** Visual equipment only; these entries never alter combat stats or game rules. */
 export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
   Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>

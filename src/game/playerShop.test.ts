@@ -33,50 +33,6 @@ function playerOf(state: GameState) {
   return snapshot;
 }
 
-/**
- * Derived-stat side effects from applying special gains via attributes
- * (mirrors ShopSession.applyPurchaseToPlayer mapping).
- */
-function specialAttackDelta(
-  classId: (typeof PLAYER_CLASS_IDS)[number],
-  gains: { maxHealth: number; attack: number; defence: number; evade: number },
-): number {
-  const maxHpAsCon = Math.floor(gains.maxHealth / 2);
-  const maxHpAsStr = gains.maxHealth % 2;
-  switch (classId) {
-    case 'rogue':
-    case 'ranger':
-      return gains.attack + gains.evade + maxHpAsStr;
-    case 'mage':
-      return gains.attack + gains.evade;
-    case 'knight':
-      return gains.attack + gains.defence + maxHpAsStr;
-    case 'barbarian':
-      return gains.attack + maxHpAsCon + maxHpAsStr;
-    case 'lorekeeper': {
-      const str = 5 + maxHpAsStr;
-      const con = 5 + maxHpAsCon;
-      const def = 5 + gains.defence;
-      const dex = 5 + gains.attack + gains.evade;
-      const ranked = [str, con, def, dex].sort((a, b) => b - a);
-      return ranked[0] + ranked[1] - 10;
-    }
-  }
-}
-
-function specialMaxHealthSideEffect(
-  classId: (typeof PLAYER_CLASS_IDS)[number],
-  gains: { maxHealth: number; attack: number; defence: number },
-): number {
-  // Attack bumps use dex for most classes (no HP). Knight uses def (no HP).
-  // Barbarian attack bumps use con (+2 HP each).
-  if (classId === 'barbarian') {
-    return gains.attack * 2;
-  }
-  // Knight attack bump uses def in ShopSession — no HP. Str only from odd maxHP.
-  return 0;
-}
-
 function createState(options: GameStateOptions = {}): GameState {
   return new GameState({ playerClass: 'ranger', ...options });
 }
@@ -311,49 +267,29 @@ describe('GameState shop flow', () => {
 
       state.addGold(definition.cost);
       const before = playerOf(state);
-      const expectedGains = applicableSpecialEquipmentGains(
-        definition.gains,
-        shopStatSnapshot(before),
-      );
+      const expectedGains = applicableSpecialEquipmentGains(definition.gains);
       expect(state.canBuySpecialEquipment()).toBe(true);
       expect(state.buySpecialEquipment()).toMatchObject({
         success: true,
         offerId: 'specialEquipment',
         specialEquipmentId: definition.id,
         goldSpent: definition.cost,
-        maxHealthGained: expectedGains.maxHealth,
-        attackGained: expectedGains.attack,
-        defenceGained: expectedGains.defence,
-        evadeGained: expectedGains.evade,
+        strGained: expectedGains.str,
+        conGained: expectedGains.con,
+        defGained: expectedGains.def,
+        dexGained: expectedGains.dex,
       });
       const after = playerOf(state);
-      // Flat ATK/DEF/HP gains are applied via attributes; derived DMG/HP can
-      // pick up pair side-effects (e.g. knight DEF also raises ATK).
-      expect(after.stats.maxHealth).toBe(
-        before.stats.maxHealth +
-          expectedGains.maxHealth +
-          specialMaxHealthSideEffect(classId, expectedGains),
-      );
-      expect(after.stats.attack).toBe(
-        before.stats.attack + specialAttackDelta(classId, expectedGains),
-      );
-      expect(after.stats.defence).toBe(
-        before.stats.defence +
-          expectedGains.defence +
-          (classId === 'knight' ? expectedGains.attack : 0),
-      );
-      expect(after.stats.dex).toBe(
-        before.stats.dex +
-          expectedGains.evade +
-          (classId === 'rogue' || classId === 'ranger' || classId === 'mage' || classId === 'lorekeeper'
-            ? expectedGains.attack
-            : 0),
-      );
+      expect(after.stats.str).toBe(before.stats.str + expectedGains.str);
+      expect(after.stats.con).toBe(before.stats.con + expectedGains.con);
+      expect(after.stats.defence).toBe(before.stats.defence + expectedGains.def);
+      expect(after.stats.dex).toBe(before.stats.dex + expectedGains.dex);
       expect(state.hasSpecialEquipment).toBe(true);
       expect(state.getShopView()?.specialOffer).toMatchObject({
         available: false,
         reason: 'owned',
         reasonText: 'Already equipped',
+        statLine: expect.stringMatching(/\+\d+ (STR|CON|DEF|DEX)/),
       });
       expect(state.buySpecialEquipment()).toMatchObject({
         success: false,
@@ -369,13 +305,7 @@ describe('GameState shop flow', () => {
     const player = new Player('knight');
     const definition = specialEquipmentForClass('knight');
     expect(
-      evaluateSpecialEquipmentOffer(
-        null,
-        'knight',
-        definition.cost,
-        shopStatSnapshot(player),
-        false,
-      ).reason,
+      evaluateSpecialEquipmentOffer(null, 'knight', definition.cost, false).reason,
     ).toBe('noShop');
 
     player.increaseStr(100);
@@ -386,7 +316,6 @@ describe('GameState shop flow', () => {
         merchant,
         'knight',
         definition.cost,
-        shopStatSnapshot(player),
         false,
       ).available,
     ).toBe(true);
@@ -395,10 +324,15 @@ describe('GameState shop flow', () => {
         merchant,
         'knight',
         definition.cost,
-        shopStatSnapshot(player),
         false,
-      ).success,
-    ).toBe(true);
+      ),
+    ).toMatchObject({
+      success: true,
+      defGained: 3,
+      strGained: 0,
+      conGained: 0,
+      dexGained: 0,
+    });
   });
 
   it('equips special gear and resets ownership on run reset', () => {

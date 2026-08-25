@@ -249,7 +249,6 @@ export class RunWorld {
       row: monster.row,
       col: monster.col,
       encounterResolved: monster.encounterResolved,
-      perception: monster.perception,
       experience: monster.experience,
       elite: monster.elite,
       stats: createCombatStats(monster.stats),

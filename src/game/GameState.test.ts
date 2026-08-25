@@ -1236,7 +1236,7 @@ describe('player class selection', () => {
     state.addGold(special.cost);
     expect(state.buySpecialEquipment().success).toBe(true);
     // Level-up auto +1 STR/+1 DEX (+2 ATK); free points went to DEF;
-    // special Moonpiercer: +2 ATK via dex +1 evade-as-dex → +3 ATK.
+    // special Moonpiercer: +3 DEX → +3 ATK.
     expect(playerOf(state).stats.attack).toBe(
       getPlayerClassDefinition('ranger').startingStats.attack + 5,
     );

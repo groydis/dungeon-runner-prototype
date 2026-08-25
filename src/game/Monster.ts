@@ -48,10 +48,6 @@ export class Monster {
     return this.definition.renderKey;
   }
 
-  get perception(): number {
-    return this.definition.perception;
-  }
-
   get experience(): number {
     return this.definition.experience;
   }

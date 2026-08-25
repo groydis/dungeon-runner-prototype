@@ -74,7 +74,6 @@ export class ShopSession {
       this.active.merchant,
       player.classId,
       player.gold,
-      shopStatSnapshot(player),
       this.specialOwned,
     ).available;
   }
@@ -94,7 +93,6 @@ export class ShopSession {
       this.active.merchant,
       player.classId,
       player.gold,
-      shopStatSnapshot(player),
       this.specialOwned,
     );
     if (result.success) {
@@ -166,45 +164,10 @@ export class ShopSession {
 
 function applyPurchaseToPlayer(player: Player, result: ShopPurchaseResult): void {
   player.trySpendGold(result.goldSpent);
-  applyMaxHealthGainViaAttributes(player, result.maxHealthGained);
-  bumpDamageAttribute(player, result.attackGained);
-  player.increaseDef(result.defenceGained);
-  if (result.evadeGained > 0) {
-    player.increaseDex(result.evadeGained);
-  }
-}
-
-/** Exact HP raise via str (+1 HP) and con (+2 HP). */
-function applyMaxHealthGainViaAttributes(player: Player, amount: number): void {
-  let left = Math.max(0, Math.floor(amount));
-  while (left >= 2) {
-    player.increaseCon(1);
-    left -= 2;
-  }
-  if (left > 0) {
-    player.increaseStr(left);
-  }
-}
-
-/** Prefer dex (no HP side effect), then def, then con, then str. */
-function bumpDamageAttribute(player: Player, amount: number): void {
-  if (amount <= 0) {
-    return;
-  }
-  switch (player.classId) {
-    case 'rogue':
-    case 'ranger':
-    case 'mage':
-    case 'lorekeeper':
-      player.increaseDex(amount);
-      break;
-    case 'knight':
-      player.increaseDef(amount);
-      break;
-    case 'barbarian':
-      player.increaseCon(amount);
-      break;
-  }
+  player.increaseStr(result.strGained);
+  player.increaseCon(result.conGained);
+  player.increaseDef(result.defGained);
+  player.increaseDex(result.dexGained);
 }
 
 function rejectedPurchase(
@@ -218,10 +181,10 @@ function rejectedPurchase(
     reason,
     goldRemaining,
     goldSpent: 0,
-    maxHealthGained: 0,
-    attackGained: 0,
-    defenceGained: 0,
-    evadeGained: 0,
+    strGained: 0,
+    conGained: 0,
+    defGained: 0,
+    dexGained: 0,
     status,
   };
 }

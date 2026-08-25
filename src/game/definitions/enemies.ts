@@ -58,8 +58,6 @@ export interface EnemyDefinition {
   readonly type: EnemyType;
   readonly name: string;
   readonly startingStats: Readonly<CombatStats>;
-  /** Percent subtracted from player Evade on a side pass. */
-  readonly perception: number;
   readonly experience: number;
   readonly elite: boolean;
   readonly renderKey: EnemyRenderKey;
@@ -95,7 +93,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'skeletonMinion',
       name: 'Skeleton Minion',
       startingStats: enemyStats(15, 5, 5, 1, 9),
-      perception: 0,
       experience: 1,
       elite: false,
       renderKey: 'skeletonMinion',
@@ -105,7 +102,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'cryptGuard',
       name: 'Crypt Guard',
       startingStats: enemyStats(18, 6, 6, 2, 6),
-      perception: 5,
       experience: 2,
       elite: false,
       renderKey: 'cryptGuard',
@@ -115,7 +111,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'skeletonWarrior',
       name: 'Skeleton Warrior',
       startingStats: enemyStats(21, 7, 7, 3, 3),
-      perception: 10,
       experience: 4,
       elite: false,
       // TODO: skeletonWarrior needs its own render key + model once art exists
@@ -126,7 +121,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'boneBrute',
       name: 'Bone Brute',
       startingStats: enemyStats(24, 8, 8, 3, 1),
-      perception: 10,
       experience: 4,
       elite: false,
       renderKey: 'boneBrute',
@@ -136,7 +130,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'skeletonMage',
       name: 'Skeleton Mage',
       startingStats: enemyStats(27, 9, 9, 1, 1),
-      perception: 8,
       experience: 4,
       elite: false,
       renderKey: 'skeletonMage',
@@ -146,7 +139,6 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       type: 'necromancer',
       name: 'Necromancer',
       startingStats: enemyStats(30, 10, 10, 5, 5),
-      perception: 15,
       experience: 10,
       elite: true,
       renderKey: 'necromancer',

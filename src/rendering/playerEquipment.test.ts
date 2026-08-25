@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_RENDER_KEYS } from '../game/definitions/classes';
+import { getPlayerClassDefinition, PLAYER_RENDER_KEYS } from '../game/definitions/classes';
 import { GameState } from '../game/GameState';
 import {
+  equipmentUpgradeLevelsFromAttributes,
   PLAYER_EQUIPMENT_LOADOUTS,
   PLAYER_EQUIPMENT_URLS,
   PLAYER_SPECIAL_EQUIPMENT_LOADOUTS,
@@ -52,7 +53,7 @@ describe('player equipment registry', () => {
     }
   });
 
-  it('maps Sharpened and Armoured shop levels to visible equipment tiers', () => {
+  it('maps attribute-growth upgrade levels to visible equipment tiers', () => {
     expect(
       playerEquipmentLoadout('rogue', { sharpened: 1, armoured: 0 }).map(
         (visual) => visual.assetKey,
@@ -85,6 +86,56 @@ describe('player equipment registry', () => {
         (visual) => visual.assetKey,
       ),
     ).toEqual(['sword1H', 'shieldSpikesColor']);
+  });
+
+  it('derives upgrade tiers from primary-attr and DEF growth', () => {
+    const rangerStart = getPlayerClassDefinition('ranger').startingStats;
+    expect(
+      equipmentUpgradeLevelsFromAttributes('ranger', rangerStart, rangerStart),
+    ).toEqual({ sharpened: 0, armoured: 0 });
+    expect(
+      equipmentUpgradeLevelsFromAttributes(
+        'ranger',
+        { ...rangerStart, str: rangerStart.str + 3 },
+        rangerStart,
+      ),
+    ).toEqual({ sharpened: 1, armoured: 0 });
+    expect(
+      equipmentUpgradeLevelsFromAttributes(
+        'ranger',
+        { ...rangerStart, str: rangerStart.str + 6 },
+        rangerStart,
+      ),
+    ).toEqual({ sharpened: 2, armoured: 0 });
+    expect(
+      equipmentUpgradeLevelsFromAttributes(
+        'ranger',
+        { ...rangerStart, str: rangerStart.str + 9 },
+        rangerStart,
+      ),
+    ).toEqual({ sharpened: 2, armoured: 0 });
+
+    const mageStart = getPlayerClassDefinition('mage').startingStats;
+    expect(
+      equipmentUpgradeLevelsFromAttributes(
+        'mage',
+        { ...mageStart, dex: mageStart.dex + 6, str: mageStart.str + 9 },
+        mageStart,
+      ),
+    ).toEqual({ sharpened: 2, armoured: 0 });
+
+    const knightStart = getPlayerClassDefinition('knight').startingStats;
+    expect(
+      equipmentUpgradeLevelsFromAttributes(
+        'knight',
+        {
+          ...knightStart,
+          str: knightStart.str + 9,
+          defence: knightStart.defence + 16,
+        },
+        knightStart,
+      ),
+    ).toEqual({ sharpened: 0, armoured: 8 });
   });
 
   it('replaces each class loadout with its purchased Fantasy Weapons Bits set', () => {

@@ -9,10 +9,10 @@ export type SpecialEquipmentId =
   | 'verdantStaff';
 
 export interface SpecialEquipmentStatGains {
-  readonly maxHealth: number;
-  readonly attack: number;
-  readonly defence: number;
-  readonly evade: number;
+  readonly str: number;
+  readonly con: number;
+  readonly def: number;
+  readonly dex: number;
 }
 
 export interface SpecialEquipmentDefinition {
@@ -30,27 +30,22 @@ export const SPECIAL_EQUIPMENT_BY_CLASS: Readonly<
   Record<PlayerClassId, SpecialEquipmentDefinition>
 > = Object.freeze({
   rogue: special('venomfangDagger', 'rogue', 'Venomfang Dagger', 'A quick blade with an alchemical edge.', 6, {
-    attack: 2,
-    evade: 1,
+    dex: 3,
   }),
   ranger: special('moonpiercerBow', 'ranger', 'Moonpiercer Bow', 'An ornate bow balanced for a sure release.', 6, {
-    attack: 2,
-    evade: 1,
+    dex: 3,
   }),
   mage: special('shardcallerStaff', 'mage', 'Shardcaller Staff', 'Arcane fragments orbit its crystal focus.', 7, {
-    attack: 3,
+    con: 3,
   }),
   knight: special('frostguardArsenal', 'knight', 'Frostguard Arsenal', 'An ice-forged sword paired with a warded shield.', 8, {
-    attack: 2,
-    defence: 2,
+    def: 3,
   }),
   barbarian: special('worldbreakerHammer', 'barbarian', 'Worldbreaker Hammer', 'A brutal stone maul made for impossible blows.', 8, {
-    maxHealth: 2,
-    attack: 3,
+    con: 4,
   }),
   lorekeeper: special('verdantStaff', 'lorekeeper', 'Verdant Staff', 'Living crystal steadies both spell and scholar.', 7, {
-    attack: 2,
-    defence: 1,
+    def: 3,
   }),
 });
 
@@ -64,37 +59,29 @@ export function specialEquipmentStatLine(
   gains: SpecialEquipmentStatGains,
 ): string {
   const entries: string[] = [];
-  if (gains.maxHealth > 0) entries.push(`+${gains.maxHealth} MAX HP`);
-  if (gains.attack > 0) entries.push(`+${gains.attack} ATK`);
-  if (gains.defence > 0) entries.push(`+${gains.defence} DEF`);
-  if (gains.evade > 0) entries.push(`+${gains.evade} DEX`);
+  if (gains.str > 0) entries.push(`+${gains.str} STR`);
+  if (gains.con > 0) entries.push(`+${gains.con} CON`);
+  if (gains.def > 0) entries.push(`+${gains.def} DEF`);
+  if (gains.dex > 0) entries.push(`+${gains.dex} DEX`);
   return entries.join(' · ');
 }
 
-/** Special equipment always applies its full authored package — no run caps. */
+/** Authored attribute package — no caps or derived-stat plumbing. */
 export function applicableSpecialEquipmentGains(
   gains: SpecialEquipmentStatGains,
-  _current: SpecialEquipmentStatSnapshot,
 ): SpecialEquipmentStatGains {
   return {
-    maxHealth: gains.maxHealth,
-    attack: gains.attack,
-    defence: gains.defence,
-    evade: gains.evade,
+    str: gains.str,
+    con: gains.con,
+    def: gains.def,
+    dex: gains.dex,
   };
-}
-
-export interface SpecialEquipmentStatSnapshot {
-  readonly maxHealth: number;
-  readonly attack: number;
-  readonly defence: number;
-  readonly evade: number;
 }
 
 export function hasSpecialEquipmentGain(
   gains: SpecialEquipmentStatGains,
 ): boolean {
-  return gains.maxHealth + gains.attack + gains.defence + gains.evade > 0;
+  return gains.str + gains.con + gains.def + gains.dex > 0;
 }
 
 function special(
@@ -112,10 +99,10 @@ function special(
     flavour,
     cost,
     gains: Object.freeze({
-      maxHealth: gains.maxHealth ?? NO_GAIN,
-      attack: gains.attack ?? NO_GAIN,
-      defence: gains.defence ?? NO_GAIN,
-      evade: gains.evade ?? NO_GAIN,
+      str: gains.str ?? NO_GAIN,
+      con: gains.con ?? NO_GAIN,
+      def: gains.def ?? NO_GAIN,
+      dex: gains.dex ?? NO_GAIN,
     }),
   });
 }

@@ -59,7 +59,6 @@ export interface MonsterSnapshot {
   readonly row: number;
   readonly col: number;
   readonly encounterResolved: boolean;
-  readonly perception: number;
   readonly experience: number;
   readonly elite: boolean;
   readonly stats: Readonly<CombatStats>;

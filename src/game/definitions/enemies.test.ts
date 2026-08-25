@@ -30,7 +30,6 @@ describe('enemy definitions', () => {
         con: 6,
         dex: 6,
       },
-      perception: 5,
       experience: 2,
       elite: false,
       renderKey: 'cryptGuard',
@@ -48,7 +47,6 @@ describe('enemy definitions', () => {
         con: 7,
         dex: 3,
       },
-      perception: 10,
       experience: 4,
       elite: false,
       renderKey: 'boneBrute',
@@ -66,7 +64,6 @@ describe('enemy definitions', () => {
         con: 8,
         dex: 1,
       },
-      perception: 10,
       experience: 4,
       elite: false,
       renderKey: 'boneBrute',
@@ -106,9 +103,6 @@ describe('enemy definitions', () => {
     const definition = getEnemyDefinition('cryptGuard');
     const monster = createMonster('guard-mut', 'cryptGuard', 20, 0);
     expect(() => {
-      (definition as { perception: number }).perception = 80;
-    }).toThrow(TypeError);
-    expect(() => {
       (definition.startingStats as { attack: number }).attack = 99;
     }).toThrow(TypeError);
     expect(() => {
@@ -120,7 +114,6 @@ describe('enemy definitions', () => {
 
     const fresh = createMonster('guard-fresh', 'cryptGuard', 20, 1);
     expect(fresh.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
-    expect(fresh.perception).toBe(5);
     expect(fresh.experience).toBe(2);
     expect(fresh.definition.dropTable).toEqual(ENEMY_DEFINITIONS.skeletonMinion.dropTable);
   });
