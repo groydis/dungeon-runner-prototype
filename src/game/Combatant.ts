@@ -3,6 +3,9 @@ export interface CombatStats {
   health: number;
   attack: number;
   defence: number;
+  str: number;
+  con: number;
+  dex: number;
 }
 
 export function createCombatStats(stats: Readonly<CombatStats>): CombatStats {
@@ -11,6 +14,9 @@ export function createCombatStats(stats: Readonly<CombatStats>): CombatStats {
     health: stats.health,
     attack: stats.attack,
     defence: stats.defence,
+    str: stats.str,
+    con: stats.con,
+    dex: stats.dex,
   };
 }
 
@@ -21,5 +27,8 @@ export function createPlayerStats(): CombatStats {
     health: 20,
     attack: 5,
     defence: 1,
+    str: 5,
+    con: 5,
+    dex: 5,
   });
 }

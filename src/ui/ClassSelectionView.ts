@@ -142,7 +142,7 @@ export class ClassSelectionView {
     this.healthEl.textContent = String(option.maxHealth);
     this.attackEl.textContent = String(option.attack);
     this.defenceEl.textContent = String(option.defence);
-    this.evadeEl.textContent = String(option.evade);
+    this.evadeEl.textContent = String(option.dex);
     this.selectButton.textContent = this.preparing
       ? `PREPARING ${option.name.toUpperCase()}…`
       : `BEGIN AS ${option.name.toUpperCase()}`;

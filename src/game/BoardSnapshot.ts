@@ -90,7 +90,6 @@ export interface PlayerSnapshot {
   readonly experience: number;
   readonly nextLevelExperience: number | null;
   readonly stats: Readonly<CombatStats>;
-  readonly evade: number;
 }
 
 export interface CollectibleSnapshot {

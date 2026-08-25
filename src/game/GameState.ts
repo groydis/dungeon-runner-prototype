@@ -34,10 +34,11 @@ import {
   type EnemyType,
 } from './definitions/enemies';
 import {
-  applyLevelUpChoice,
+  applyLevelUpAllocation,
   buildLevelUpView,
-  evaluateLevelUpChoice,
-  type LevelUpChoice,
+  isValidLevelUpAllocation,
+  playerAttributeSnapshot,
+  type LevelUpAllocation,
   type LevelUpResult,
   type LevelUpView,
 } from './levelUp';
@@ -48,7 +49,6 @@ import {
   combatVictoryText,
   encounterStartText,
   findAlignedMonsterEncounters,
-  rollAvoidance,
 } from './encounters';
 import { type Monster } from './Monster';
 import {
@@ -72,11 +72,8 @@ import {
 import { RunWorld } from './RunWorld';
 import { ShopSession } from './ShopSession';
 import {
-  shopStatSnapshot,
   type PotionOfferId,
   type PotionPurchaseResult,
-  type ShopOfferId,
-  type ShopProgress,
   type ShopPurchaseResult,
   type ShopView,
 } from './shop';
@@ -113,7 +110,7 @@ export interface HudSnapshot {
   gold: number;
   attack: number;
   defence: number;
-  evade: number;
+  dex: number;
   level: number;
   experience: number;
   nextLevelExperience: number | null;
@@ -147,7 +144,7 @@ export class GameState {
   private _status = '';
   private _runOver = false;
 
-  private readonly rollAvoidance: AvoidanceRoll;
+  private readonly forceAvoidance: AvoidanceRoll | undefined;
   private readonly enemyExperience?: (type: EnemyType) => number;
   private readonly createRng: () => Rng;
   private readonly createDropRng: () => Rng;
@@ -173,9 +170,7 @@ export class GameState {
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
-    this.rollAvoidance =
-      options.rollAvoidance ??
-      ((chance = 0) => rollAvoidance(chance, this.evadeRng));
+    this.forceAvoidance = options.rollAvoidance;
     if (options.playerClass) {
       this.beginRun(options.playerClass);
     }
@@ -225,7 +220,7 @@ export class GameState {
         gold: 0,
         attack: 0,
         defence: 0,
-        evade: 0,
+        dex: 0,
         level: 1,
         experience: 0,
         nextLevelExperience: 3,
@@ -241,7 +236,7 @@ export class GameState {
       gold: this._player.gold,
       attack: stats.attack,
       defence: stats.defence,
-      evade: this._player.evade,
+      dex: stats.dex,
       level: this._player.level,
       experience: this._player.experience,
       nextLevelExperience: this._player.nextLevelExperience,
@@ -279,7 +274,6 @@ export class GameState {
       experience: this._player.experience,
       nextLevelExperience: this._player.nextLevelExperience,
       stats: this._player.stats,
-      evade: this._player.evade,
     });
   }
 
@@ -295,20 +289,20 @@ export class GameState {
     return this.requirePlayer().addExperience(amount);
   }
 
-  increaseAttack(amount: number): number {
-    return this.requirePlayer().increaseAttack(amount);
+  increaseStr(amount: number): number {
+    return this.requirePlayer().increaseStr(amount);
   }
 
-  increaseDefence(amount: number): number {
-    return this.requirePlayer().increaseDefence(amount);
+  increaseCon(amount: number): number {
+    return this.requirePlayer().increaseCon(amount);
   }
 
-  increaseMaxHealth(amount: number): number {
-    return this.requirePlayer().increaseMaxHealth(amount);
+  increaseDef(amount: number): number {
+    return this.requirePlayer().increaseDef(amount);
   }
 
-  increaseEvade(amount: number): number {
-    return this.requirePlayer().increaseEvade(amount);
+  increaseDex(amount: number): number {
+    return this.requirePlayer().increaseDex(amount);
   }
 
   getClassSelectionView(): ClassSelectionView {
@@ -403,24 +397,8 @@ export class GameState {
     return this.shopSession.getShopView(this._player);
   }
 
-  getShopProgressSnapshot(): Readonly<ShopProgress> {
-    return this.shopSession.getProgressSnapshot();
-  }
-
-  canBuyShopOffer(offerId: ShopOfferId): boolean {
-    return this.shopSession.canBuyOffer(this._player, offerId);
-  }
-
   canBuySpecialEquipment(): boolean {
     return this.shopSession.canBuySpecialEquipment(this._player);
-  }
-
-  buyShopOffer(offerId: ShopOfferId): ShopPurchaseResult {
-    const result = this.shopSession.buyOffer(this._player, offerId);
-    if (this._player && this.shopSession.isOpen) {
-      this._status = result.status;
-    }
-    return result;
   }
 
   buySpecialEquipment(): ShopPurchaseResult {
@@ -460,12 +438,11 @@ export class GameState {
     this.shopSession.close();
   }
 
-  applyEvade(target: EncounterTarget, evadeChance?: number): void {
+  applyEvade(target: EncounterTarget): void {
     const monster = this.requireActiveMonster(target.id);
     this._status = encounterStartText({
       kind: 'evade',
       monster: encounterMonsterView(monster),
-      evadeChance,
     });
     this.world.removeMonster(monster);
   }
@@ -567,48 +544,43 @@ export class GameState {
     return buildLevelUpView(
       level,
       this._player.experience,
-      shopStatSnapshot(this._player),
+      playerAttributeSnapshot(this._player),
     );
   }
 
-  chooseLevelUp(choice: LevelUpChoice): LevelUpResult {
+  chooseLevelUp(allocation: LevelUpAllocation): LevelUpResult {
     if (this.pendingLevelUps.length === 0 || !this._player) {
       return {
         success: false,
         reason: 'noLevelUp',
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
+        strGained: 0,
+        conGained: 0,
+        defGained: 0,
+        dexGained: 0,
         pendingRemaining: 0,
         status: 'There is no level-up to claim.',
       };
     }
 
-    const eligibility = evaluateLevelUpChoice(
-      choice,
-      shopStatSnapshot(this._player),
-    );
-    if (!eligibility.available) {
+    if (!isValidLevelUpAllocation(allocation)) {
       return {
         success: false,
-        choice,
-        reason: eligibility.reason ?? 'capped',
-        maxHealthGained: 0,
-        attackGained: 0,
-        defenceGained: 0,
-        evadeGained: 0,
+        reason: 'invalidAllocation',
+        allocation: { ...allocation },
+        strGained: 0,
+        conGained: 0,
+        defGained: 0,
+        dexGained: 0,
         pendingRemaining: this.pendingLevelUps.length,
-        status: eligibility.disabledReason ?? 'That reward is unavailable.',
+        status: 'Spend exactly 2 points across STR, CON, DEF, and DEX.',
       };
     }
 
     this.pendingLevelUps.shift();
-    const applied = applyLevelUpChoice(this._player, choice);
+    const applied = applyLevelUpAllocation(this._player, allocation)!;
     this._status = applied.status;
     return {
       success: true,
-      choice,
       ...applied,
       pendingRemaining: this.pendingLevelUps.length,
     };
@@ -860,9 +832,14 @@ export class GameState {
     }
 
     const events = findAlignedMonsterEncounters(
-      this._player,
+      {
+        row: this._player.row,
+        col: this._player.col,
+        dex: this._player.stats.dex,
+      },
       this.world.livingMonsters(),
-      this.rollAvoidance,
+      this.forceAvoidance,
+      this.evadeRng,
     );
     if (events.length > 0) {
       this._status = events.map(encounterStartText).join(' ');

@@ -1,9 +1,3 @@
-import {
-  PLAYER_ATTACK_CAP,
-  PLAYER_DEFENCE_CAP,
-  PLAYER_EVADE_MAX,
-  PLAYER_MAX_HEALTH_CAP,
-} from './config';
 import { type Merchant } from './Merchant';
 import { type CombatStats } from './Combatant';
 import { type PlayerClassId } from './definitions/classes';
@@ -35,67 +29,13 @@ export {
   merchantPotionStock,
 } from './merchantPotions';
 
-export const SHOP_OFFER_IDS = [
-  'vitality',
-  'sharpened',
-  'armoured',
-  'evasive',
-] as const;
-
-export type ShopOfferId = (typeof SHOP_OFFER_IDS)[number];
-
 export type ShopUnavailableReason =
   | 'noShop'
   | 'noClass'
   | 'unaffordable'
-  | 'capped'
   | 'owned';
 
-export type ShopStatKey = 'maxHealth' | 'attack' | 'defence' | 'evade';
-
-export const SHOP_STAT_GAIN = 1;
-
-export interface ShopOfferCatalogEntry {
-  title: string;
-  description: string;
-  firstPrice: number;
-  cap: number;
-  stat: ShopStatKey;
-}
-
-export const SHOP_OFFER_CATALOG: Record<ShopOfferId, ShopOfferCatalogEntry> = {
-  vitality: {
-    title: 'Vitality',
-    description: '+1 max HP',
-    firstPrice: 2,
-    cap: PLAYER_MAX_HEALTH_CAP,
-    stat: 'maxHealth',
-  },
-  sharpened: {
-    title: 'Sharpened',
-    description: '+1 attack',
-    firstPrice: 3,
-    cap: PLAYER_ATTACK_CAP,
-    stat: 'attack',
-  },
-  armoured: {
-    title: 'Armoured',
-    description: '+1 defence',
-    firstPrice: 3,
-    cap: PLAYER_DEFENCE_CAP,
-    stat: 'defence',
-  },
-  evasive: {
-    title: 'Evasive',
-    description: '+1 Evade',
-    firstPrice: 2,
-    cap: PLAYER_EVADE_MAX,
-    stat: 'evade',
-  },
-};
-
-export type ShopProgress = Record<ShopOfferId, number>;
-
+/** Snapshot used when evaluating special-equipment gains. */
 export interface ShopStatSnapshot {
   maxHealth: number;
   attack: number;
@@ -105,18 +45,6 @@ export interface ShopStatSnapshot {
 
 export interface ActiveShop {
   merchant: Merchant;
-}
-
-export interface ShopOfferView {
-  id: ShopOfferId;
-  title: string;
-  description: string;
-  currentValue: number;
-  nextValue: number;
-  cost: number;
-  available: boolean;
-  reason?: ShopUnavailableReason;
-  reasonText?: string;
 }
 
 export interface ShopSpecialOfferView {
@@ -146,13 +74,12 @@ export interface PotionOfferView {
 export interface ShopView {
   gold: number;
   potionOffers: PotionOfferView[];
-  offers: ShopOfferView[];
   specialOffer: ShopSpecialOfferView | null;
 }
 
 export interface ShopPurchaseResult {
   success: boolean;
-  offerId?: ShopOfferId | 'specialEquipment';
+  offerId?: 'specialEquipment';
   specialEquipmentId?: SpecialEquipmentId;
   reason?: ShopUnavailableReason;
   goldRemaining: number;
@@ -178,66 +105,22 @@ export function createActiveShop(merchant: Merchant): ActiveShop {
   return { merchant };
 }
 
-export function createShopProgress(): ShopProgress {
-  return {
-    vitality: 0,
-    sharpened: 0,
-    armoured: 0,
-    evasive: 0,
-  };
-}
-
 export function shopStatSnapshot(player: {
   stats: CombatStats;
-  evade: number;
 }): ShopStatSnapshot {
   const stats = player.stats;
   return {
     maxHealth: stats.maxHealth,
     attack: stats.attack,
     defence: stats.defence,
-    evade: player.evade,
+    evade: stats.dex,
   };
-}
-
-export function shopOfferPrice(offerId: ShopOfferId, progress: ShopProgress): number {
-  return SHOP_OFFER_CATALOG[offerId].firstPrice + progress[offerId];
-}
-
-export function shopStatValue(
-  offerId: ShopOfferId,
-  stats: ShopStatSnapshot,
-): number {
-  return stats[SHOP_OFFER_CATALOG[offerId].stat];
-}
-
-export function evaluateShopOffer(
-  merchant: Merchant | null,
-  offerId: ShopOfferId,
-  gold: number,
-  stats: ShopStatSnapshot,
-  progress: ShopProgress,
-): { available: boolean; reason?: ShopUnavailableReason } {
-  if (!merchant) {
-    return { available: false, reason: 'noShop' };
-  }
-
-  if (shopStatValue(offerId, stats) >= SHOP_OFFER_CATALOG[offerId].cap) {
-    return { available: false, reason: 'capped' };
-  }
-
-  if (gold < shopOfferPrice(offerId, progress)) {
-    return { available: false, reason: 'unaffordable' };
-  }
-
-  return { available: true };
 }
 
 export function buildShopView(
   merchant: Merchant | null,
   gold: number,
   stats: ShopStatSnapshot,
-  progress: ShopProgress,
   playerClassId?: PlayerClassId,
   specialEquipmentOwned = false,
   health = stats.maxHealth,
@@ -251,25 +134,6 @@ export function buildShopView(
     potionOffers: merchantPotionStock(merchant.row).map((definition) =>
       buildPotionOfferView(merchant, definition.id, gold, health, stats.maxHealth),
     ),
-    offers: SHOP_OFFER_IDS.map((id) => {
-      const catalog = SHOP_OFFER_CATALOG[id];
-      const currentValue = shopStatValue(id, stats);
-      const evaluation = evaluateShopOffer(merchant, id, gold, stats, progress);
-      return {
-        id,
-        title: catalog.title,
-        description: catalog.description,
-        currentValue,
-        nextValue:
-          currentValue >= catalog.cap ? currentValue : currentValue + SHOP_STAT_GAIN,
-        cost: shopOfferPrice(id, progress),
-        available: evaluation.available,
-        reason: evaluation.reason,
-        reasonText: evaluation.reason
-          ? unavailableReasonText(evaluation.reason)
-          : undefined,
-      };
-    }),
     specialOffer: playerClassId
       ? buildSpecialEquipmentOfferView(
           merchant,
@@ -283,9 +147,6 @@ export function buildShopView(
 }
 
 export function unavailableReasonText(reason: ShopUnavailableReason): string {
-  if (reason === 'capped') {
-    return 'Already at maximum';
-  }
   if (reason === 'unaffordable') {
     return 'Not enough gold';
   }
@@ -314,7 +175,7 @@ export function evaluateSpecialEquipmentOffer(
   const definition = specialEquipmentForClass(classId);
   const gains = applicableSpecialEquipmentGains(definition.gains, stats);
   if (!hasSpecialEquipmentGain(gains)) {
-    return { available: false, reason: 'capped' };
+    return { available: false, reason: 'owned' };
   }
   if (gold < definition.cost) {
     return { available: false, reason: 'unaffordable' };
@@ -338,11 +199,7 @@ export function applySpecialEquipmentPurchase(
     owned,
   );
   if (!evaluation.available) {
-    return emptyPurchase(
-      'specialEquipment',
-      gold,
-      evaluation.reason ?? 'noShop',
-    );
+    return emptyPurchase(gold, evaluation.reason ?? 'noShop');
   }
   const gains = applicableSpecialEquipmentGains(definition.gains, stats);
   return {
@@ -356,35 +213,6 @@ export function applySpecialEquipmentPurchase(
     defenceGained: gains.defence,
     evadeGained: gains.evade,
     status: `You equip ${definition.name}. ${specialEquipmentStatLine(gains)}.`,
-  };
-}
-
-export function applyShopPurchase(
-  merchant: Merchant | null,
-  offerId: ShopOfferId,
-  gold: number,
-  stats: ShopStatSnapshot,
-  progress: ShopProgress,
-): ShopPurchaseResult {
-  const evaluation = evaluateShopOffer(merchant, offerId, gold, stats, progress);
-  if (!evaluation.available) {
-    return emptyPurchase(offerId, gold, evaluation.reason ?? 'noShop');
-  }
-
-  const cost = shopOfferPrice(offerId, progress);
-  progress[offerId] += 1;
-  const nextValue = shopStatValue(offerId, stats) + SHOP_STAT_GAIN;
-
-  return {
-    success: true,
-    offerId,
-    goldRemaining: gold - cost,
-    goldSpent: cost,
-    maxHealthGained: offerId === 'vitality' ? SHOP_STAT_GAIN : 0,
-    attackGained: offerId === 'sharpened' ? SHOP_STAT_GAIN : 0,
-    defenceGained: offerId === 'armoured' ? SHOP_STAT_GAIN : 0,
-    evadeGained: offerId === 'evasive' ? SHOP_STAT_GAIN : 0,
-    status: purchaseStatus(offerId, nextValue),
   };
 }
 
@@ -426,13 +254,12 @@ export function applyPotionPurchase(
 }
 
 function emptyPurchase(
-  offerId: ShopOfferId | 'specialEquipment',
   gold: number,
   reason: ShopUnavailableReason,
 ): ShopPurchaseResult {
   return {
     success: false,
-    offerId,
+    offerId: 'specialEquipment',
     reason,
     goldRemaining: gold,
     goldSpent: 0,
@@ -523,17 +350,4 @@ function buildSpecialEquipmentOfferView(
       ? unavailableReasonText(evaluation.reason)
       : undefined,
   };
-}
-
-function purchaseStatus(offerId: ShopOfferId, nextValue: number): string {
-  if (offerId === 'vitality') {
-    return `You buy Vitality. Max HP is now ${nextValue}.`;
-  }
-  if (offerId === 'sharpened') {
-    return `You buy Sharpened. Attack is now ${nextValue}.`;
-  }
-  if (offerId === 'armoured') {
-    return `You buy Armoured. Defence is now ${nextValue}.`;
-  }
-  return `You buy Evasive. Evade is now ${nextValue}.`;
 }

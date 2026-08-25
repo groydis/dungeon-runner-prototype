@@ -11,7 +11,6 @@ import {
 import {
   applyPotionPurchase,
   buildShopView,
-  createShopProgress,
   shopStatSnapshot,
 } from './shop';
 import { Player } from './Player';
@@ -97,7 +96,6 @@ describe('Merchant potion purchases', () => {
       new Merchant('m-14', 14, 1),
       player.gold,
       shopStatSnapshot(player),
-      createShopProgress(),
       player.classId,
       false,
       player.stats.health,
@@ -113,7 +111,6 @@ describe('Merchant potion purchases', () => {
       new Merchant('m-42', 42, 1),
       player.gold,
       shopStatSnapshot(player),
-      createShopProgress(),
       player.classId,
       false,
       player.stats.health,

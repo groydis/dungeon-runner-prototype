@@ -1,198 +1,132 @@
-import {
-  PLAYER_ATTACK_CAP,
-  PLAYER_DEFENCE_CAP,
-  PLAYER_EVADE_MAX,
-  PLAYER_MAX_HEALTH_CAP,
-} from './config';
 import { type Player } from './Player';
 import { nextLevelExperience } from './progression';
 
-export type LevelUpChoice = 'vitality' | 'sharpened' | 'armoured' | 'evasive';
+/** Free points to distribute on each level-up (after the automatic +1 to all). */
+export const LEVEL_UP_FREE_POINTS = 2;
 
-export const LEVEL_UP_CHOICES: readonly LevelUpChoice[] = [
-  'vitality',
-  'sharpened',
-  'armoured',
-  'evasive',
-];
-
-export const LEVEL_UP_VITALITY_MAX_HEALTH = 1;
-export const LEVEL_UP_SHARPENED_ATTACK = 1;
-export const LEVEL_UP_ARMOURED_DEFENCE = 1;
-export const LEVEL_UP_EVASIVE_EVADE = 5;
-
-export type LevelUpUnavailableReason = 'noLevelUp' | 'capped';
-
-export interface LevelUpChoiceView {
-  id: LevelUpChoice;
-  title: string;
-  description: string;
-  available: boolean;
-  reason?: Exclude<LevelUpUnavailableReason, 'noLevelUp'>;
-  disabledReason?: string;
+export interface LevelUpAllocation {
+  str: number;
+  con: number;
+  def: number;
+  dex: number;
 }
+
+export type LevelUpUnavailableReason = 'noLevelUp' | 'invalidAllocation';
+
+export type LevelUpAttributeId = keyof LevelUpAllocation;
+
+export const LEVEL_UP_ATTRIBUTES: readonly LevelUpAttributeId[] = [
+  'str',
+  'con',
+  'def',
+  'dex',
+];
 
 export interface LevelUpView {
   level: number;
   experience: number;
   nextLevelExperience: number | null;
-  choices: LevelUpChoiceView[];
+  freePoints: number;
+  /** Current attributes shown for context while allocating. */
+  attributes: LevelUpAllocation;
 }
 
 export interface LevelUpResult {
   success: boolean;
-  choice?: LevelUpChoice;
   reason?: LevelUpUnavailableReason;
-  maxHealthGained: number;
-  attackGained: number;
-  defenceGained: number;
-  evadeGained: number;
+  allocation?: LevelUpAllocation;
+  strGained: number;
+  conGained: number;
+  defGained: number;
+  dexGained: number;
   pendingRemaining: number;
   status: string;
 }
 
-export const LEVEL_UP_CATALOG: Record<
-  LevelUpChoice,
-  { title: string; description: string }
-> = {
-  vitality: {
-    title: 'Vitality',
-    description: `+${LEVEL_UP_VITALITY_MAX_HEALTH} max HP`,
-  },
-  sharpened: {
-    title: 'Sharpened',
-    description: `+${LEVEL_UP_SHARPENED_ATTACK} attack`,
-  },
-  armoured: {
-    title: 'Armoured',
-    description: `+${LEVEL_UP_ARMOURED_DEFENCE} defence`,
-  },
-  evasive: {
-    title: 'Evasive',
-    description: `+${LEVEL_UP_EVASIVE_EVADE} Evade (max ${PLAYER_EVADE_MAX})`,
-  },
-};
-
-export interface LevelUpStatSnapshot {
-  maxHealth: number;
-  attack: number;
-  defence: number;
-  evade: number;
+export function emptyLevelUpAllocation(): LevelUpAllocation {
+  return { str: 0, con: 0, def: 0, dex: 0 };
 }
 
-export const LEVEL_UP_CAPS: Record<LevelUpChoice, number> = {
-  vitality: PLAYER_MAX_HEALTH_CAP,
-  sharpened: PLAYER_ATTACK_CAP,
-  armoured: PLAYER_DEFENCE_CAP,
-  evasive: PLAYER_EVADE_MAX,
-};
+export function allocationSum(allocation: LevelUpAllocation): number {
+  return allocation.str + allocation.con + allocation.def + allocation.dex;
+}
 
-export const LEVEL_UP_CAPPED_REASONS: Record<LevelUpChoice, string> = {
-  vitality: `Max HP is already at maximum (${PLAYER_MAX_HEALTH_CAP}).`,
-  sharpened: `Attack is already at maximum (${PLAYER_ATTACK_CAP}).`,
-  armoured: `Defence is already at maximum (${PLAYER_DEFENCE_CAP}).`,
-  evasive: `Evade is already at maximum (${PLAYER_EVADE_MAX}).`,
-};
-
-export const LEVEL_UP_EVASIVE_CAPPED_REASON = LEVEL_UP_CAPPED_REASONS.evasive;
-
-export function evaluateLevelUpChoice(
-  choice: LevelUpChoice,
-  stats: LevelUpStatSnapshot,
-): { available: boolean; reason?: 'capped'; disabledReason?: string } {
-  const current = currentLevelUpStat(choice, stats);
-  if (current >= LEVEL_UP_CAPS[choice]) {
-    return {
-      available: false,
-      reason: 'capped',
-      disabledReason: LEVEL_UP_CAPPED_REASONS[choice],
-    };
+export function isValidLevelUpAllocation(
+  allocation: LevelUpAllocation,
+): boolean {
+  for (const key of LEVEL_UP_ATTRIBUTES) {
+    const value = allocation[key];
+    if (!Number.isInteger(value) || value < 0) {
+      return false;
+    }
   }
-  return { available: true };
+  return allocationSum(allocation) === LEVEL_UP_FREE_POINTS;
 }
 
 export function buildLevelUpView(
   level: number,
   experience: number,
-  stats: LevelUpStatSnapshot,
+  attributes: LevelUpAllocation,
 ): LevelUpView {
   return {
     level,
     experience,
     nextLevelExperience: nextLevelExperience(experience),
-    choices: LEVEL_UP_CHOICES.map((id) => {
-      const evaluation = evaluateLevelUpChoice(id, stats);
-      return {
-        id,
-        title: LEVEL_UP_CATALOG[id].title,
-        description: LEVEL_UP_CATALOG[id].description,
-        available: evaluation.available,
-        reason: evaluation.reason,
-        disabledReason: evaluation.disabledReason,
-      };
-    }),
+    freePoints: LEVEL_UP_FREE_POINTS,
+    attributes: { ...attributes },
   };
 }
 
-function currentLevelUpStat(
-  choice: LevelUpChoice,
-  stats: LevelUpStatSnapshot,
-): number {
-  if (choice === 'vitality') {
-    return stats.maxHealth;
+/**
+ * Automatic +1 to every attribute, plus the player's free-point allocation.
+ * Rejects (no partial apply) if the allocation is invalid.
+ */
+export function applyLevelUpAllocation(
+  player: Player,
+  allocation: LevelUpAllocation,
+): Omit<LevelUpResult, 'success' | 'pendingRemaining' | 'reason'> | null {
+  if (!isValidLevelUpAllocation(allocation)) {
+    return null;
   }
-  if (choice === 'sharpened') {
-    return stats.attack;
-  }
-  if (choice === 'armoured') {
-    return stats.defence;
-  }
-  return stats.evade;
+
+  const strGained = 1 + allocation.str;
+  const conGained = 1 + allocation.con;
+  const defGained = 1 + allocation.def;
+  const dexGained = 1 + allocation.dex;
+
+  player.increaseStr(strGained);
+  player.increaseCon(conGained);
+  player.increaseDef(defGained);
+  player.increaseDex(dexGained);
+
+  const stats = player.stats;
+  return {
+    allocation: { ...allocation },
+    strGained,
+    conGained,
+    defGained,
+    dexGained,
+    status:
+      `Level up: +1 all stats, plus ${allocationSummary(allocation)}. ` +
+      `Now STR ${stats.str} · CON ${stats.con} · DEF ${stats.defence} · DEX ${stats.dex}.`,
+  };
 }
 
-export function applyLevelUpChoice(player: Player, choice: LevelUpChoice): {
-  maxHealthGained: number;
-  attackGained: number;
-  defenceGained: number;
-  evadeGained: number;
-  status: string;
-} {
-  if (choice === 'vitality') {
-    const maxHealthGained = player.increaseMaxHealth(LEVEL_UP_VITALITY_MAX_HEALTH);
-    return {
-      maxHealthGained,
-      attackGained: 0,
-      defenceGained: 0,
-      evadeGained: 0,
-      status: `Vitality: max HP is now ${player.stats.maxHealth}.`,
-    };
-  }
-  if (choice === 'sharpened') {
-    const attackGained = player.increaseAttack(LEVEL_UP_SHARPENED_ATTACK);
-    return {
-      maxHealthGained: 0,
-      attackGained,
-      defenceGained: 0,
-      evadeGained: 0,
-      status: `Sharpened: attack is now ${player.stats.attack}.`,
-    };
-  }
-  if (choice === 'armoured') {
-    const defenceGained = player.increaseDefence(LEVEL_UP_ARMOURED_DEFENCE);
-    return {
-      maxHealthGained: 0,
-      attackGained: 0,
-      defenceGained,
-      evadeGained: 0,
-      status: `Armoured: defence is now ${player.stats.defence}.`,
-    };
-  }
-  const evadeGained = player.increaseEvade(LEVEL_UP_EVASIVE_EVADE);
+function allocationSummary(allocation: LevelUpAllocation): string {
+  const parts = LEVEL_UP_ATTRIBUTES.filter((key) => allocation[key] > 0).map(
+    (key) => `+${allocation[key]} ${key.toUpperCase()}`,
+  );
+  return parts.length > 0 ? parts.join(', ') : 'no free points spent';
+}
+
+export function playerAttributeSnapshot(player: {
+  stats: { str: number; con: number; defence: number; dex: number };
+}): LevelUpAllocation {
+  const stats = player.stats;
   return {
-    maxHealthGained: 0,
-    attackGained: 0,
-    defenceGained: 0,
-    evadeGained,
-    status: `Evasive: Evade is now ${player.evade}.`,
+    str: stats.str,
+    con: stats.con,
+    def: stats.defence,
+    dex: stats.dex,
   };
 }

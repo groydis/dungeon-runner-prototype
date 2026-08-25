@@ -4,8 +4,8 @@ import { experienceHudText, levelHudText } from './LevelUpOverlayView';
 
 export type { HudSnapshot };
 
-export function evadeHudText(evade: number): string {
-  return `EVA: ${evade}`;
+export function evadeHudText(dex: number): string {
+  return `DEX: ${dex}`;
 }
 
 export function goldHudText(gold: number): string {
@@ -54,7 +54,7 @@ export class HudView {
     this.goldEl.textContent = goldHudText(snapshot.gold);
     this.attackEl.textContent = attackHudText(snapshot.attack);
     this.defenceEl.textContent = armourHudText(snapshot.defence);
-    this.evadeEl.textContent = evadeHudText(snapshot.evade);
+    this.evadeEl.textContent = evadeHudText(snapshot.dex);
     this.levelEl.textContent = levelHudText(snapshot.level);
     this.experienceEl.textContent = experienceHudText(
       snapshot.experience,

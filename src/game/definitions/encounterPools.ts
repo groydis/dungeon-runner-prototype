@@ -23,7 +23,8 @@ export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
     entries: [
       { item: 'skeletonMinion', weight: 25 },
       { item: 'cryptGuard', weight: 30 },
-      { item: 'boneBrute', weight: 22 },
+      { item: 'skeletonWarrior', weight: 11 },
+      { item: 'boneBrute', weight: 11 },
       { item: 'skeletonMage', weight: 15 },
       { item: 'necromancer', weight: 8 },
     ],
@@ -33,7 +34,8 @@ export const ENCOUNTER_POOLS: readonly EncounterPoolBand[] = [
     entries: [
       { item: 'skeletonMinion', weight: 40 },
       { item: 'cryptGuard', weight: 30 },
-      { item: 'boneBrute', weight: 20 },
+      { item: 'skeletonWarrior', weight: 10 },
+      { item: 'boneBrute', weight: 10 },
       { item: 'skeletonMage', weight: 10 },
     ],
   },

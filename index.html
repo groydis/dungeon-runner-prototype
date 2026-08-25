@@ -530,7 +530,7 @@
             <p id="gold">G: 0</p>
             <p id="attack">ATK: —</p>
             <p id="defence">ARM: —</p>
-            <p id="evade">EVA: —</p>
+            <p id="evade">DEX: —</p>
           </div>
         </header>
         <div class="hud-bottom">
@@ -594,7 +594,7 @@
                   </span>
                   <span id="shop-special-title" class="shop-special-title">Moonpiercer Bow</span>
                   <span id="shop-special-desc" class="shop-special-desc">An ornate bow balanced for a sure release.</span>
-                  <span id="shop-special-stats" class="shop-special-stats">+2 ATK · +1 EVA</span>
+                  <span id="shop-special-stats" class="shop-special-stats">+2 ATK · +1 DEX</span>
                   <span id="shop-special-reason" class="shop-special-reason"></span>
                 </span>
                 <span class="shop-special-preview-stage" aria-hidden="true">
@@ -689,29 +689,6 @@
                   </span>
                 </button>
               </div>
-              <p id="shop-inventory-title" class="shop-section-title">RUN UPGRADES</p>
-              <div class="shop-offers-grid">
-                <button type="button" id="shop-offer-vitality" class="shop-offer" aria-label="Vitality, 2 gold. +1 max HP">
-                  <span class="shop-offer-heading"><span id="shop-vitality-title" class="shop-offer-title">Vitality</span><span id="shop-vitality-cost" class="shop-offer-cost">2 G</span></span>
-                  <span id="shop-vitality-desc" class="shop-offer-desc">+1 max HP (20 → 21)</span>
-                  <span id="shop-vitality-reason" class="shop-offer-reason"></span>
-                </button>
-                <button type="button" id="shop-offer-sharpened" class="shop-offer" aria-label="Sharpened, 3 gold. +1 attack">
-                  <span class="shop-offer-heading"><span id="shop-sharpened-title" class="shop-offer-title">Sharpened</span><span id="shop-sharpened-cost" class="shop-offer-cost">3 G</span></span>
-                  <span id="shop-sharpened-desc" class="shop-offer-desc">+1 attack (5 → 6)</span>
-                  <span id="shop-sharpened-reason" class="shop-offer-reason"></span>
-                </button>
-                <button type="button" id="shop-offer-armoured" class="shop-offer" aria-label="Armoured, 3 gold. +1 defence">
-                  <span class="shop-offer-heading"><span id="shop-armoured-title" class="shop-offer-title">Armoured</span><span id="shop-armoured-cost" class="shop-offer-cost">3 G</span></span>
-                  <span id="shop-armoured-desc" class="shop-offer-desc">+1 defence (1 → 2)</span>
-                  <span id="shop-armoured-reason" class="shop-offer-reason"></span>
-                </button>
-                <button type="button" id="shop-offer-evasive" class="shop-offer" aria-label="Evasive, 2 gold. +1 Evade">
-                  <span class="shop-offer-heading"><span id="shop-evasive-title" class="shop-offer-title">Evasive</span><span id="shop-evasive-cost" class="shop-offer-cost">2 G</span></span>
-                  <span id="shop-evasive-desc" class="shop-offer-desc">+1 Evade (1 → 2)</span>
-                  <span id="shop-evasive-reason" class="shop-offer-reason"></span>
-                </button>
-              </div>
               <button type="button" id="shop-leave" aria-label="Leave the travelling merchant">
                 BACK TO THE DUNGEON
               </button>
@@ -731,45 +708,34 @@
           <h2 id="level-up-title">LEVEL UP</h2>
           <p id="level-up-level">Level 2</p>
           <p id="level-up-xp">XP: 3 / 7</p>
-          <button
-            type="button"
-            id="level-up-vitality"
-            class="level-up-choice"
-            aria-label="Vitality. +1 max HP"
-          >
-            <span id="level-up-vitality-title" class="level-up-choice-title">Vitality</span>
-            <span id="level-up-vitality-desc" class="level-up-choice-desc">+1 max HP</span>
-            <span id="level-up-vitality-reason" class="level-up-choice-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="level-up-sharpened"
-            class="level-up-choice"
-            aria-label="Sharpened. +1 attack"
-          >
-            <span id="level-up-sharpened-title" class="level-up-choice-title">Sharpened</span>
-            <span id="level-up-sharpened-desc" class="level-up-choice-desc">+1 attack</span>
-            <span id="level-up-sharpened-reason" class="level-up-choice-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="level-up-armoured"
-            class="level-up-choice"
-            aria-label="Armoured. +1 defence"
-          >
-            <span id="level-up-armoured-title" class="level-up-choice-title">Armoured</span>
-            <span id="level-up-armoured-desc" class="level-up-choice-desc">+1 defence</span>
-            <span id="level-up-armoured-reason" class="level-up-choice-reason"></span>
-          </button>
-          <button
-            type="button"
-            id="level-up-evasive"
-            class="level-up-choice"
-            aria-label="Evasive. +5 Evade"
-          >
-            <span id="level-up-evasive-title" class="level-up-choice-title">Evasive</span>
-            <span id="level-up-evasive-desc" class="level-up-choice-desc">+5 Evade (max 20)</span>
-            <span id="level-up-evasive-reason" class="level-up-choice-reason"></span>
+          <p id="level-up-points">Free points remaining: 2 / 2</p>
+          <p class="level-up-hint">+1 to every attribute is automatic. Assign 2 free points:</p>
+          <div class="level-up-stat-row">
+            <span class="level-up-stat-label">STR</span>
+            <button type="button" id="level-up-str-minus" class="level-up-step" aria-label="Decrease STR">−</button>
+            <span id="level-up-str-value" class="level-up-stat-value">0</span>
+            <button type="button" id="level-up-str-plus" class="level-up-step" aria-label="Increase STR">+</button>
+          </div>
+          <div class="level-up-stat-row">
+            <span class="level-up-stat-label">CON</span>
+            <button type="button" id="level-up-con-minus" class="level-up-step" aria-label="Decrease CON">−</button>
+            <span id="level-up-con-value" class="level-up-stat-value">0</span>
+            <button type="button" id="level-up-con-plus" class="level-up-step" aria-label="Increase CON">+</button>
+          </div>
+          <div class="level-up-stat-row">
+            <span class="level-up-stat-label">DEF</span>
+            <button type="button" id="level-up-def-minus" class="level-up-step" aria-label="Decrease DEF">−</button>
+            <span id="level-up-def-value" class="level-up-stat-value">0</span>
+            <button type="button" id="level-up-def-plus" class="level-up-step" aria-label="Increase DEF">+</button>
+          </div>
+          <div class="level-up-stat-row">
+            <span class="level-up-stat-label">DEX</span>
+            <button type="button" id="level-up-dex-minus" class="level-up-step" aria-label="Decrease DEX">−</button>
+            <span id="level-up-dex-value" class="level-up-stat-value">0</span>
+            <button type="button" id="level-up-dex-plus" class="level-up-step" aria-label="Increase DEX">+</button>
+          </div>
+          <button type="button" id="level-up-confirm" class="level-up-confirm" disabled>
+            Confirm
           </button>
         </div>
       </div>
@@ -815,7 +781,7 @@
               <span><small>HEALTH</small><strong id="class-stat-health">18</strong></span>
               <span><small>ATTACK</small><strong id="class-stat-attack">5</strong></span>
               <span><small>DEFENCE</small><strong id="class-stat-defence">1</strong></span>
-              <span><small>EVADE</small><strong id="class-stat-evade">6</strong></span>
+              <span><small>DEX</small><strong id="class-stat-evade">8</strong></span>
             </div>
             <button type="button" id="class-select-current">BEGIN AS ROGUE</button>
             <p class="class-swipe-hint">SWIPE OR USE THE ARROWS</p>

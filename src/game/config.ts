@@ -30,18 +30,6 @@ export const SAFE_ROWS_AFTER_START = 3;
 export const GOLD_AMOUNT = 1;
 export const POTION_HEAL = 4;
 
-/**
- * Encounter-helper fallback when no player Evade is supplied.
- * Live player Evade comes from the selected class definition.
- */
-export const PLAYER_BASE_EVADE = 1;
-
-/** Universal run caps for Merchant purchases and level-up rewards. */
-export const PLAYER_MAX_HEALTH_CAP = 35;
-export const PLAYER_ATTACK_CAP = 15;
-export const PLAYER_DEFENCE_CAP = 10;
-export const PLAYER_EVADE_MAX = 20;
-
 /** First shop at this row, then every N rows: 14, 28, 42, … */
 export const SHOP_ROW_INTERVAL = 14;
 export const MERCHANT_LEAVE_FX_SEC = 0.36;

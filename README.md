@@ -50,8 +50,7 @@ Included:
 - HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
 - A rare Travelling Merchant shop overlay with an animated Hoarder portrait, speech bubble, gold purse, class equipment product preview, healing-potion shelf with GLB previews, and compact two-column upgrade inventory
-- One-time class equipment offers from KayKit Fantasy Weapons Bits: each class sees only its own named weapon/set with a live 3D product preview, receives a capped multi-stat bonus on purchase, and visibly equips it for the rest of that run
-- Universal run caps shared by Merchant upgrades and level-up rewards
+- One-time class equipment offers from KayKit Fantasy Weapons Bits: each class sees only its own named weapon/set with a live 3D product preview, receives a multi-stat bonus on purchase, and visibly equips it for the rest of that run
 - Death overlay; Restart Run returns to class selection without reloading the page
 - Anonymous death telemetry: player level at death is posted to a Cloudflare D1 table (no accounts, cookies, or other identifiers)
 - iOS waitlist: emails stored in the same D1 database, plus public Privacy and Support pages
@@ -248,7 +247,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **iOS waitlist** posts `{ email }` to `/api/waitlist`. The Worker stores a normalised address in `ios_waitlist` (`INSERT OR IGNORE`, so duplicates still succeed). A filled honeypot field is discarded with the same 204. No IP is stored. Privacy and Support pages live at `/privacy` and `/support`. The class gallery lives at `/classes`.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
-- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the capped stat package and run-scoped ownership.
+- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and replaces that loadout with the class's Fantasy Weapons Bits set after its one-time special purchase. Equipment meshes remain presentation-only; `specialEquipment.ts` and the shop rules own the stat package and run-scoped ownership.
 - **Enemy presentation** maps definition-layer `EnemyRenderKey` values (currently one per `EnemyType`) to KayKit GLBs in `enemyAssets.ts`. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only and does not own the key union.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
@@ -438,16 +437,7 @@ Classes are starting stats and presentation only. Ranger arrows, Mage and Loreke
 
 **Choose Your Class** appears full-screen after **Play** and the measured boot preload, and again after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Gameplay assets continue warming while the player browses. If the highlighted class is not ready when selected, its button temporarily reads `Preparing [class]…`. Until that class is ready and selected, the board has no legal highlights and `GameState` rejects movement.
 
-Universal run caps (Merchant purchases and level-up rewards share these):
-
-| Stat | Cap |
-|---|---:|
-| Max HP | 35 |
-| Attack | 15 |
-| Defence | 10 |
-| Evade | 20 |
-
-Merchant upgrades still grant +1. Level-up Vitality / Sharpened / Armoured still grant +1. Evasive still grants +5, but stops at 20. A choice that would grant +0 is disabled. Vitality still raises max HP only and does not heal current HP.
+Merchant upgrades grant +1. Level-up Vitality / Sharpened / Armoured grant +1. Evasive grants +5. There are no hard run caps on those stats. Vitality still raises max HP only and does not heal current HP.
 
 ## Travelling Merchant
 
@@ -471,25 +461,24 @@ Potion buttons disable at full health or when gold is short. Each offer shows a 
 
 ### Run upgrades
 
-| Offer | Effect | Cap | First price |
-|---|---|---:|---:|
-| Vitality | +1 max HP; current HP is unchanged | 35 | 2 |
-| Sharpened | +1 attack | 15 | 3 |
-| Armoured | +1 defence | 10 | 3 |
-| Evasive | +1 Evade | 20 | 2 |
-| Leave | Close the shop and continue | — | 0 |
+| Offer | Effect | First price |
+|---|---|---:|
+| Vitality | +1 max HP; current HP is unchanged | 2 |
+| Sharpened | +1 attack | 3 |
+| Armoured | +1 defence | 3 |
+| Evasive | +1 Evade | 2 |
+| Leave | Close the shop and continue | 0 |
 
-Example Attack prices: `3 → 4 → 5 → …` until attack reaches 15. Example Evade prices: `2 → 3 → 4 → …` until Evade reaches its hard maximum of 20. Starting values come from the selected class, not from a single default package.
+Example Attack prices: `3 → 4 → 5 → …` with no upper limit. Example Evade prices: `2 → 3 → 4 → …` with no upper limit. Starting values come from the selected class, not from a single default package.
 
 Rules:
 
-- Purchase buttons disable when the player cannot afford the offer or that stat is already at its Merchant cap.
-- Gold never becomes negative. Unaffordable and capped offers cannot be purchased.
+- Purchase buttons disable when the player cannot afford the offer.
+- Gold never becomes negative. Unaffordable offers cannot be purchased.
 - Vitality never heals current HP.
-- EVA has a hard maximum of 20. Merchant Evasive and level-up Evasive both stop there.
 - A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats and potions can still be bought.
 - Successful Sharpened purchases also advance class-specific visual weapon tiers: Rogue dagger→axe, Ranger bow→crossbows, Mage staff→wand/spellbook, and Barbarian axe→two-handed swords. Successful Armoured purchases advance the Knight through the retained shield variants. These swaps do not add stats beyond the existing shop purchase.
-- Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts` and `src/game/merchantPotions.ts`. Rendering only shows the resulting view.
+- Shop costs, eligibility, and stat changes live in `src/game/shop.ts` and `src/game/merchantPotions.ts`. Rendering only shows the resulting view.
 
 Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, Merchant prices and purchase counts, merchant entities, and meshes.
 
@@ -536,7 +525,7 @@ Starting stats:
 
 |            | HP | Attack | Defence | Evade / Perception |
 |------------|----|--------|---------|-------------------:|
-| Player     | by class (see Player classes) | by class | by class | by class (hard max 20) |
+| Player     | by class (see Player classes) | by class | by class | by class |
 | Skeleton Minion   | 8  | 3      | 0       | Perception 0% |
 | Crypt Guard | 12 | 4      | 1       | Perception 5% |
 | Bone Brute | 20 | 6      | 1       | Perception 10% |
@@ -603,14 +592,12 @@ Crossing a threshold pauses the board and opens a level-up overlay. If one fight
 
 | Choice | Effect |
 |---|---|
-| Vitality | +1 max HP; current HP is unchanged. Disabled at 35. |
-| Sharpened | +1 attack. Disabled at 15. |
-| Armoured | +1 defence. Disabled at 10. |
-| Evasive | +5 Evade, hard maximum 20. Disabled at 20 (`Evade is already at maximum (20).`). |
+| Vitality | +1 max HP; current HP is unchanged. |
+| Sharpened | +1 attack. |
+| Armoured | +1 defence. |
+| Evasive | +5 Evade. |
 
-A capped choice is not selectable and never grants +0. The overlay stays open so another available reward can still be chosen.
-
-After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restarting a run with the same class restores level, XP, pending choices, and the four combat stats to that class’s bases. Restart Run after death returns to class selection instead.
+The overlay stays open until a reward is chosen. After a winning fight the playback order is: combat log, enemy removal and drop spawn, XP/HUD update, then the level-up overlay after the drop animation (or immediately if nothing dropped). Board input stays locked until a reward is chosen. Restarting a run with the same class restores level, XP, pending choices, and the four combat stats to that class’s bases. Restart Run after death returns to class selection instead.
 
 ## Death and restart
 

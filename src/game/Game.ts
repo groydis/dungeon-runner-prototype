@@ -29,12 +29,10 @@ import {
   seedFromSearch,
 } from './random';
 import { InputController, type TilePick } from './InputController';
-import { type LevelUpChoice } from './levelUp';
+import { type LevelUpAllocation } from './levelUp';
 import {
   POTION_OFFER_IDS,
-  SHOP_OFFER_IDS,
   type PotionOfferId,
-  type ShopOfferId,
 } from './shop';
 import { CameraController } from '../rendering/CameraController';
 import { ClassSelectionPreview } from '../rendering/ClassSelectionPreview';
@@ -142,18 +140,12 @@ export class Game {
     for (const classId of PLAYER_CLASS_IDS) {
       this.classSelect.onSelect(classId, () => this.selectClass(classId));
     }
-    for (const offerId of SHOP_OFFER_IDS) {
-      this.shop.onOffer(offerId, () => this.buyShopOffer(offerId));
-    }
     for (const offerId of POTION_OFFER_IDS) {
       this.shop.onPotion(offerId, () => this.buyPotionOffer(offerId));
     }
     this.shop.onLeave(() => this.leaveShop());
     this.shop.onSpecialEquipment(() => this.buySpecialEquipment());
-    this.levelUp.onChoice('vitality', () => this.chooseLevelUp('vitality'));
-    this.levelUp.onChoice('sharpened', () => this.chooseLevelUp('sharpened'));
-    this.levelUp.onChoice('armoured', () => this.chooseLevelUp('armoured'));
-    this.levelUp.onChoice('evasive', () => this.chooseLevelUp('evasive'));
+    this.levelUp.onConfirm(() => this.confirmLevelUp());
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -361,7 +353,7 @@ export class Game {
     }
 
     if (event.kind === 'evade') {
-      this.state.applyEvade(event.monster, event.evadeChance);
+      this.state.applyEvade(event.monster);
       this.updateHud();
       this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
       this.setPhase({
@@ -609,21 +601,6 @@ export class Game {
     this.updateHud();
   }
 
-  private buyShopOffer(offerId: ShopOfferId): void {
-    if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
-      return;
-    }
-    const result = this.state.buyShopOffer(offerId);
-    if (result.success) {
-      const progress = this.state.getShopProgressSnapshot();
-      this.scene.setPlayerEquipmentUpgradeLevels({
-        sharpened: progress.sharpened,
-        armoured: progress.armoured,
-      });
-    }
-    this.updateHud();
-  }
-
   private buySpecialEquipment(): void {
     if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
       return;
@@ -643,12 +620,13 @@ export class Game {
     this.updateHud();
   }
 
-  private chooseLevelUp(choice: LevelUpChoice): void {
+  private confirmLevelUp(): void {
     if (this.phase.kind !== 'levelUp' || !this.state.levelUpOpen) {
       return;
     }
 
-    const result = this.state.chooseLevelUp(choice);
+    const allocation: LevelUpAllocation = this.levelUp.getAllocation();
+    const result = this.state.chooseLevelUp(allocation);
     this.updateHud();
     if (!result.success) {
       return;

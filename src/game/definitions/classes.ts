@@ -40,7 +40,6 @@ export interface PlayerClassDefinition {
   readonly name: string;
   readonly description: string;
   readonly startingStats: Readonly<CombatStats>;
-  readonly startingEvade: number;
   readonly renderKey: PlayerRenderKey;
 }
 
@@ -51,23 +50,66 @@ export interface ClassOptionView {
   maxHealth: number;
   attack: number;
   defence: number;
-  evade: number;
+  dex: number;
 }
 
 export interface ClassSelectionView {
   classes: ClassOptionView[];
 }
 
+export interface ClassAttributePool {
+  str: number;
+  con: number;
+  def: number;
+  dex: number;
+}
+
+/** Universal max HP from attributes (every class, including lorekeeper). */
+export function computeMaxHealth(str: number, con: number): number {
+  return str + con * 2;
+}
+
+/** Fixed damage pairs; lorekeeper always sums its two highest attributes. */
+export function computeClassDamage(
+  classId: PlayerClassId,
+  pool: Readonly<ClassAttributePool>,
+): number {
+  switch (classId) {
+    case 'rogue':
+    case 'ranger':
+      return pool.str + pool.dex;
+    case 'mage':
+      return pool.dex + pool.con;
+    case 'knight':
+      return pool.str + pool.def;
+    case 'barbarian':
+      return pool.str + pool.con;
+    case 'lorekeeper': {
+      const ranked = [pool.str, pool.con, pool.def, pool.dex].sort(
+        (a, b) => b - a,
+      );
+      return ranked[0] + ranked[1];
+    }
+  }
+}
+
 function classStats(
-  maxHealth: number,
-  attack: number,
-  defence: number,
+  classId: PlayerClassId,
+  str: number,
+  con: number,
+  def: number,
+  dex: number,
 ): CombatStats {
+  const pool = { str, con, def, dex };
+  const maxHealth = computeMaxHealth(str, con);
   return createCombatStats({
     maxHealth,
     health: maxHealth,
-    attack,
-    defence,
+    attack: computeClassDamage(classId, pool),
+    defence: def,
+    str,
+    con,
+    dex,
   });
 }
 
@@ -78,48 +120,42 @@ export const PLAYER_CLASS_DEFINITIONS: DeepReadonly<
     id: 'rogue',
     name: 'Rogue',
     description: 'Nimble survivor with the best chance to slip past threats.',
-    startingStats: classStats(18, 5, 1),
-    startingEvade: 6,
+    startingStats: classStats('rogue', 6, 5, 2, 7),
     renderKey: 'rogue',
   },
   ranger: {
     id: 'ranger',
     name: 'Ranger',
     description: 'Flexible fighter with reliable early damage.',
-    startingStats: classStats(20, 6, 1),
-    startingEvade: 3,
+    startingStats: classStats('ranger', 5, 5, 2, 8),
     renderKey: 'ranger',
   },
   mage: {
     id: 'mage',
     name: 'Mage',
     description: 'Fragile but devastating without needing magic abilities yet.',
-    startingStats: classStats(16, 8, 0),
-    startingEvade: 2,
+    startingStats: classStats('mage', 3, 5, 4, 8),
     renderKey: 'mage',
   },
   knight: {
     id: 'knight',
     name: 'Knight',
     description: 'Armoured and dependable under sustained damage.',
-    startingStats: classStats(26, 4, 3),
-    startingEvade: 0,
+    startingStats: classStats('knight', 8, 5, 5, 2),
     renderKey: 'knight',
   },
   barbarian: {
     id: 'barbarian',
     name: 'Barbarian',
     description: 'Huge health and damage, with no defensive tricks.',
-    startingStats: classStats(28, 7, 0),
-    startingEvade: 0,
+    startingStats: classStats('barbarian', 10, 8, 1, 1),
     renderKey: 'barbarian',
   },
   lorekeeper: {
     id: 'lorekeeper',
     name: 'Lorekeeper',
     description: 'A seasoned scholar balancing resilience, armour, and magic.',
-    startingStats: classStats(22, 5, 2),
-    startingEvade: 2,
+    startingStats: classStats('lorekeeper', 5, 5, 5, 5),
     renderKey: 'lorekeeper',
   },
 });
@@ -141,12 +177,12 @@ export function buildClassSelectionView(): ClassSelectionView {
         maxHealth: definition.startingStats.maxHealth,
         attack: definition.startingStats.attack,
         defence: definition.startingStats.defence,
-        evade: definition.startingEvade,
+        dex: definition.startingStats.dex,
       };
     }),
   };
 }
 
 export function classStatLine(option: ClassOptionView): string {
-  return `HP ${option.maxHealth} · ATK ${option.attack} · DEF ${option.defence} · EVA ${option.evade}`;
+  return `HP ${option.maxHealth} · ATK ${option.attack} · DEF ${option.defence} · DEX ${option.dex}`;
 }

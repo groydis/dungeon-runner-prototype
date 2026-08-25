@@ -6,12 +6,21 @@ import { pickWeighted, type Rng } from '../random';
 export type EnemyType =
   | 'skeletonMinion'
   | 'cryptGuard'
+  | 'skeletonWarrior'
   | 'boneBrute'
   | 'skeletonMage'
   | 'necromancer';
 
-/** One distinct render key per enemy type. Rendering maps these to GLBs. */
-export type EnemyRenderKey = EnemyType;
+/**
+ * Render keys map to loaded models. `skeletonWarrior` temporarily reuses the
+ * boneBrute key until it has its own art.
+ */
+export type EnemyRenderKey =
+  | 'skeletonMinion'
+  | 'cryptGuard'
+  | 'boneBrute'
+  | 'skeletonMage'
+  | 'necromancer';
 
 export type EnemyDropKind = 'none' | 'gold' | 'potion';
 
@@ -62,17 +71,30 @@ export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
 /** Testing-only Skeleton Minion attack used by `?fatal=1`. */
 export const FATAL_SKELETON_MINION_ATTACK = 99;
 
+function enemyStats(
+  hp: number,
+  str: number,
+  con: number,
+  def: number,
+  dex: number,
+): CombatStats {
+  return createCombatStats({
+    maxHealth: hp,
+    health: hp,
+    attack: str,
+    defence: def,
+    str,
+    con,
+    dex,
+  });
+}
+
 export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>> =
   deepFreeze({
     skeletonMinion: {
       type: 'skeletonMinion',
       name: 'Skeleton Minion',
-      startingStats: {
-        maxHealth: 8,
-        health: 8,
-        attack: 3,
-        defence: 0,
-      },
+      startingStats: enemyStats(15, 5, 5, 1, 9),
       perception: 0,
       experience: 1,
       elite: false,
@@ -82,27 +104,28 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     cryptGuard: {
       type: 'cryptGuard',
       name: 'Crypt Guard',
-      startingStats: {
-        maxHealth: 12,
-        health: 12,
-        attack: 4,
-        defence: 1,
-      },
+      startingStats: enemyStats(18, 6, 6, 2, 6),
       perception: 5,
       experience: 2,
       elite: false,
       renderKey: 'cryptGuard',
       dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
+    skeletonWarrior: {
+      type: 'skeletonWarrior',
+      name: 'Skeleton Warrior',
+      startingStats: enemyStats(21, 7, 7, 3, 3),
+      perception: 10,
+      experience: 4,
+      elite: false,
+      // TODO: skeletonWarrior needs its own render key + model once art exists
+      renderKey: 'boneBrute',
+      dropTable: DEFAULT_ENEMY_DROP_TABLE,
+    },
     boneBrute: {
       type: 'boneBrute',
       name: 'Bone Brute',
-      startingStats: {
-        maxHealth: 20,
-        health: 20,
-        attack: 6,
-        defence: 1,
-      },
+      startingStats: enemyStats(24, 8, 8, 3, 1),
       perception: 10,
       experience: 4,
       elite: false,
@@ -112,12 +135,7 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     skeletonMage: {
       type: 'skeletonMage',
       name: 'Skeleton Mage',
-      startingStats: {
-        maxHealth: 15,
-        health: 15,
-        attack: 7,
-        defence: 0,
-      },
+      startingStats: enemyStats(27, 9, 9, 1, 1),
       perception: 8,
       experience: 4,
       elite: false,
@@ -127,12 +145,7 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
     necromancer: {
       type: 'necromancer',
       name: 'Necromancer',
-      startingStats: {
-        maxHealth: 34,
-        health: 34,
-        attack: 9,
-        defence: 2,
-      },
+      startingStats: enemyStats(30, 10, 10, 5, 5),
       perception: 15,
       experience: 10,
       elite: true,

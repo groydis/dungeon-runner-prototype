@@ -1,9 +1,3 @@
-import {
-  PLAYER_ATTACK_CAP,
-  PLAYER_DEFENCE_CAP,
-  PLAYER_EVADE_MAX,
-  PLAYER_MAX_HEALTH_CAP,
-} from './config';
 import { type PlayerClassId } from './definitions/classes';
 
 export type SpecialEquipmentId =
@@ -73,19 +67,20 @@ export function specialEquipmentStatLine(
   if (gains.maxHealth > 0) entries.push(`+${gains.maxHealth} MAX HP`);
   if (gains.attack > 0) entries.push(`+${gains.attack} ATK`);
   if (gains.defence > 0) entries.push(`+${gains.defence} DEF`);
-  if (gains.evade > 0) entries.push(`+${gains.evade} EVA`);
+  if (gains.evade > 0) entries.push(`+${gains.evade} DEX`);
   return entries.join(' · ');
 }
 
+/** Special equipment always applies its full authored package — no run caps. */
 export function applicableSpecialEquipmentGains(
   gains: SpecialEquipmentStatGains,
-  current: SpecialEquipmentStatSnapshot,
+  _current: SpecialEquipmentStatSnapshot,
 ): SpecialEquipmentStatGains {
   return {
-    maxHealth: cappedGain(current.maxHealth, gains.maxHealth, PLAYER_MAX_HEALTH_CAP),
-    attack: cappedGain(current.attack, gains.attack, PLAYER_ATTACK_CAP),
-    defence: cappedGain(current.defence, gains.defence, PLAYER_DEFENCE_CAP),
-    evade: cappedGain(current.evade, gains.evade, PLAYER_EVADE_MAX),
+    maxHealth: gains.maxHealth,
+    attack: gains.attack,
+    defence: gains.defence,
+    evade: gains.evade,
   };
 }
 
@@ -123,8 +118,4 @@ function special(
       evade: gains.evade ?? NO_GAIN,
     }),
   });
-}
-
-function cappedGain(current: number, requested: number, cap: number): number {
-  return Math.max(0, Math.min(requested, cap - current));
 }

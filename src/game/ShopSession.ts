@@ -1,5 +1,3 @@
-import { freezeReadModel } from './BoardSnapshot';
-import { type DeepReadonly } from './freeze';
 import { type Merchant } from './Merchant';
 import {
   MERCHANT_POTION_CATALOG,
@@ -9,29 +7,23 @@ import {
 import { type Player } from './Player';
 import {
   applyPotionPurchase,
-  applyShopPurchase,
   applySpecialEquipmentPurchase,
   buildShopView,
   createActiveShop,
-  createShopProgress,
-  evaluateShopOffer,
   evaluateSpecialEquipmentOffer,
   shopStatSnapshot,
   type ActiveShop,
   type PotionPurchaseResult,
-  type ShopOfferId,
-  type ShopProgress,
   type ShopPurchaseResult,
   type ShopView,
 } from './shop';
 
 /**
- * Run-owned Merchant session: open visit, upgrade price tracks, and
- * one-time special-equipment ownership. Pricing stays in `shop.ts`.
+ * Run-owned Merchant session: open visit and one-time special-equipment
+ * ownership. Pricing stays in `shop.ts`.
  */
 export class ShopSession {
   private active: ActiveShop | null = null;
-  private progress: ShopProgress = createShopProgress();
   private specialOwned = false;
 
   get isOpen(): boolean {
@@ -57,12 +49,7 @@ export class ShopSession {
 
   reset(): void {
     this.active = null;
-    this.progress = createShopProgress();
     this.specialOwned = false;
-  }
-
-  getProgressSnapshot(): DeepReadonly<ShopProgress> {
-    return freezeReadModel({ ...this.progress });
   }
 
   getShopView(player: Player | null): ShopView | null {
@@ -73,24 +60,10 @@ export class ShopSession {
       this.active.merchant,
       player.gold,
       shopStatSnapshot(player),
-      this.progress,
       player.classId,
       this.specialOwned,
       player.stats.health,
     );
-  }
-
-  canBuyOffer(player: Player | null, offerId: ShopOfferId): boolean {
-    if (!player || !this.active) {
-      return false;
-    }
-    return evaluateShopOffer(
-      this.active.merchant,
-      offerId,
-      player.gold,
-      shopStatSnapshot(player),
-      this.progress,
-    ).available;
   }
 
   canBuySpecialEquipment(player: Player | null): boolean {
@@ -106,43 +79,12 @@ export class ShopSession {
     ).available;
   }
 
-  buyOffer(player: Player | null, offerId: ShopOfferId): ShopPurchaseResult {
-    if (!player) {
-      return rejectedPurchase(offerId, 0, 'noClass', 'Choose a class first.');
-    }
-    if (!this.active) {
-      return rejectedPurchase(
-        offerId,
-        player.gold,
-        'noShop',
-        'There is no merchant here.',
-      );
-    }
-    const result = applyShopPurchase(
-      this.active.merchant,
-      offerId,
-      player.gold,
-      shopStatSnapshot(player),
-      this.progress,
-    );
-    if (result.success) {
-      applyPurchaseToPlayer(player, result);
-    }
-    return result;
-  }
-
   buySpecialEquipment(player: Player | null): ShopPurchaseResult {
     if (!player) {
-      return rejectedPurchase(
-        'specialEquipment',
-        0,
-        'noClass',
-        'Choose a class first.',
-      );
+      return rejectedPurchase(0, 'noClass', 'Choose a class first.');
     }
     if (!this.active) {
       return rejectedPurchase(
-        'specialEquipment',
         player.gold,
         'noShop',
         'There is no merchant here.',
@@ -224,21 +166,55 @@ export class ShopSession {
 
 function applyPurchaseToPlayer(player: Player, result: ShopPurchaseResult): void {
   player.trySpendGold(result.goldSpent);
-  player.increaseMaxHealth(result.maxHealthGained);
-  player.increaseAttack(result.attackGained);
-  player.increaseDefence(result.defenceGained);
-  player.increaseEvade(result.evadeGained);
+  applyMaxHealthGainViaAttributes(player, result.maxHealthGained);
+  bumpDamageAttribute(player, result.attackGained);
+  player.increaseDef(result.defenceGained);
+  if (result.evadeGained > 0) {
+    player.increaseDex(result.evadeGained);
+  }
+}
+
+/** Exact HP raise via str (+1 HP) and con (+2 HP). */
+function applyMaxHealthGainViaAttributes(player: Player, amount: number): void {
+  let left = Math.max(0, Math.floor(amount));
+  while (left >= 2) {
+    player.increaseCon(1);
+    left -= 2;
+  }
+  if (left > 0) {
+    player.increaseStr(left);
+  }
+}
+
+/** Prefer dex (no HP side effect), then def, then con, then str. */
+function bumpDamageAttribute(player: Player, amount: number): void {
+  if (amount <= 0) {
+    return;
+  }
+  switch (player.classId) {
+    case 'rogue':
+    case 'ranger':
+    case 'mage':
+    case 'lorekeeper':
+      player.increaseDex(amount);
+      break;
+    case 'knight':
+      player.increaseDef(amount);
+      break;
+    case 'barbarian':
+      player.increaseCon(amount);
+      break;
+  }
 }
 
 function rejectedPurchase(
-  offerId: ShopPurchaseResult['offerId'],
   goldRemaining: number,
   reason: ShopPurchaseResult['reason'],
   status: string,
 ): ShopPurchaseResult {
   return {
     success: false,
-    offerId,
+    offerId: 'specialEquipment',
     reason,
     goldRemaining,
     goldSpent: 0,

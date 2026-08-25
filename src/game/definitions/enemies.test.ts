@@ -8,29 +8,64 @@ import {
 } from './enemies';
 
 describe('enemy definitions', () => {
-  it('gives every enemy definition a typed render key matching its type', () => {
+  it('gives every enemy definition a typed render key', () => {
     for (const type of Object.keys(ENEMY_DEFINITIONS) as Array<
       keyof typeof ENEMY_DEFINITIONS
     >) {
-      expect(getEnemyDefinition(type).renderKey).toBe(type);
+      const expected = type === 'skeletonWarrior' ? 'boneBrute' : type;
+      expect(getEnemyDefinition(type).renderKey).toBe(expected);
     }
   });
 
-  it('defines Crypt Guard and Bone Brute with the specified data', () => {
+  it('defines Crypt Guard, Skeleton Warrior, and Bone Brute with the specified data', () => {
     expect(ENEMY_DEFINITIONS.cryptGuard).toEqual({
       type: 'cryptGuard',
       name: 'Crypt Guard',
-      startingStats: { maxHealth: 12, health: 12, attack: 4, defence: 1 },
+      startingStats: {
+        maxHealth: 18,
+        health: 18,
+        attack: 6,
+        defence: 2,
+        str: 6,
+        con: 6,
+        dex: 6,
+      },
       perception: 5,
       experience: 2,
       elite: false,
       renderKey: 'cryptGuard',
       dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
     });
+    expect(ENEMY_DEFINITIONS.skeletonWarrior).toEqual({
+      type: 'skeletonWarrior',
+      name: 'Skeleton Warrior',
+      startingStats: {
+        maxHealth: 21,
+        health: 21,
+        attack: 7,
+        defence: 3,
+        str: 7,
+        con: 7,
+        dex: 3,
+      },
+      perception: 10,
+      experience: 4,
+      elite: false,
+      renderKey: 'boneBrute',
+      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
+    });
     expect(ENEMY_DEFINITIONS.boneBrute).toEqual({
       type: 'boneBrute',
       name: 'Bone Brute',
-      startingStats: { maxHealth: 20, health: 20, attack: 6, defence: 1 },
+      startingStats: {
+        maxHealth: 24,
+        health: 24,
+        attack: 8,
+        defence: 3,
+        str: 8,
+        con: 8,
+        dex: 1,
+      },
       perception: 10,
       experience: 4,
       elite: false,
@@ -95,8 +130,8 @@ describe('enemy definitions', () => {
     const second = createMonster('guard-b', 'cryptGuard', 20, 1);
 
     first.takeDamage(5);
-    expect(first.stats.health).toBe(7);
-    expect(second.stats.health).toBe(12);
+    expect(first.stats.health).toBe(13);
+    expect(second.stats.health).toBe(18);
     expect(second.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
   });
 
@@ -107,6 +142,7 @@ describe('enemy definitions', () => {
       ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
     );
     expect(factory('cryptGuard')).toEqual(createEnemyStats('cryptGuard'));
+    expect(factory('skeletonWarrior')).toEqual(createEnemyStats('skeletonWarrior'));
     expect(factory('boneBrute')).toEqual(createEnemyStats('boneBrute'));
     expect(factory('skeletonMage')).toEqual(createEnemyStats('skeletonMage'));
     expect(factory('necromancer')).toEqual(createEnemyStats('necromancer'));

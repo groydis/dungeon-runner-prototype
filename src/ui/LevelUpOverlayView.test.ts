@@ -1,22 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import {
-  PLAYER_ATTACK_CAP,
-  PLAYER_DEFENCE_CAP,
-  PLAYER_EVADE_MAX,
-  PLAYER_MAX_HEALTH_CAP,
-} from '../game/config';
 import { getPlayerClassDefinition } from '../game/definitions/classes';
 import {
-  LEVEL_UP_CAPPED_REASONS,
-  LEVEL_UP_EVASIVE_CAPPED_REASON,
+  LEVEL_UP_FREE_POINTS,
   buildLevelUpView,
-  type LevelUpStatSnapshot,
+  isValidLevelUpAllocation,
+  playerAttributeSnapshot,
+  type LevelUpAllocation,
 } from '../game/levelUp';
 import {
   LevelUpOverlayView,
   experienceHudText,
   levelHudText,
-  levelUpChoiceAriaLabel,
 } from './LevelUpOverlayView';
 
 describe('level and XP HUD text', () => {
@@ -25,141 +19,86 @@ describe('level and XP HUD text', () => {
     expect(experienceHudText(0, 3)).toBe('XP: 0 / 3');
   });
 
-  it('renders mid-run progress and a clean cap value', () => {
+  it('renders mid-run progress and a clean end-of-track value', () => {
     expect(levelHudText(4)).toBe('LVL: 4');
     expect(experienceHudText(12, 18)).toBe('XP: 12 / 18');
     expect(experienceHudText(25, null)).toBe('XP: 25');
   });
 
-  it('shows the reached level and next threshold on a level-up view', () => {
-    const view = buildLevelUpView(2, 3, rangerLevelUpStats());
+  it('shows the reached level, free points, and current attributes', () => {
+    const ranger = getPlayerClassDefinition('ranger');
+    const attributes = playerAttributeSnapshot({ stats: ranger.startingStats });
+    const view = buildLevelUpView(2, 3, attributes);
     expect(view.level).toBe(2);
+    expect(view.freePoints).toBe(LEVEL_UP_FREE_POINTS);
     expect(experienceHudText(view.experience, view.nextLevelExperience)).toBe(
       'XP: 3 / 7',
     );
-    expect(view.choices.map((choice) => choice.title)).toEqual([
-      'Vitality',
-      'Sharpened',
-      'Armoured',
-      'Evasive',
-    ]);
-    expect(view.choices.find((choice) => choice.id === 'evasive')).toMatchObject({
-      available: true,
-      description: '+5 Evade (max 20)',
+    expect(view.attributes).toEqual({
+      str: ranger.startingStats.str,
+      con: ranger.startingStats.con,
+      def: ranger.startingStats.defence,
+      dex: ranger.startingStats.dex,
     });
-    expect(view.choices.find((choice) => choice.id === 'evasive')?.description).not.toContain(
-      '%',
-    );
   });
 
-  it('disables Evasive at 20 and keeps the other choices available', () => {
-    const available = buildLevelUpView(2, 3, rangerLevelUpStats({ evade: 16 }));
-    expect(available.choices.find((choice) => choice.id === 'evasive')?.available).toBe(
-      true,
-    );
-
-    const capped = buildLevelUpView(2, 3, rangerLevelUpStats({ evade: PLAYER_EVADE_MAX }));
-    const evasive = capped.choices.find((choice) => choice.id === 'evasive');
-    expect(evasive).toMatchObject({
-      available: false,
-      reason: 'capped',
-      disabledReason: LEVEL_UP_EVASIVE_CAPPED_REASON,
-    });
-    expect(
-      capped.choices.filter((choice) => choice.id !== 'evasive').every((choice) => choice.available),
-    ).toBe(true);
-    expect(levelUpChoiceAriaLabel(evasive!)).toBe(
-      'Evasive. Unavailable. Evade is already at maximum (20).',
+  it('accepts only non-negative integer allocations that sum to 2', () => {
+    expect(isValidLevelUpAllocation({ str: 2, con: 0, def: 0, dex: 0 })).toBe(true);
+    expect(isValidLevelUpAllocation({ str: 1, con: 1, def: 0, dex: 0 })).toBe(true);
+    expect(isValidLevelUpAllocation({ str: 0, con: 0, def: 0, dex: 0 })).toBe(false);
+    expect(isValidLevelUpAllocation({ str: 3, con: 0, def: 0, dex: 0 })).toBe(false);
+    expect(isValidLevelUpAllocation({ str: -1, con: 3, def: 0, dex: 0 })).toBe(false);
+    expect(isValidLevelUpAllocation({ str: 1.5, con: 0.5, def: 0, dex: 0 })).toBe(
+      false,
     );
   });
 });
 
-describe('level-up overlay disabled state', () => {
-  it('disables the Evasive button and exposes why it is unavailable', () => {
+describe('level-up overlay', () => {
+  it('enables confirm only after exactly 2 free points are assigned', () => {
     const root = createLevelUpRoot();
     const overlay = new LevelUpOverlayView(root);
-    overlay.render(buildLevelUpView(2, 3, rangerLevelUpStats({ evade: PLAYER_EVADE_MAX })));
-
-    expect(root.button('level-up-evasive').disabled).toBe(true);
-    expect(root.button('level-up-evasive').getAttribute('aria-label')).toBe(
-      'Evasive. Unavailable. Evade is already at maximum (20).',
-    );
-    expect(root.text('level-up-evasive-reason')).toBe(
-      'Evade is already at maximum (20).',
-    );
-    expect(root.button('level-up-vitality').disabled).toBe(false);
-    expect(root.button('level-up-sharpened').disabled).toBe(false);
-    expect(root.button('level-up-armoured').disabled).toBe(false);
-    overlay.dispose();
-  });
-
-  it('disables every choice when its universal cap is reached', () => {
-    const root = createLevelUpRoot();
-    const overlay = new LevelUpOverlayView(root);
+    const ranger = getPlayerClassDefinition('ranger');
     overlay.render(
-      buildLevelUpView(6, 25, {
-        maxHealth: PLAYER_MAX_HEALTH_CAP,
-        attack: PLAYER_ATTACK_CAP,
-        defence: PLAYER_DEFENCE_CAP,
-        evade: PLAYER_EVADE_MAX,
-      }),
+      buildLevelUpView(6, 25, playerAttributeSnapshot({ stats: ranger.startingStats })),
     );
 
-    for (const id of ['vitality', 'sharpened', 'armoured', 'evasive'] as const) {
-      expect(root.button(`level-up-${id}`).disabled).toBe(true);
-      expect(root.button(`level-up-${id}`).getAttribute('aria-label')).toBe(
-        levelUpChoiceAriaLabel({
-          id,
-          title: id === 'vitality' ? 'Vitality' : id === 'sharpened' ? 'Sharpened' : id === 'armoured' ? 'Armoured' : 'Evasive',
-          description: '',
-          available: false,
-          reason: 'capped',
-          disabledReason: LEVEL_UP_CAPPED_REASONS[id],
-        }),
-      );
-    }
+    expect(root.button('level-up-confirm').disabled).toBe(true);
+    root.button('level-up-str-plus').click();
+    root.button('level-up-dex-plus').click();
+    expect(overlay.getAllocation()).toEqual({
+      str: 1,
+      con: 0,
+      def: 0,
+      dex: 1,
+    } satisfies LevelUpAllocation);
+    expect(root.button('level-up-confirm').disabled).toBe(false);
     overlay.dispose();
   });
 });
-
-function rangerLevelUpStats(
-  overrides: Partial<LevelUpStatSnapshot> = {},
-): LevelUpStatSnapshot {
-  const ranger = getPlayerClassDefinition('ranger');
-  return {
-    maxHealth: ranger.startingStats.maxHealth,
-    attack: ranger.startingStats.attack,
-    defence: ranger.startingStats.defence,
-    evade: ranger.startingEvade,
-    ...overrides,
-  };
-}
 
 function createLevelUpRoot(): ParentNode & {
-  button(id: string): HTMLButtonElement;
-  text(id: string): string;
+  button(id: string): HTMLButtonElement & { click(): void };
 } {
   const nodes = new Map<string, FakeElement>();
   const ids = [
     'level-up',
     'level-up-level',
     'level-up-xp',
-    'level-up-vitality',
-    'level-up-sharpened',
-    'level-up-armoured',
-    'level-up-evasive',
-    'level-up-vitality-title',
-    'level-up-sharpened-title',
-    'level-up-armoured-title',
-    'level-up-evasive-title',
-    'level-up-vitality-desc',
-    'level-up-sharpened-desc',
-    'level-up-armoured-desc',
-    'level-up-evasive-desc',
-    'level-up-vitality-reason',
-    'level-up-sharpened-reason',
-    'level-up-armoured-reason',
-    'level-up-evasive-reason',
+    'level-up-points',
+    'level-up-confirm',
+    'level-up-str-value',
+    'level-up-con-value',
+    'level-up-def-value',
+    'level-up-dex-value',
+    'level-up-str-minus',
+    'level-up-con-minus',
+    'level-up-def-minus',
+    'level-up-dex-minus',
+    'level-up-str-plus',
+    'level-up-con-plus',
+    'level-up-def-plus',
+    'level-up-dex-plus',
   ];
   for (const id of ids) {
     nodes.set(id, new FakeElement());
@@ -170,14 +109,10 @@ function createLevelUpRoot(): ParentNode & {
       return nodes.get(selector.slice(1)) as unknown as HTMLElement | null;
     },
     button(id: string) {
-      return nodes.get(id) as unknown as HTMLButtonElement;
-    },
-    text(id: string) {
-      return nodes.get(id)?.textContent ?? '';
+      return nodes.get(id) as unknown as HTMLButtonElement & { click(): void };
     },
   } as ParentNode & {
-    button(id: string): HTMLButtonElement;
-    text(id: string): string;
+    button(id: string): HTMLButtonElement & { click(): void };
   };
 }
 
@@ -187,12 +122,6 @@ class FakeElement {
   textContent = '';
   private readonly attrs = new Map<string, string>();
   private readonly listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
-
-  constructor() {}
-
-  querySelector(): null {
-    return null;
-  }
 
   addEventListener(
     type: string,
@@ -214,7 +143,13 @@ class FakeElement {
     this.attrs.set(name, value);
   }
 
-  getAttribute(name: string): string | null {
-    return this.attrs.get(name) ?? null;
+  click(): void {
+    for (const listener of this.listeners.get('click') ?? []) {
+      if (typeof listener === 'function') {
+        listener(new Event('click'));
+      } else {
+        listener.handleEvent(new Event('click'));
+      }
+    }
   }
 }

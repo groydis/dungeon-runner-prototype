@@ -34,10 +34,10 @@ describe('class-selection overlay', () => {
     expect(root.text('class-current-name')).toBe('Rogue');
     expect(root.text('class-current-desc')).toBe(rogue.description);
     expect(root.text('class-carousel-position')).toBe('1 / 6');
-    expect(root.text('class-stat-health')).toBe('18');
-    expect(root.text('class-stat-attack')).toBe('5');
-    expect(root.text('class-stat-defence')).toBe('1');
-    expect(root.text('class-stat-evade')).toBe('6');
+    expect(root.text('class-stat-health')).toBe('16');
+    expect(root.text('class-stat-attack')).toBe('13');
+    expect(root.text('class-stat-defence')).toBe('2');
+    expect(root.text('class-stat-evade')).toBe('7');
     expect(root.text('class-select-current')).toBe('BEGIN AS ROGUE');
     expect(root.button('class-select-current').disabled).toBe(false);
     expect(root.button('class-select-current').getAttribute('aria-label')).toBe(
@@ -153,7 +153,7 @@ describe('HUD combat stats', () => {
       gold: 0,
       attack: ranger.startingStats.attack,
       defence: ranger.startingStats.defence,
-      evade: ranger.startingEvade,
+      dex: ranger.startingStats.dex,
       level: 1,
       experience: 0,
       nextLevelExperience: 3,
@@ -168,7 +168,7 @@ describe('HUD combat stats', () => {
     expect(root.text('gold')).toBe('G: 0');
     expect(root.text('attack')).toBe(`ATK: ${ranger.startingStats.attack}`);
     expect(root.text('defence')).toBe(`ARM: ${ranger.startingStats.defence}`);
-    expect(root.text('evade')).toBe(`EVA: ${ranger.startingEvade}`);
+    expect(root.text('evade')).toBe(`DEX: ${ranger.startingStats.dex}`);
     expect(root.text('evade')).not.toContain('%');
     expect(root.text('health-text')).toBe(
       `HP ${ranger.startingStats.health} / ${ranger.startingStats.maxHealth}`,

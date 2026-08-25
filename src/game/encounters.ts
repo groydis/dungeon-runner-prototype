@@ -2,7 +2,6 @@ import {
   encounterMonsterView,
   type EncounterMonsterView,
 } from './BoardSnapshot';
-import { PLAYER_BASE_EVADE } from './config';
 import { type Monster } from './Monster';
 import { type Player } from './Player';
 import { type Rng } from './random';
@@ -14,36 +13,32 @@ export type EncounterEvent =
       kind: 'combat';
       approach: CombatApproach;
       monster: EncounterMonsterView;
-      evadeChance?: number;
     }
   | {
       kind: 'evade';
       monster: EncounterMonsterView;
-      evadeChance?: number;
     };
 
-export type AvoidanceRoll = (chance?: number) => boolean;
+/** Force evade (`true`) or surprise combat (`false`), bypassing the DEX contest. */
+export type AvoidanceRoll = () => boolean;
 
-export function evadeChance(
-  playerEvade: number,
-  enemyPerception: number,
-): number {
-  // Safety clamp on the computed chance only. Player Evade itself never exceeds 20.
-  return Math.min(85, Math.max(0, playerEvade - enemyPerception));
-}
-
-/** `chance` is a percent. `random()` is [0, 1). */
-export function rollAvoidance(
-  chance: number,
+/**
+ * Opposed d10 contest: playerDex + d10 > enemyDex + d10.
+ * Ties fail to evade (combat).
+ */
+export function rollEvadeContest(
+  playerDex: number,
+  enemyDex: number,
   random: () => number = Math.random,
 ): boolean {
-  return random() * 100 < chance;
+  const d10 = () => Math.floor(random() * 10) + 1;
+  return playerDex + d10() > enemyDex + d10();
 }
 
 /**
  * Development helper: `?avoid=1` always evades, `?avoid=0` always starts
- * Surprise Attack combat, ignoring Evade and Perception.
- * When neither is set, returns undefined so GameState can use its evade RNG.
+ * Surprise Attack combat, ignoring the DEX contest.
+ * When neither is set, returns undefined so GameState can use the contest.
  */
 export function avoidanceOverrideFromSearch(search: string): AvoidanceRoll | undefined {
   const params = new URLSearchParams(
@@ -60,17 +55,16 @@ export function avoidanceOverrideFromSearch(search: string): AvoidanceRoll | und
 }
 
 /**
- * Testing helper. Forced `?avoid=` values win; otherwise rolls against chance
- * with the optional RNG (defaults to `Math.random`).
+ * Testing helper. Forced `?avoid=` values win; otherwise rolls the DEX contest
+ * with a placeholder (callers that need a real contest should use
+ * `rollEvadeContest` directly). Prefer injecting `forceRoll` into
+ * `findAlignedMonsterEncounters`.
  */
 export function avoidanceRollerFromSearch(
   search: string,
-  random?: Rng,
+  _random?: Rng,
 ): AvoidanceRoll {
-  return (
-    avoidanceOverrideFromSearch(search) ??
-    ((chance = PLAYER_BASE_EVADE) => rollAvoidance(chance, random))
-  );
+  return avoidanceOverrideFromSearch(search) ?? (() => false);
 }
 
 /**
@@ -98,12 +92,12 @@ function isOnMonsterTile(
 
 /** Pure checks. Does not mutate monsters or tiles. */
 export function findAlignedMonsterEncounters(
-  player: Pick<Player, 'row' | 'col'> & { evade?: number },
+  player: Pick<Player, 'row' | 'col'> & { dex: number },
   monsters: Iterable<Monster>,
-  roll: AvoidanceRoll = (chance = PLAYER_BASE_EVADE) => rollAvoidance(chance),
+  forceRoll?: AvoidanceRoll,
+  random: () => number = Math.random,
 ): EncounterEvent[] {
   const events: EncounterEvent[] = [];
-  const playerEvade = player.evade ?? PLAYER_BASE_EVADE;
 
   for (const monster of monsters) {
     if (monster.encounterResolved) {
@@ -127,15 +121,16 @@ export function findAlignedMonsterEncounters(
       continue;
     }
 
-    const chance = evadeChance(playerEvade, monster.perception);
-    if (roll(chance)) {
-      events.push({ kind: 'evade', monster: view, evadeChance: chance });
+    const evaded = forceRoll
+      ? forceRoll()
+      : rollEvadeContest(player.dex, monster.stats.dex, random);
+    if (evaded) {
+      events.push({ kind: 'evade', monster: view });
     } else {
       events.push({
         kind: 'combat',
         approach: 'surprise',
         monster: view,
-        evadeChance: chance,
       });
     }
   }
@@ -145,13 +140,11 @@ export function findAlignedMonsterEncounters(
 
 export function encounterStartText(event: EncounterEvent): string {
   const { name } = event.monster;
-  const chanceSuffix =
-    event.evadeChance === undefined ? '' : ` Evade chance: ${event.evadeChance}.`;
   if (event.kind === 'evade') {
-    return `You slip past the ${name}.${chanceSuffix}`;
+    return `You slip past the ${name}.`;
   }
   if (event.approach === 'surprise') {
-    return `You catch the ${name} off guard!${chanceSuffix}`;
+    return `You catch the ${name} off guard!`;
   }
   return `A ${name} blocks your path!`;
 }

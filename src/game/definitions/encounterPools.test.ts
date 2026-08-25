@@ -47,10 +47,13 @@ describe('encounter pool boundaries', () => {
     );
   });
 
-  it('begins allowing Bone Brute at row 40', () => {
+  it('begins allowing Bone Brute and Skeleton Warrior at row 40', () => {
     expect(encounterPoolForRow(40).some((entry) => entry.item === 'boneBrute')).toBe(
       true,
     );
+    expect(
+      encounterPoolForRow(40).some((entry) => entry.item === 'skeletonWarrior'),
+    ).toBe(true);
   });
 });
 
@@ -64,6 +67,7 @@ describe('weighted enemy selection', () => {
   it('selects each late-band branch with a deterministic roll', () => {
     expect(pickEnemyTypeForRow(40, () => 0)).toBe('skeletonMinion');
     expect(pickEnemyTypeForRow(40, () => 0.5)).toBe('cryptGuard');
+    expect(pickEnemyTypeForRow(40, () => 0.7)).toBe('skeletonWarrior');
     expect(pickEnemyTypeForRow(40, () => 0.8)).toBe('boneBrute');
     expect(pickEnemyTypeForRow(40, () => 0.99)).toBe('skeletonMage');
     expect(pickEnemyTypeForRow(60, () => 0.99)).toBe('necromancer');
