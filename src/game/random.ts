@@ -68,6 +68,19 @@ export function evadeRngFactoryFromSearch(search: string): () => Rng {
   return () => mulberry32((seed ^ EVADE_RNG_SEED_SALT) >>> 0);
 }
 
+/**
+ * XOR salt so enemy weapon rolls never share the row, drop, or evade streams.
+ */
+export const WEAPON_RNG_SEED_SALT = 0xc2b2ae35;
+
+export function weaponRngFactoryFromSearch(search: string): () => Rng {
+  const seed = seedFromSearch(search);
+  if (seed === undefined) {
+    return () => Math.random;
+  }
+  return () => mulberry32((seed ^ WEAPON_RNG_SEED_SALT) >>> 0);
+}
+
 export function randomInt(rng: Rng, maxExclusive: number): number {
   if (maxExclusive <= 0) {
     return 0;

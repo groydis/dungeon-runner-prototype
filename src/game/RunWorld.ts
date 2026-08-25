@@ -19,6 +19,7 @@ import {
   type EnemyStatsFactory,
   type EnemyType,
 } from './definitions/enemies';
+import { rollEnemyWeapon } from './definitions/enemyWeapons';
 import { type PickupId } from './definitions/pickupCatalog';
 import { Grid } from './Grid';
 import { createMerchant, type Merchant } from './Merchant';
@@ -61,22 +62,27 @@ export class RunWorld {
     this.grid.clear();
   }
 
-  populateInitial(rng: Rng): void {
+  populateInitial(rng: Rng, weaponRng: Rng): void {
     this.grid.ensureRange(
       START_ROW,
       START_ROW + ROW_POOL_SIZE + 2,
-      (row, col) => this.materializeTile(row, col, rng),
+      (row, col) => this.materializeTile(row, col, rng, weaponRng),
     );
   }
 
-  prepareAhead(playerRow: number, rng: Rng, runOver: boolean): void {
+  prepareAhead(
+    playerRow: number,
+    rng: Rng,
+    runOver: boolean,
+    weaponRng: Rng,
+  ): void {
     if (runOver) {
       return;
     }
     this.grid.ensureRange(
       playerRow,
       playerRow + ROW_POOL_SIZE + 2,
-      (row, col) => this.materializeTile(row, col, rng),
+      (row, col) => this.materializeTile(row, col, rng, weaponRng),
     );
     const minRow = playerRow - 2;
     this.grid.pruneBelow(minRow);
@@ -309,6 +315,7 @@ export class RunWorld {
               id: occupant.id,
               type: occupant.type as EnemyType,
               renderKey: occupant.renderKey,
+              weaponVariant: occupant.weaponVariant,
             },
           }
         : {}),
@@ -382,7 +389,12 @@ export class RunWorld {
     return recipe;
   }
 
-  private materializeTile(row: number, col: number, rng: Rng): Tile {
+  private materializeTile(
+    row: number,
+    col: number,
+    rng: Rng,
+    weaponRng: Rng,
+  ): Tile {
     const lane = this.recipeFor(row, rng)[col] ?? { kind: 'empty' };
 
     if (lane.kind === 'monster') {
@@ -397,6 +409,13 @@ export class RunWorld {
         }
         return createEmptyTile(row, col);
       }
+      const baseStats = this.createEnemyStats(lane.enemyType, row);
+      const weaponVariant = rollEnemyWeapon(lane.enemyType, weaponRng);
+      const stats = createCombatStats({
+        ...baseStats,
+        attack: baseStats.attack + (weaponVariant?.attackBonus ?? 0),
+        defence: baseStats.defence + (weaponVariant?.defenceBonus ?? 0),
+      });
       this.monsters.set(
         lane.entityId,
         createMonster(
@@ -404,7 +423,8 @@ export class RunWorld {
           lane.enemyType,
           row,
           col,
-          this.createEnemyStats(lane.enemyType, row),
+          stats,
+          weaponVariant,
         ),
       );
       return createTile(row, col, { type: 'monster', id: lane.entityId });

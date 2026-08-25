@@ -5,6 +5,7 @@ import {
   type EnemyType,
   getEnemyDefinition,
 } from './definitions/enemies';
+import { type EnemyWeaponVariant } from './definitions/enemyWeapons';
 import { type DeepReadonly } from './freeze';
 
 /** Run-specific monster instance. Type/stats come from a static definition. */
@@ -16,6 +17,7 @@ export class Monster {
   private _col: number;
   private _encounterResolved = false;
   private readonly _stats: CombatStats;
+  private readonly _weaponVariant: EnemyWeaponVariant | null;
 
   constructor(
     id: string,
@@ -23,6 +25,7 @@ export class Monster {
     row: number,
     col: number,
     stats?: CombatStats,
+    weaponVariant: EnemyWeaponVariant | null = null,
   ) {
     this.id = id;
     this.type = type;
@@ -30,6 +33,7 @@ export class Monster {
     this._row = row;
     this._col = col;
     this._stats = createCombatStats(stats ?? this.definition.startingStats);
+    this._weaponVariant = weaponVariant;
   }
 
   get row(): number {
@@ -46,6 +50,10 @@ export class Monster {
 
   get renderKey(): EnemyRenderKey {
     return this.definition.renderKey;
+  }
+
+  get weaponVariant(): EnemyWeaponVariant | null {
+    return this._weaponVariant;
   }
 
   get experience(): number {
@@ -100,6 +108,7 @@ export function createMonster(
   row: number,
   col: number,
   stats?: CombatStats,
+  weaponVariant: EnemyWeaponVariant | null = null,
 ): Monster {
-  return new Monster(id, type, row, col, stats);
+  return new Monster(id, type, row, col, stats, weaponVariant);
 }

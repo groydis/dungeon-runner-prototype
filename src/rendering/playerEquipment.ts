@@ -7,8 +7,10 @@ import { loadGltfScene } from './rigMediumAnimations';
 
 export type PlayerEquipmentAssetKey =
   | 'dagger'
+  | 'bow'
   | 'bowWithString'
   | 'staff'
+  | 'druidStaff'
   | 'sword1H'
   | 'shieldBadge'
   | 'axe2H'
@@ -29,17 +31,51 @@ export type PlayerEquipmentAssetKey =
   | 'shieldSquare'
   | 'shieldSquareColor'
   | 'fantasyDaggerC'
+  | 'fantasyDaggerA'
+  | 'fantasyDaggerB'
   | 'fantasyBowAWithString'
+  | 'fantasyBowBWithString'
+  | 'fantasyBowCWithString'
   | 'fantasyStaffD'
+  | 'fantasyStaffA'
+  | 'fantasyStaffB'
   | 'fantasySwordG'
+  | 'fantasySwordA'
+  | 'fantasySwordB'
+  | 'fantasySwordC'
+  | 'fantasySwordD'
+  | 'fantasySwordE'
+  | 'fantasySwordF'
   | 'fantasyShieldA'
+  | 'fantasyShieldB'
+  | 'fantasyShieldC'
+  | 'fantasyShieldD'
   | 'fantasyHammerD'
-  | 'fantasyStaffC';
+  | 'fantasyHammerA'
+  | 'fantasyHammerB'
+  | 'fantasyHammerC'
+  | 'fantasyStaffC'
+  | 'fantasyAxeA'
+  | 'fantasyAxeB'
+  | 'fantasyAxeC'
+  | 'fantasyAxeD'
+  | 'fantasyFistweaponA'
+  | 'fantasyFistweaponB'
+  | 'fantasyFistweaponCLeft'
+  | 'fantasyFistweaponCRight'
+  | 'fantasyHalberd'
+  | 'fantasyScythe'
+  | 'fantasySpearA'
+  | 'fantasySpearB'
+  | 'fantasyWandA'
+  | 'fantasyWandB';
 
 export const PLAYER_EQUIPMENT_URLS: Record<PlayerEquipmentAssetKey, string> = {
   dagger: '/models/players/kaykit/weapons/dagger.glb',
+  bow: '/models/players/kaykit/weapons/bow.glb',
   bowWithString: '/models/players/kaykit/weapons/bow_withString.glb',
   staff: '/models/players/kaykit/weapons/staff.glb',
+  druidStaff: '/models/players/kaykit/weapons/druid_staff.glb',
   sword1H: '/models/players/kaykit/weapons/sword_1handed.glb',
   shieldBadge: '/models/players/kaykit/weapons/shield_badge.glb',
   axe2H: '/models/players/kaykit/weapons/axe_2handed.glb',
@@ -62,13 +98,53 @@ export const PLAYER_EQUIPMENT_URLS: Record<PlayerEquipmentAssetKey, string> = {
   shieldSquareColor: '/models/players/kaykit/weapons/shield_square_color.glb',
   fantasyDaggerC:
     '/models/players/kaykit/weapons/fantasy_bits/dagger_C.glb',
+  fantasyDaggerA:
+    '/models/players/kaykit/weapons/fantasy_bits/dagger_A.glb',
+  fantasyDaggerB:
+    '/models/players/kaykit/weapons/fantasy_bits/dagger_B.glb',
   fantasyBowAWithString:
     '/models/players/kaykit/weapons/fantasy_bits/bow_A_withString.glb',
+  fantasyBowBWithString:
+    '/models/players/kaykit/weapons/fantasy_bits/bow_B_withString.glb',
+  fantasyBowCWithString:
+    '/models/players/kaykit/weapons/fantasy_bits/bow_C_withString.glb',
   fantasyStaffD: '/models/players/kaykit/weapons/fantasy_bits/staff_D.glb',
+  fantasyStaffA: '/models/players/kaykit/weapons/fantasy_bits/staff_A.glb',
+  fantasyStaffB: '/models/players/kaykit/weapons/fantasy_bits/staff_B.glb',
   fantasySwordG: '/models/players/kaykit/weapons/fantasy_bits/sword_G.glb',
+  fantasySwordA: '/models/players/kaykit/weapons/fantasy_bits/sword_A.glb',
+  fantasySwordB: '/models/players/kaykit/weapons/fantasy_bits/sword_B.glb',
+  fantasySwordC: '/models/players/kaykit/weapons/fantasy_bits/sword_C.glb',
+  fantasySwordD: '/models/players/kaykit/weapons/fantasy_bits/sword_D.glb',
+  fantasySwordE: '/models/players/kaykit/weapons/fantasy_bits/sword_E.glb',
+  fantasySwordF: '/models/players/kaykit/weapons/fantasy_bits/sword_F.glb',
   fantasyShieldA: '/models/players/kaykit/weapons/fantasy_bits/shield_A.glb',
+  fantasyShieldB: '/models/players/kaykit/weapons/fantasy_bits/shield_B.glb',
+  fantasyShieldC: '/models/players/kaykit/weapons/fantasy_bits/shield_C.glb',
+  fantasyShieldD: '/models/players/kaykit/weapons/fantasy_bits/shield_D.glb',
   fantasyHammerD: '/models/players/kaykit/weapons/fantasy_bits/hammer_D.glb',
+  fantasyHammerA: '/models/players/kaykit/weapons/fantasy_bits/hammer_A.glb',
+  fantasyHammerB: '/models/players/kaykit/weapons/fantasy_bits/hammer_B.glb',
+  fantasyHammerC: '/models/players/kaykit/weapons/fantasy_bits/hammer_C.glb',
   fantasyStaffC: '/models/players/kaykit/weapons/fantasy_bits/staff_C.glb',
+  fantasyAxeA: '/models/players/kaykit/weapons/fantasy_bits/axe_A.glb',
+  fantasyAxeB: '/models/players/kaykit/weapons/fantasy_bits/axe_B.glb',
+  fantasyAxeC: '/models/players/kaykit/weapons/fantasy_bits/axe_C.glb',
+  fantasyAxeD: '/models/players/kaykit/weapons/fantasy_bits/axe_D.glb',
+  fantasyFistweaponA:
+    '/models/players/kaykit/weapons/fantasy_bits/fistweapon_A.glb',
+  fantasyFistweaponB:
+    '/models/players/kaykit/weapons/fantasy_bits/fistweapon_B.glb',
+  fantasyFistweaponCLeft:
+    '/models/players/kaykit/weapons/fantasy_bits/fistweapon_C_left.glb',
+  fantasyFistweaponCRight:
+    '/models/players/kaykit/weapons/fantasy_bits/fistweapon_C_right.glb',
+  fantasyHalberd: '/models/players/kaykit/weapons/fantasy_bits/halberd.glb',
+  fantasyScythe: '/models/players/kaykit/weapons/fantasy_bits/scythe.glb',
+  fantasySpearA: '/models/players/kaykit/weapons/fantasy_bits/spear_A.glb',
+  fantasySpearB: '/models/players/kaykit/weapons/fantasy_bits/spear_B.glb',
+  fantasyWandA: '/models/players/kaykit/weapons/fantasy_bits/wand_A.glb',
+  fantasyWandB: '/models/players/kaykit/weapons/fantasy_bits/wand_B.glb',
 };
 
 export const PLAYER_WEAPON_MOUNT_NAME = 'weaponMount';

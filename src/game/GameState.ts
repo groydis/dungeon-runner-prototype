@@ -126,6 +126,7 @@ export interface GameStateOptions {
   createRng?: () => Rng;
   createDropRng?: () => Rng;
   createEvadeRng?: () => Rng;
+  createWeaponRng?: () => Rng;
   /** Seeds pickup tiers without advancing the generation stream. */
   runSeed?: number;
   createRowRecipe?: RowRecipeFactory;
@@ -149,10 +150,12 @@ export class GameState {
   private readonly createRng: () => Rng;
   private readonly createDropRng: () => Rng;
   private readonly createEvadeRng: () => Rng;
+  private readonly createWeaponRng: () => Rng;
   private readonly runSeed: number;
   private rng: Rng;
   private dropRng: Rng;
   private evadeRng: Rng;
+  private weaponRng: Rng;
 
   constructor(options: GameStateOptions = {}) {
     this.runSeed =
@@ -167,9 +170,11 @@ export class GameState {
     this.createRng = options.createRng ?? (() => Math.random);
     this.createDropRng = options.createDropRng ?? (() => Math.random);
     this.createEvadeRng = options.createEvadeRng ?? (() => Math.random);
+    this.createWeaponRng = options.createWeaponRng ?? (() => Math.random);
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
+    this.weaponRng = this.createWeaponRng();
     this.forceAvoidance = options.rollAvoidance;
     if (options.playerClass) {
       this.beginRun(options.playerClass);
@@ -638,7 +643,7 @@ export class GameState {
     this.clearRunSession();
     this.world.clear();
     this.rebuildStreams();
-    this.world.populateInitial(this.rng);
+    this.world.populateInitial(this.rng, this.weaponRng);
   }
 
   private clearRunSession(): void {
@@ -654,6 +659,7 @@ export class GameState {
     this.rng = this.createRng();
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
+    this.weaponRng = this.createWeaponRng();
   }
 
   private legalMoveCols(): number[] {
@@ -678,7 +684,7 @@ export class GameState {
 
     player.moveTo(toRow, toCol);
     this._distance += 1;
-    this.world.prepareAhead(player.row, this.rng, this._runOver);
+    this.world.prepareAhead(player.row, this.rng, this._runOver, this.weaponRng);
 
     const destination = this.world.snapshotTile(toRow, toCol);
     if (!destination) {

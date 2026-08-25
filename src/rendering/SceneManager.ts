@@ -58,6 +58,7 @@ import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type PlayerRenderKey } from '../game/definitions/classes';
 import { type EnemyDropResult } from '../game/definitions/enemies';
+import { type EnemyWeaponVariant } from '../game/definitions/enemyWeapons';
 import {
   coinModelSizeForPickup,
   potionModelSizeForPickup,
@@ -72,6 +73,10 @@ import {
   loadEnemyTemplate,
   type EnemyRenderKey,
 } from './enemyAssets';
+import {
+  enemyEquipmentLoadout,
+  enemyWeaponVariantsEqual,
+} from './enemyEquipment';
 import {
   DUNGEON_FLOOR_KEYS,
   DUNGEON_WALL_KEYS,
@@ -149,6 +154,9 @@ interface EnemySlot {
   oneShotAction: AnimationAction | null;
   loadToken: number;
   occupantId: string | null;
+  weaponVariant: EnemyWeaponVariant | null;
+  equipmentMounts: Group[];
+  equipmentLoadToken: number;
   dying: boolean;
   deathFadeStartedAt: number | null;
   attackSequence: number;
@@ -1799,13 +1807,23 @@ export class SceneManager {
         if (this.enemyAdvanceFx?.mesh === slot.group) {
           slot.group.visible = true;
           if (occupant && occupant.renderKey === key) {
-            this.requestEnemyModel(slot, occupant.id, key);
+            this.requestEnemyModel(
+              slot,
+              occupant.id,
+              key,
+              occupant.weaponVariant,
+            );
           }
           continue;
         }
         if (occupant && occupant.renderKey === key) {
           slot.group.visible = true;
-          this.requestEnemyModel(slot, occupant.id, key);
+          this.requestEnemyModel(
+            slot,
+            occupant.id,
+            key,
+            occupant.weaponVariant,
+          );
           continue;
         }
         if (playingMonsterFx || slot.dying) {
@@ -2085,6 +2103,9 @@ export class SceneManager {
       oneShotAction: null,
       loadToken: 0,
       occupantId: null,
+      weaponVariant: null,
+      equipmentMounts: [],
+      equipmentLoadToken: 0,
       dying: false,
       deathFadeStartedAt: null,
       attackSequence: 0,
@@ -2509,6 +2530,95 @@ export class SceneManager {
     this.playerEquipmentMounts = [];
   }
 
+  private async installEnemyEquipmentLoadout(
+    slot: EnemySlot,
+    model: Group,
+    weaponVariant: EnemyWeaponVariant | null,
+    occupantId: string,
+    modelToken: number,
+  ): Promise<void> {
+    const equipmentToken = ++slot.equipmentLoadToken;
+    this.removeEnemyEquipment(slot);
+    const loadout = enemyEquipmentLoadout(weaponVariant);
+    await Promise.all(
+      loadout.map((visual) =>
+        this.installEnemyEquipment(
+          slot,
+          model,
+          visual,
+          loadPlayerEquipmentTemplate(visual.assetKey),
+          occupantId,
+          modelToken,
+          equipmentToken,
+        ),
+      ),
+    );
+  }
+
+  private async installEnemyEquipment(
+    slot: EnemySlot,
+    model: Group,
+    loadout: PlayerEquipmentVisual,
+    templatePromise: Promise<Group>,
+    occupantId: string,
+    modelToken: number,
+    equipmentToken: number,
+  ): Promise<void> {
+    try {
+      const weaponTemplate = await templatePromise;
+      if (
+        modelToken !== slot.loadToken ||
+        equipmentToken !== slot.equipmentLoadToken ||
+        slot.occupantId !== occupantId ||
+        slot.model !== model
+      ) {
+        return;
+      }
+      this.attachEnemyEquipment(slot, model, weaponTemplate, loadout);
+    } catch (error) {
+      if (
+        modelToken !== slot.loadToken ||
+        equipmentToken !== slot.equipmentLoadToken
+      ) {
+        return;
+      }
+      console.error(
+        `Failed to load enemy equipment '${loadout.assetKey}' from ${playerEquipmentUrl(loadout.assetKey)}`,
+        error,
+      );
+    }
+  }
+
+  private attachEnemyEquipment(
+    slot: EnemySlot,
+    model: Group,
+    template: Group,
+    loadout: PlayerEquipmentVisual,
+  ): void {
+    const mountNode = findEquipmentMount(model, loadout.mount);
+    if (!mountNode) {
+      console.error(
+        `Failed to attach enemy equipment '${loadout.assetKey}': missing mount '${loadout.mount}'`,
+      );
+      return;
+    }
+    const mount = new Group();
+    mount.name = `${PLAYER_WEAPON_MOUNT_NAME}-${loadout.assetKey}`;
+    mount.position.set(...loadout.position);
+    mount.rotation.set(...loadout.rotation);
+    mount.scale.setScalar(loadout.scale);
+    mount.add(template.clone());
+    mountNode.add(mount);
+    slot.equipmentMounts.push(mount);
+  }
+
+  private removeEnemyEquipment(slot: EnemySlot): void {
+    for (const mount of slot.equipmentMounts) {
+      mount.removeFromParent();
+    }
+    slot.equipmentMounts = [];
+  }
+
   private attachPlayerModel(model: Group, clips: PlayerClipMap): void {
     this.removePlayerModel();
     this.playerModel = model;
@@ -2709,14 +2819,20 @@ export class SceneManager {
     slot: EnemySlot,
     occupantId: string,
     key: EnemyRenderKey,
+    weaponVariant: EnemyWeaponVariant | null,
   ): void {
-    if (slot.occupantId === occupantId && (slot.model || slot.loadToken > 0)) {
+    if (
+      slot.occupantId === occupantId &&
+      (slot.model || slot.loadToken > 0) &&
+      enemyWeaponVariantsEqual(slot.weaponVariant, weaponVariant)
+    ) {
       return;
     }
     this.detachEnemyModel(slot);
     slot.dying = false;
     slot.deathFadeStartedAt = null;
     slot.occupantId = occupantId;
+    slot.weaponVariant = weaponVariant;
     slot.loadToken += 1;
     const token = slot.loadToken;
     void this.installEnemyModel(slot, key, occupantId, token);
@@ -2744,6 +2860,13 @@ export class SceneManager {
       cloneMeshMaterials(model);
       fitEnemyModel(model, key);
       this.attachEnemyModel(slot, model, clips);
+      await this.installEnemyEquipmentLoadout(
+        slot,
+        model,
+        slot.weaponVariant,
+        occupantId,
+        token,
+      );
     } catch (error) {
       if (token !== slot.loadToken) {
         return;
@@ -2781,6 +2904,7 @@ export class SceneManager {
   }
 
   private detachEnemyModel(slot: EnemySlot): void {
+    this.removeEnemyEquipment(slot);
     slot.mixer?.stopAllAction();
     slot.mixer = null;
     slot.loopAction = null;
@@ -2797,6 +2921,7 @@ export class SceneManager {
   private releaseEnemySlot(slot: EnemySlot): void {
     slot.loadToken += 1;
     slot.occupantId = null;
+    slot.weaponVariant = null;
     slot.dying = false;
     slot.deathFadeStartedAt = null;
     slot.attackSequence = 0;

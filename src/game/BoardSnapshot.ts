@@ -10,6 +10,7 @@ import {
 } from './config';
 import { type PlayerClassId, type PlayerRenderKey } from './definitions/classes';
 import { type EnemyRenderKey, type EnemyType } from './definitions/enemies';
+import { type EnemyWeaponVariant } from './definitions/enemyWeapons';
 import { type PickupId } from './definitions/pickupCatalog';
 import { deepFreeze, type DeepReadonly } from './freeze';
 import { type GridPosition, type TileContentType } from './Tile';
@@ -26,6 +27,7 @@ export interface TileMonsterView {
   readonly id: string;
   readonly type: EnemyType;
   readonly renderKey: EnemyRenderKey;
+  readonly weaponVariant: EnemyWeaponVariant | null;
 }
 
 export interface TileSnapshot {

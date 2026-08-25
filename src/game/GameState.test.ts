@@ -143,6 +143,7 @@ describe('enemy definitions', () => {
   it('applies the fatal query-string override on top of the Skeleton Minion definition', () => {
     const state = createState({
       createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createWeaponRng: () => () => 0,
       rollAvoidance: () => true,
     });
 
