@@ -11,6 +11,7 @@ import {
 export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
   'skeletonMinion',
   'cryptGuard',
+  'skeletonWarrior',
   'boneBrute',
   'skeletonMage',
   'necromancer',
@@ -19,7 +20,8 @@ export const ENEMY_RENDER_KEYS: readonly EnemyRenderKey[] = [
 export const ENEMY_MODEL_URLS: Record<EnemyRenderKey, string> = {
   skeletonMinion: '/models/enemies/kaykit/Skeleton_Minion.glb',
   cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
-  boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+  skeletonWarrior: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+  boneBrute: '/models/enemies/kaykit/Skeleton_Golem.glb',
   skeletonMage: '/models/enemies/kaykit/Skeleton_Mage.glb',
   necromancer: '/models/enemies/kaykit/Necromancer.glb',
 };
@@ -45,7 +47,8 @@ export const ENEMY_ATTACK_CLIPS: Record<
 > = {
   skeletonMinion: ['attackUnarmed', 'attackUnarmedKick'],
   cryptGuard: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
-  boneBrute: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+  skeletonWarrior: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+  boneBrute: ['attackUnarmed', 'attackUnarmedKick'],
   skeletonMage: ['magicShoot', 'magicSpellcasting'],
   necromancer: ['magicSummon'],
 };
@@ -60,6 +63,8 @@ export interface EnemyModelFit {
 export const ENEMY_MODEL_FITS: Record<EnemyRenderKey, EnemyModelFit> = {
   skeletonMinion: { height: 0.78, wrapperY: 0.46, yaw: 0 },
   cryptGuard: { height: 0.96, wrapperY: 0.58, yaw: 0 },
+  skeletonWarrior: { height: 1.08, wrapperY: 0.52, yaw: 0 },
+  // TODO: verify Golem fit in-scene, was copied from the old Warrior fit as a starting point
   boneBrute: { height: 1.08, wrapperY: 0.52, yaw: 0 },
   skeletonMage: { height: 0.96, wrapperY: 0.58, yaw: 0 },
   necromancer: { height: 1.06, wrapperY: 0.6, yaw: 0 },

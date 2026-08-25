@@ -12,12 +12,12 @@ export type EnemyType =
   | 'necromancer';
 
 /**
- * Render keys map to loaded models. `skeletonWarrior` temporarily reuses the
- * boneBrute key until it has its own art.
+ * Render keys map to loaded KayKit enemy models.
  */
 export type EnemyRenderKey =
   | 'skeletonMinion'
   | 'cryptGuard'
+  | 'skeletonWarrior'
   | 'boneBrute'
   | 'skeletonMage'
   | 'necromancer';
@@ -113,8 +113,7 @@ export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>>
       startingStats: enemyStats(21, 7, 7, 3, 3),
       experience: 4,
       elite: false,
-      // TODO: skeletonWarrior needs its own render key + model once art exists
-      renderKey: 'boneBrute',
+      renderKey: 'skeletonWarrior',
       dropTable: DEFAULT_ENEMY_DROP_TABLE,
     },
     boneBrute: {

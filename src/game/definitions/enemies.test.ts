@@ -12,8 +12,9 @@ describe('enemy definitions', () => {
     for (const type of Object.keys(ENEMY_DEFINITIONS) as Array<
       keyof typeof ENEMY_DEFINITIONS
     >) {
-      const expected = type === 'skeletonWarrior' ? 'boneBrute' : type;
-      expect(getEnemyDefinition(type).renderKey).toBe(expected);
+      expect(getEnemyDefinition(type).renderKey).toBe(
+        type === 'skeletonWarrior' ? 'skeletonWarrior' : type,
+      );
     }
   });
 
@@ -49,7 +50,7 @@ describe('enemy definitions', () => {
       },
       experience: 4,
       elite: false,
-      renderKey: 'boneBrute',
+      renderKey: 'skeletonWarrior',
       dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
     });
     expect(ENEMY_DEFINITIONS.boneBrute).toEqual({

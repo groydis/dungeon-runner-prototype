@@ -90,6 +90,7 @@ export function preloadCharacterSelectionBackgroundAssets(): Promise<void> {
     selectionBackgroundPromise = settlePreloads([
       loadRigMediumClips(),
       loadEnemyTemplate('cryptGuard'),
+      loadEnemyTemplate('skeletonWarrior'),
       loadEnemyTemplate('boneBrute'),
       loadMerchantTemplate(),
       loadMerchantClips(),

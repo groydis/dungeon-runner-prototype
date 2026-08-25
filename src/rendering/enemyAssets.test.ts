@@ -18,6 +18,7 @@ describe('enemy asset mapping', () => {
     expect([...ENEMY_RENDER_KEYS]).toEqual([
       'skeletonMinion',
       'cryptGuard',
+      'skeletonWarrior',
       'boneBrute',
       'skeletonMage',
       'necromancer',
@@ -28,14 +29,16 @@ describe('enemy asset mapping', () => {
     expect(ENEMY_MODEL_URLS).toEqual({
       skeletonMinion: '/models/enemies/kaykit/Skeleton_Minion.glb',
       cryptGuard: '/models/enemies/kaykit/Skeleton_Rogue.glb',
-      boneBrute: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+      skeletonWarrior: '/models/enemies/kaykit/Skeleton_Warrior.glb',
+      boneBrute: '/models/enemies/kaykit/Skeleton_Golem.glb',
       skeletonMage: '/models/enemies/kaykit/Skeleton_Mage.glb',
       necromancer: '/models/enemies/kaykit/Necromancer.glb',
     });
     expect(ENEMY_ATTACK_CLIPS).toEqual({
       skeletonMinion: ['attackUnarmed', 'attackUnarmedKick'],
       cryptGuard: ['attack1H', 'attack1HChop', 'attack1HHorizontal', 'attack1HStab'],
-      boneBrute: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+      skeletonWarrior: ['attack2H', 'attack2HSlice', 'attack2HSpin', 'attack2HStab'],
+      boneBrute: ['attackUnarmed', 'attackUnarmedKick'],
       skeletonMage: ['magicShoot', 'magicSpellcasting'],
       necromancer: ['magicSummon'],
     });

@@ -2035,6 +2035,13 @@ export class SceneManager {
         this.boneBruteMaterial,
         0.52,
       ),
+      skeletonWarrior: this.createEnemySlot(
+        'skeletonWarrior',
+        col,
+        boneBruteGeo,
+        this.boneBruteMaterial,
+        0.52,
+      ),
       skeletonMage: this.createEnemySlot(
         'skeletonMage',
         col,
