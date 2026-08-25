@@ -60,46 +60,54 @@ describe('rollEnemyWeapon', () => {
     expect(minionFistC?.weaponAssetKey).not.toBe(minionFistC?.offhandWeaponAssetKey);
   });
 
-  it('only rolls shields for crypt guard', () => {
-    let call = 0;
-    const weaponThenShield: () => number = () => {
-      call += 1;
-      if (call === 1) {
-        return 0.999;
-      }
-      if (call === 2) {
-        return 0;
-      }
-      return 0;
+  it('only rolls shields for crypt guard and tiers defence by shield size', () => {
+    const cryptGuardRolls = (
+      weaponRng: number,
+      shieldChanceRng: number,
+      shieldPickRng: number,
+    ) => {
+      let call = 0;
+      return () => {
+        call += 1;
+        if (call === 1) {
+          return weaponRng;
+        }
+        if (call === 2) {
+          return shieldChanceRng;
+        }
+        return shieldPickRng;
+      };
     };
-    expect(rollEnemyWeapon('cryptGuard', weaponThenShield)).toMatchObject({
+
+    expect(
+      rollEnemyWeapon('cryptGuard', cryptGuardRolls(0.999, 0.1, 0)),
+    ).toMatchObject({
       weaponAssetKey: 'fantasyAxeC',
-      shieldAssetKey: 'shieldBadge',
-      defenceBonus: 1,
+      shieldAssetKey: 'shieldRound',
+      defenceBonus: 2,
     });
 
-    call = 0;
-    const shieldBlocked: () => number = () => {
-      call += 1;
-      if (call === 1) {
-        return 0.999;
-      }
-      return 0.5;
-    };
-    expect(rollEnemyWeapon('cryptGuard', shieldBlocked)).toMatchObject({
+    expect(
+      rollEnemyWeapon('cryptGuard', cryptGuardRolls(0.999, 0.1, 0.999)),
+    ).toMatchObject({
+      weaponAssetKey: 'fantasyAxeC',
+      shieldAssetKey: 'fantasyShieldD',
+      defenceBonus: 5,
+    });
+
+    expect(
+      rollEnemyWeapon('cryptGuard', cryptGuardRolls(0.999, 0.5, 0.1)),
+    ).toMatchObject({
       weaponAssetKey: 'fantasyAxeC',
       defenceBonus: 0,
     });
     expect(
-      rollEnemyWeapon('cryptGuard', shieldBlocked)?.shieldAssetKey,
+      rollEnemyWeapon('cryptGuard', cryptGuardRolls(0.999, 0.5, 0.1))
+        ?.shieldAssetKey,
     ).toBeUndefined();
 
-    call = 0;
     expect(
-      rollEnemyWeapon('skeletonWarrior', () => {
-        call += 1;
-        return call === 1 ? 0.999 : 0;
-      })?.shieldAssetKey,
+      rollEnemyWeapon('skeletonWarrior', cryptGuardRolls(0.999, 0.1, 0))?.shieldAssetKey,
     ).toBeUndefined();
   });
 });

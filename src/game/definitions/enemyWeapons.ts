@@ -2,8 +2,9 @@ import { type PlayerEquipmentAssetKey } from '../../rendering/playerEquipment';
 import { pickWeighted, type Rng } from '../random';
 import { type EnemyType } from './enemies';
 import {
-  ENEMY_SHIELD_ASSET_KEYS,
+  SHIELD_CATALOG,
   WEAPON_CATALOG,
+  type ShieldCatalogEntry,
   type WeaponCatalogEntry,
 } from './weaponCatalog';
 
@@ -95,6 +96,19 @@ const BRUTE_FIST_ATTACK: Readonly<Record<string, number>> = {
   fistweaponC: 3,
 };
 
+const SHIELD_RARITY_WEIGHT: Record<ShieldCatalogEntry['rarity'], number> = {
+  common: 5,
+  uncommon: 3,
+  rare: 2,
+  legendary: 1,
+};
+
+const SHIELD_POOL: readonly { item: ShieldCatalogEntry; weight: number }[] =
+  SHIELD_CATALOG.map((shield) => ({
+    item: shield,
+    weight: SHIELD_RARITY_WEIGHT[shield.rarity],
+  }));
+
 function catalogEntry(id: string): WeaponCatalogEntry {
   const entry = WEAPON_CATALOG.find((weapon) => weapon.id === id);
   if (!entry) {
@@ -168,18 +182,17 @@ export function rollEnemyWeapon(
   }
 
   const weapon = catalogEntry(weaponId);
-  let shieldAssetKey: PlayerEquipmentAssetKey | undefined;
+  let shieldEntry: ShieldCatalogEntry | undefined;
   if (type === 'cryptGuard' && rng() < CRYPT_GUARD_SHIELD_CHANCE) {
-    const idx = Math.floor(rng() * ENEMY_SHIELD_ASSET_KEYS.length);
-    shieldAssetKey = ENEMY_SHIELD_ASSET_KEYS[idx];
+    shieldEntry = pickWeighted(SHIELD_POOL, rng);
   }
 
   return {
     weaponAssetKey: weapon.assetKey,
     weaponMount: 'handslot.r',
-    shieldAssetKey,
-    shieldMount: shieldAssetKey ? 'handslot.l' : undefined,
+    shieldAssetKey: shieldEntry?.assetKey,
+    shieldMount: shieldEntry ? 'handslot.l' : undefined,
     attackBonus: weapon.attackBonus,
-    defenceBonus: shieldAssetKey ? 1 : 0,
+    defenceBonus: shieldEntry?.defenceBonus ?? 0,
   };
 }

@@ -376,17 +376,84 @@ export const WEAPON_CATALOG: readonly WeaponCatalogEntry[] = [
   },
 ];
 
-export const ENEMY_SHIELD_ASSET_KEYS: readonly PlayerEquipmentAssetKey[] = [
-  'shieldBadge',
-  'shieldBadgeColor',
-  'shieldRound',
-  'shieldRoundColor',
-  'shieldSquare',
-  'shieldSquareColor',
-  'shieldSpikes',
-  'shieldSpikesColor',
-  'fantasyShieldA',
-  'fantasyShieldB',
-  'fantasyShieldC',
-  'fantasyShieldD',
+export interface ShieldCatalogEntry {
+  readonly id: string;
+  readonly assetKey: PlayerEquipmentAssetKey;
+  readonly defenceBonus: number;
+  readonly rarity: WeaponRarity;
+}
+
+export const SHIELD_CATALOG: readonly ShieldCatalogEntry[] = [
+  {
+    id: 'shieldRound',
+    assetKey: 'shieldRound',
+    defenceBonus: 2,
+    rarity: 'common',
+  },
+  {
+    id: 'shieldRoundColor',
+    assetKey: 'shieldRoundColor',
+    defenceBonus: 2,
+    rarity: 'common',
+  },
+  {
+    id: 'fantasyShieldA',
+    assetKey: 'fantasyShieldA',
+    defenceBonus: 2,
+    rarity: 'common',
+  },
+  {
+    id: 'shieldBadge',
+    assetKey: 'shieldBadge',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'shieldBadgeColor',
+    assetKey: 'shieldBadgeColor',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'shieldSpikes',
+    assetKey: 'shieldSpikes',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'shieldSpikesColor',
+    assetKey: 'shieldSpikesColor',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'shieldSquare',
+    assetKey: 'shieldSquare',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'shieldSquareColor',
+    assetKey: 'shieldSquareColor',
+    defenceBonus: 3,
+    rarity: 'uncommon',
+  },
+  {
+    id: 'fantasyShieldB',
+    assetKey: 'fantasyShieldB',
+    defenceBonus: 4,
+    rarity: 'rare',
+  },
+  {
+    id: 'fantasyShieldC',
+    assetKey: 'fantasyShieldC',
+    defenceBonus: 4,
+    rarity: 'rare',
+  },
+  {
+    id: 'fantasyShieldD',
+    assetKey: 'fantasyShieldD',
+    defenceBonus: 5,
+    rarity: 'legendary',
+  },
 ];
