@@ -89,7 +89,7 @@ describe('combat', () => {
   });
 
   it('lets injected fatal minion stats kill the player', () => {
-    const fatalMinion = enemyStatsFactoryFromSearch('?fatal=1')('skeletonMinion');
+    const fatalMinion = enemyStatsFactoryFromSearch('?fatal=1')('skeletonMinion', 60);
     expect(fatalMinion.attack).not.toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.attack);
     expect(fatalMinion.maxHealth).toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth);
     const result = resolveAutomaticCombat(player, fatalMinion, 'frontOn', {

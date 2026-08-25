@@ -404,7 +404,7 @@ export class RunWorld {
           lane.enemyType,
           row,
           col,
-          this.createEnemyStats(lane.enemyType),
+          this.createEnemyStats(lane.enemyType, row),
         ),
       );
       return createTile(row, col, { type: 'monster', id: lane.entityId });

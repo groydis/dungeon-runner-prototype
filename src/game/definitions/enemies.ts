@@ -64,10 +64,13 @@ export interface EnemyDefinition {
   readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
 }
 
-export type EnemyStatsFactory = (type: EnemyType) => CombatStats;
+export type EnemyStatsFactory = (type: EnemyType, row: number) => CombatStats;
 
 /** Testing-only Skeleton Minion attack used by `?fatal=1`. */
 export const FATAL_SKELETON_MINION_ATTACK = 99;
+
+export const ENEMY_SCALING_START_ROW = 60;
+export const ENEMY_SCALING_ROW_INTERVAL = 15;
 
 function enemyStats(
   hp: number,
@@ -163,9 +166,26 @@ export function enemyDropCollectibleId(
   return `drop-${kind}-${enemyId}`;
 }
 
-/** Default spawn stats: a clone of the definition, with no overrides. */
-export function createEnemyStats(type: EnemyType): CombatStats {
-  return createCombatStats(getEnemyDefinition(type).startingStats);
+/** Default spawn stats: definition baseline plus optional row scaling. */
+export function createEnemyStats(type: EnemyType, row: number = 60): CombatStats {
+  const base = getEnemyDefinition(type).startingStats;
+  const increment = Math.floor(
+    Math.max(0, row - ENEMY_SCALING_START_ROW) / ENEMY_SCALING_ROW_INTERVAL,
+  );
+  const str = base.str + increment;
+  const con = base.con + increment;
+  const def = base.defence + increment;
+  const dex = base.dex + increment;
+  const maxHealth = str + con * 2;
+  return createCombatStats({
+    maxHealth,
+    health: maxHealth,
+    attack: str,
+    defence: def,
+    str,
+    con,
+    dex,
+  });
 }
 
 /**
@@ -178,8 +198,8 @@ export function enemyStatsFactoryFromSearch(search: string): EnemyStatsFactory {
   );
   const fatal = params.get('fatal') === '1';
 
-  return (type) => {
-    const stats = createEnemyStats(type);
+  return (type, row) => {
+    const stats = createEnemyStats(type, row);
     if (fatal && type === 'skeletonMinion') {
       return createCombatStats({
         ...stats,

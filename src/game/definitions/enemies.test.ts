@@ -131,14 +131,35 @@ describe('enemy definitions', () => {
 
   it('applies ?fatal=1 only to Skeleton Minion', () => {
     const factory = enemyStatsFactoryFromSearch('?fatal=1');
-    expect(factory('skeletonMinion').attack).toBe(99);
-    expect(factory('skeletonMinion').maxHealth).toBe(
+    expect(factory('skeletonMinion', 60).attack).toBe(99);
+    expect(factory('skeletonMinion', 60).maxHealth).toBe(
       ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
     );
-    expect(factory('cryptGuard')).toEqual(createEnemyStats('cryptGuard'));
-    expect(factory('skeletonWarrior')).toEqual(createEnemyStats('skeletonWarrior'));
-    expect(factory('boneBrute')).toEqual(createEnemyStats('boneBrute'));
-    expect(factory('skeletonMage')).toEqual(createEnemyStats('skeletonMage'));
-    expect(factory('necromancer')).toEqual(createEnemyStats('necromancer'));
+    expect(factory('cryptGuard', 60)).toEqual(createEnemyStats('cryptGuard'));
+    expect(factory('skeletonWarrior', 60)).toEqual(createEnemyStats('skeletonWarrior'));
+    expect(factory('boneBrute', 60)).toEqual(createEnemyStats('boneBrute'));
+    expect(factory('skeletonMage', 60)).toEqual(createEnemyStats('skeletonMage'));
+    expect(factory('necromancer', 60)).toEqual(createEnemyStats('necromancer'));
+  });
+
+  it('scales enemy stats by row after ENEMY_SCALING_START_ROW', () => {
+    const baseline = createEnemyStats('necromancer', 60);
+    expect(baseline).toEqual(ENEMY_DEFINITIONS.necromancer.startingStats);
+    expect(baseline.maxHealth).toBe(30);
+    expect(baseline.attack).toBe(10);
+    expect(baseline.defence).toBe(5);
+    expect(baseline.str).toBe(10);
+    expect(baseline.con).toBe(10);
+    expect(baseline.dex).toBe(5);
+
+    expect(createEnemyStats('necromancer', 74)).toEqual(baseline);
+
+    const scaled = createEnemyStats('necromancer', 100);
+    expect(scaled.str).toBe(12);
+    expect(scaled.con).toBe(12);
+    expect(scaled.defence).toBe(7);
+    expect(scaled.dex).toBe(7);
+    expect(scaled.attack).toBe(12);
+    expect(scaled.maxHealth).toBe(36);
   });
 });
