@@ -13,8 +13,10 @@ import { mulberry32 } from './random';
 import { encounterPoolForRow } from './definitions/encounterPools';
 import {
   EARLY_ROW_PATTERN_WEIGHTS,
+  MERCHANT_COLUMN,
   ROW_PATTERN_WEIGHTS,
   createRowRecipe,
+  isInMerchantFreeZone,
   isMerchantRow,
   type LaneRecipe,
 } from './rowGeneration';
@@ -59,10 +61,14 @@ function assertRowSafety(row: number, recipe: LaneRecipe[]): void {
 
   if (isMerchantRow(row)) {
     expect(kinds.shop).toBe(1);
-    expect(kinds.empty).toBe(2);
+    expect(recipe[MERCHANT_COLUMN]?.kind).toBe('shop');
     expect(kinds.monster ?? 0).toBe(0);
-    expect((kinds.gold ?? 0) + (kinds.potion ?? 0)).toBe(0);
-    expect(kinds.trap ?? 0).toBe(0);
+  }
+
+  for (let col = 0; col < LANE_COUNT; col += 1) {
+    if (isInMerchantFreeZone(row, col)) {
+      expect(recipe[col]?.kind).not.toBe('monster');
+    }
   }
 }
 
@@ -92,6 +98,57 @@ describe('row generation', () => {
     expect(14 % SHOP_ROW_INTERVAL).toBe(0);
   });
 
+  it('keeps a 3×3 merchant free zone clear of enemies', () => {
+    expect(isInMerchantFreeZone(12, 1)).toBe(false);
+    expect(isInMerchantFreeZone(13, 0)).toBe(true);
+    expect(isInMerchantFreeZone(13, 1)).toBe(true);
+    expect(isInMerchantFreeZone(13, 2)).toBe(true);
+    expect(isInMerchantFreeZone(14, 0)).toBe(true);
+    expect(isInMerchantFreeZone(14, 1)).toBe(true);
+    expect(isInMerchantFreeZone(14, 2)).toBe(true);
+    expect(isInMerchantFreeZone(15, 1)).toBe(true);
+    expect(isInMerchantFreeZone(16, 1)).toBe(false);
+
+    for (let seed = 1; seed < 120; seed += 1) {
+      const rng = mulberry32(seed);
+      for (let row = 0; row < 60; row += 1) {
+        const recipe = createRowRecipe(row, rng);
+        for (let col = 0; col < LANE_COUNT; col += 1) {
+          if (isInMerchantFreeZone(row, col)) {
+            expect(recipe[col]?.kind).not.toBe('monster');
+          }
+        }
+        if (isMerchantRow(row)) {
+          expect(recipe[MERCHANT_COLUMN]?.kind).toBe('shop');
+        }
+      }
+    }
+  });
+
+  it('still allows loot and traps inside the merchant free zone', () => {
+    const seen = { loot: false, trap: false };
+    for (let seed = 1; seed < 400 && (!seen.loot || !seen.trap); seed += 1) {
+      const rng = mulberry32(seed);
+      for (let row = TRAP_START_ROW; row < 90; row += 1) {
+        const recipe = createRowRecipe(row, rng);
+        for (let col = 0; col < LANE_COUNT; col += 1) {
+          if (!isInMerchantFreeZone(row, col)) {
+            continue;
+          }
+          const kind = recipe[col]?.kind;
+          if (kind === 'gold' || kind === 'potion') {
+            seen.loot = true;
+          }
+          if (kind === 'trap') {
+            seen.trap = true;
+          }
+        }
+      }
+    }
+    expect(seen.loot).toBe(true);
+    expect(seen.trap).toBe(true);
+  });
+
   it('repeats recipes for a fixed seeded RNG', () => {
     const generate = (seed: number) => {
       const rng = mulberry32(seed);
@@ -100,7 +157,7 @@ describe('row generation', () => {
 
     const first = generate(123);
     expect(generate(123)).toEqual(first);
-    expect(first[14]?.some((lane) => lane.kind === 'shop')).toBe(true);
+    expect(first[14]?.[MERCHANT_COLUMN]?.kind).toBe('shop');
     expect(generate(456)).not.toEqual(first);
   });
 
@@ -111,17 +168,12 @@ describe('row generation', () => {
     }
   });
 
-  it('places no traps in rows 0–7 and never on Merchant rows', () => {
+  it('places no traps in rows 0–7', () => {
     const rng = mulberry32(99);
     for (let row = 0; row < TRAP_START_ROW; row += 1) {
       expect(createRowRecipe(row, rng).some((lane) => lane.kind === 'trap')).toBe(
         false,
       );
-    }
-    for (const row of [14, 28, 42, 56]) {
-      const recipe = createRowRecipe(row, rng);
-      expect(recipe.some((lane) => lane.kind === 'shop')).toBe(true);
-      expect(recipe.some((lane) => lane.kind === 'trap')).toBe(false);
     }
   });
 

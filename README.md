@@ -307,7 +307,7 @@ World layout (rendering only):
 4. Trigger a landed Alarm Trap, if present, and resolve one enemy advance
 5. Collect eligible cardinal-plus encounters (combat is not played back here)
 
-A tile never holds loot, a shop, a trap, and a monster together. Shop rows are otherwise empty, so a Merchant opening never also pulls an enemy. If a pickup or Alarm Trap and an encounter happen in one step, the earlier status is applied first; an encounter then overwrites the status line.
+A tile never holds loot, a shop, a trap, and a monster together. The 3×3 around a Merchant never spawns enemies, so opening a shop never also pulls a fight from that tile ring. If a pickup or Alarm Trap and an encounter happen in one step, the earlier status is applied first; an encounter then overwrites the status line.
 
 ## Procedural row content
 
@@ -345,8 +345,10 @@ Safety guarantees:
 Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14`):
 
 - First shop at row `14`, then every 14 rows: `28`, `42`, `56`, …
-- Exactly one Merchant in a randomly chosen lane; the other two lanes are empty
-- No monster, gold, potion, trap, or other content on that row
+- Exactly one Merchant in the centre lane
+- A 3×3 merchant free zone (Chebyshev distance ≤ 1 from the Merchant) never spawns enemies
+- Gold, potions, and Alarm Traps may still appear in that zone, including on the Merchant row’s side lanes
+- The Merchant tile itself remains shop-only (loot or traps rolled onto centre are replaced by the Merchant)
 
 `?seed=<number>` seeds **row generation** (Mulberry32), including Merchant lanes, trap lanes, and enemy-type rolls. Enemy drops and side-pass evade rolls use **separate** Mulberry32 streams from the same seed (`DROP_RNG_SEED_SALT`, `EVADE_RNG_SEED_SALT`), so neither can change later layouts. `?avoid=1` / `?avoid=0` bypass the evade stream. Combat hit resolution is still deterministic from stats. Without `?seed`, generation, drops, and evade all use `Math.random`. Restart Run rebuilds every stream from the same seed.
 

@@ -5,6 +5,7 @@ import {
   LANE_COUNT,
   SAFE_ROWS_AFTER_START,
   SHOP_ROW_INTERVAL,
+  START_COL,
   START_ROW,
   TRAP_START_ROW,
 } from './config';
@@ -89,6 +90,9 @@ export type RowPattern =
 
 const LAST_SAFE_ROW = START_ROW + SAFE_ROWS_AFTER_START;
 
+/** Centre lane — matches iOS `MerchantRules.column` so the free zone is a true 3×3. */
+export const MERCHANT_COLUMN = START_COL;
+
 /**
  * Builds a row recipe factory that denominations pickups from `runSeed`
  * without advancing the generation stream (iOS `PickupDenominations` parity).
@@ -118,21 +122,55 @@ export function createRowRecipe(
   }
 
   if (isMerchantRow(row)) {
-    const col = randomInt(rng, LANE_COUNT);
-    empty[col] = {
+    const weights =
+      row < TRAP_START_ROW ? EARLY_ROW_PATTERN_WEIGHTS : ROW_PATTERN_WEIGHTS;
+    const recipe = recipeFromPattern(
+      row,
+      pickWeighted(weights, rng),
+      rng,
+      runSeed,
+    );
+    const cleared = clearMonstersInMerchantFreeZone(row, recipe);
+    cleared[MERCHANT_COLUMN] = {
       kind: 'shop',
       entityId: merchantId(row),
     };
-    return empty;
+    return cleared;
   }
 
   const weights =
     row < TRAP_START_ROW ? EARLY_ROW_PATTERN_WEIGHTS : ROW_PATTERN_WEIGHTS;
-  return recipeFromPattern(row, pickWeighted(weights, rng), rng, runSeed);
+  const recipe = recipeFromPattern(
+    row,
+    pickWeighted(weights, rng),
+    rng,
+    runSeed,
+  );
+  return clearMonstersInMerchantFreeZone(row, recipe);
 }
 
 export function isMerchantRow(row: number): boolean {
   return row >= SHOP_ROW_INTERVAL && row % SHOP_ROW_INTERVAL === 0;
+}
+
+/** Chebyshev distance ≤ 1 from the Merchant tile — enemies never spawn here. */
+export function isInMerchantFreeZone(row: number, col: number): boolean {
+  if (col < 0 || col >= LANE_COUNT || row < SHOP_ROW_INTERVAL - 1) {
+    return false;
+  }
+  const lower = Math.floor(row / SHOP_ROW_INTERVAL) * SHOP_ROW_INTERVAL;
+  const candidates = [lower, lower + SHOP_ROW_INTERVAL];
+  for (const merchantRow of candidates) {
+    if (merchantRow < SHOP_ROW_INTERVAL) {
+      continue;
+    }
+    if (
+      Math.max(Math.abs(row - merchantRow), Math.abs(col - MERCHANT_COLUMN)) <= 1
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function emptyRow(): LaneRecipe[] {
@@ -166,6 +204,18 @@ export function collectibleLane(
     entityId: collectibleId(pickupId, row, col),
     pickupId,
   };
+}
+
+function clearMonstersInMerchantFreeZone(
+  row: number,
+  lanes: LaneRecipe[],
+): LaneRecipe[] {
+  return lanes.map((lane, col) => {
+    if (lane.kind === 'monster' && isInMerchantFreeZone(row, col)) {
+      return { kind: 'empty' as const };
+    }
+    return lane;
+  });
 }
 
 function recipeFromPattern(
