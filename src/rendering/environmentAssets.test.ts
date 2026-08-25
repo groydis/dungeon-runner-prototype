@@ -76,6 +76,9 @@ describe('dungeon environment assets', () => {
     expect(dungeonWallTorchSide(4)).toBe('left');
     expect(dungeonWallTorchSide(11)).toBe('right');
     expect(dungeonWallTorchSide(18)).toBe('left');
+    expect(dungeonWallVariant(4, 'left')).toBe('stone');
+    expect(dungeonWallVariant(11, 'right')).toBe('stone');
+    expect(dungeonWallVariant(18, 'left')).toBe('stone');
   });
 
   it('limits exterior light beams to windowed and gated wall modules', () => {

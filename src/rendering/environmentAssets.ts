@@ -82,7 +82,9 @@ const DUNGEON_WALL_VARIANTS: readonly DungeonWallAssetKey[] = Object.freeze([
 
 const FLOOR_TOP_Y = 0.071;
 const WALL_SOURCE_WIDTH = 4;
-const WALL_MOUNT_HEIGHT = FLOOR_TOP_Y + TILE_PITCH * 0.58;
+/** AABB center height for wall sconces (raised from the old 0.58 factor). */
+const WALL_MOUNT_HEIGHT_FRACTION = 0.72;
+const WALL_MOUNT_HEIGHT = FLOOR_TOP_Y + TILE_PITCH * WALL_MOUNT_HEIGHT_FRACTION;
 
 export function loadDungeonFloorTemplate(
   key: DungeonFloorAssetKey,
@@ -117,24 +119,29 @@ export function dungeonFloorRotation(row: number, col: number): number {
   return (Math.abs(row * 17 + col * 13) % 4) * (Math.PI / 2);
 }
 
-/** Stable visual-only wall choice; it never consumes gameplay RNG. */
-export function dungeonWallVariant(
-  row: number,
-  side: DungeonWallSide,
-): DungeonWallAssetKey {
-  if (row >= 0 && row <= 2) {
-    return 'stone';
-  }
-  const hash = presentationHash(row, side === 'left' ? 0x51ed270b : 0x7f4a7c15);
-  return DUNGEON_WALL_VARIANTS[hash % DUNGEON_WALL_VARIANTS.length]!;
-}
-
 /** One alternating mounted torch every seven rows keeps the corridor readable. */
 export function dungeonWallTorchSide(row: number): DungeonWallSide | null {
   if (row < 4 || (row - 4) % 7 !== 0) {
     return null;
   }
   return Math.floor((row - 4) / 7) % 2 === 0 ? 'left' : 'right';
+}
+
+/** Stable visual-only wall choice; it never consumes gameplay RNG. */
+export function dungeonWallVariant(
+  row: number,
+  side: DungeonWallSide,
+): DungeonWallAssetKey {
+  // Opening stretch and torch mounts always use plain stone; other cells keep
+  // the weighted random mix.
+  if (row >= 0 && row <= 2) {
+    return 'stone';
+  }
+  if (dungeonWallTorchSide(row) === side) {
+    return 'stone';
+  }
+  const hash = presentationHash(row, side === 'left' ? 0x51ed270b : 0x7f4a7c15);
+  return DUNGEON_WALL_VARIANTS[hash % DUNGEON_WALL_VARIANTS.length]!;
 }
 
 /** Windowed and gated modules receive a rendering-only exterior light beam. */
