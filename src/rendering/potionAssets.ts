@@ -5,6 +5,7 @@ export const POTION_MODEL_URLS = {
   small: '/models/items/kaykit/potion_small_red.glb',
   medium: '/models/items/kaykit/potion_medium_red.glb',
   large: '/models/items/kaykit/potion_large_red.glb',
+  greater: '/models/items/kaykit/potion_huge_red.glb',
 } as const;
 
 export type PotionModelSize = keyof typeof POTION_MODEL_URLS;
@@ -13,6 +14,15 @@ export const ACTIVE_POTION_MODEL_SIZE: PotionModelSize = 'small';
 export const RESERVED_POTION_MODEL_SIZES = Object.freeze([
   'medium',
   'large',
+  'greater',
+] as const satisfies readonly PotionModelSize[]);
+
+/** Shop shelf loads every stocked size; floor pickups still use only `small`. */
+export const SHOP_POTION_MODEL_SIZES = Object.freeze([
+  'small',
+  'medium',
+  'large',
+  'greater',
 ] as const satisfies readonly PotionModelSize[]);
 
 export function loadPotionTemplate(

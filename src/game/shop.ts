@@ -8,12 +8,32 @@ import { type Merchant } from './Merchant';
 import { type CombatStats } from './Combatant';
 import { type PlayerClassId } from './definitions/classes';
 import {
+  MERCHANT_POTION_CATALOG,
+  evaluatePotionOffer,
+  merchantPotionInStock,
+  merchantPotionStock,
+  potionEffectText,
+  potionUnavailableReasonText,
+  type PotionOfferId,
+  type PotionUnavailableReason,
+} from './merchantPotions';
+import {
   applicableSpecialEquipmentGains,
   hasSpecialEquipmentGain,
   specialEquipmentForClass,
   specialEquipmentStatLine,
   type SpecialEquipmentId,
 } from './specialEquipment';
+
+export type {
+  PotionOfferId,
+  PotionUnavailableReason,
+} from './merchantPotions';
+export {
+  MERCHANT_POTION_CATALOG,
+  POTION_OFFER_IDS,
+  merchantPotionStock,
+} from './merchantPotions';
 
 export const SHOP_OFFER_IDS = [
   'vitality',
@@ -112,8 +132,20 @@ export interface ShopSpecialOfferView {
   reasonText?: string;
 }
 
+export interface PotionOfferView {
+  id: PotionOfferId;
+  title: string;
+  description: string;
+  healAmount: number;
+  cost: number;
+  available: boolean;
+  reason?: PotionUnavailableReason;
+  reasonText?: string;
+}
+
 export interface ShopView {
   gold: number;
+  potionOffers: PotionOfferView[];
   offers: ShopOfferView[];
   specialOffer: ShopSpecialOfferView | null;
 }
@@ -129,6 +161,16 @@ export interface ShopPurchaseResult {
   attackGained: number;
   defenceGained: number;
   evadeGained: number;
+  status: string;
+}
+
+export interface PotionPurchaseResult {
+  success: boolean;
+  offerId?: PotionOfferId;
+  reason?: PotionUnavailableReason;
+  goldRemaining: number;
+  goldSpent: number;
+  healthRestored: number;
   status: string;
 }
 
@@ -198,6 +240,7 @@ export function buildShopView(
   progress: ShopProgress,
   playerClassId?: PlayerClassId,
   specialEquipmentOwned = false,
+  health = stats.maxHealth,
 ): ShopView | null {
   if (!merchant) {
     return null;
@@ -205,6 +248,9 @@ export function buildShopView(
 
   return {
     gold,
+    potionOffers: merchantPotionStock(merchant.row).map((definition) =>
+      buildPotionOfferView(merchant, definition.id, gold, health, stats.maxHealth),
+    ),
     offers: SHOP_OFFER_IDS.map((id) => {
       const catalog = SHOP_OFFER_CATALOG[id];
       const currentValue = shopStatValue(id, stats);
@@ -342,6 +388,43 @@ export function applyShopPurchase(
   };
 }
 
+/** Immediate-use potion: spend gold and report heal amount; caller applies heal. */
+export function applyPotionPurchase(
+  merchant: Merchant | null,
+  offerId: PotionOfferId,
+  gold: number,
+  health: number,
+  maxHealth: number,
+): PotionPurchaseResult {
+  const definition = MERCHANT_POTION_CATALOG[offerId];
+  const evaluation = evaluatePotionOffer(
+    merchant !== null,
+    merchant !== null && merchantPotionInStock(offerId, merchant.row),
+    gold,
+    health,
+    maxHealth,
+    definition.price,
+  );
+  if (!evaluation.available) {
+    return emptyPotionPurchase(
+      offerId,
+      gold,
+      evaluation.reason ?? 'noShop',
+      definition.price,
+    );
+  }
+
+  const restored = Math.min(definition.healAmount, maxHealth - health);
+  return {
+    success: true,
+    offerId,
+    goldRemaining: gold - definition.price,
+    goldSpent: definition.price,
+    healthRestored: restored,
+    status: `Bought ${definition.name}. Restored ${restored} HP.`,
+  };
+}
+
 function emptyPurchase(
   offerId: ShopOfferId | 'specialEquipment',
   gold: number,
@@ -358,6 +441,53 @@ function emptyPurchase(
     defenceGained: 0,
     evadeGained: 0,
     status: unavailableReasonText(reason),
+  };
+}
+
+function emptyPotionPurchase(
+  offerId: PotionOfferId,
+  gold: number,
+  reason: PotionUnavailableReason,
+  price: number,
+): PotionPurchaseResult {
+  return {
+    success: false,
+    offerId,
+    reason,
+    goldRemaining: gold,
+    goldSpent: 0,
+    healthRestored: 0,
+    status: potionUnavailableReasonText(reason, price),
+  };
+}
+
+function buildPotionOfferView(
+  merchant: Merchant,
+  offerId: PotionOfferId,
+  gold: number,
+  health: number,
+  maxHealth: number,
+): PotionOfferView {
+  const definition = MERCHANT_POTION_CATALOG[offerId];
+  const evaluation = evaluatePotionOffer(
+    true,
+    merchantPotionInStock(offerId, merchant.row),
+    gold,
+    health,
+    maxHealth,
+    definition.price,
+  );
+  return {
+    id: offerId,
+    title: definition.name,
+    description: potionEffectText(definition.healAmount),
+    healAmount: definition.healAmount,
+    cost: definition.price,
+    available: evaluation.available,
+    reason: evaluation.reason,
+    reasonText: evaluation.reason
+      ? potionUnavailableReasonText(evaluation.reason, definition.price)
+      : undefined,
   };
 }
 

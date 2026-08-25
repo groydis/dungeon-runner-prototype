@@ -29,11 +29,17 @@ import {
 } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type LevelUpChoice } from './levelUp';
-import { SHOP_OFFER_IDS, type ShopOfferId } from './shop';
+import {
+  POTION_OFFER_IDS,
+  SHOP_OFFER_IDS,
+  type PotionOfferId,
+  type ShopOfferId,
+} from './shop';
 import { CameraController } from '../rendering/CameraController';
 import { ClassSelectionPreview } from '../rendering/ClassSelectionPreview';
 import { EquipmentShopPreview } from '../rendering/EquipmentShopPreview';
 import { MerchantShopPreview } from '../rendering/MerchantShopPreview';
+import { PotionShopPreview } from '../rendering/PotionShopPreview';
 import {
   preloadCharacterSelectionBackgroundAssets,
   preloadClassGameplayAssets,
@@ -63,6 +69,7 @@ export class Game {
   private readonly shop: ShopOverlayView;
   private readonly merchantShopPreview: MerchantShopPreview;
   private readonly equipmentShopPreview: EquipmentShopPreview;
+  private readonly potionShopPreview: PotionShopPreview;
   private readonly levelUp: LevelUpOverlayView;
   private readonly classSelect: ClassSelectionView;
   private readonly classSelectionPreview: ClassSelectionPreview;
@@ -103,6 +110,20 @@ export class Game {
     this.equipmentShopPreview = new EquipmentShopPreview(
       equipmentPreviewCanvas,
     );
+    const potionCanvases = Object.fromEntries(
+      POTION_OFFER_IDS.map((offerId) => {
+        const canvas = document.querySelector<HTMLCanvasElement>(
+          `#shop-potion-preview-${offerId}`,
+        );
+        if (!canvas) {
+          throw new Error(
+            `Missing required element: #shop-potion-preview-${offerId}`,
+          );
+        }
+        return [offerId, canvas];
+      }),
+    ) as Record<PotionOfferId, HTMLCanvasElement>;
+    this.potionShopPreview = new PotionShopPreview(potionCanvases);
     this.levelUp = new LevelUpOverlayView();
     const classPreviewCanvas =
       document.querySelector<HTMLCanvasElement>('#class-model-preview');
@@ -121,6 +142,9 @@ export class Game {
     }
     for (const offerId of SHOP_OFFER_IDS) {
       this.shop.onOffer(offerId, () => this.buyShopOffer(offerId));
+    }
+    for (const offerId of POTION_OFFER_IDS) {
+      this.shop.onPotion(offerId, () => this.buyPotionOffer(offerId));
     }
     this.shop.onLeave(() => this.leaveShop());
     this.shop.onSpecialEquipment(() => this.buySpecialEquipment());
@@ -158,6 +182,7 @@ export class Game {
     this.shop.dispose();
     this.merchantShopPreview.dispose();
     this.equipmentShopPreview.dispose();
+    this.potionShopPreview.dispose();
     this.levelUp.dispose();
     this.classSelect.dispose();
     this.classSelectionPreview.dispose();
@@ -185,6 +210,8 @@ export class Game {
     this.merchantShopPreview.render();
     this.equipmentShopPreview.update(dt);
     this.equipmentShopPreview.render();
+    this.potionShopPreview.update(dt);
+    this.potionShopPreview.render();
     this.classSelectionPreview.update(dt);
     this.classSelectionPreview.render();
 
@@ -507,6 +534,7 @@ export class Game {
       this.shop.hide();
       this.merchantShopPreview.setVisible(false);
       this.equipmentShopPreview.setClassId(null);
+      this.potionShopPreview.setActiveOffers([]);
       this.levelUp.hide();
       this.state.dismissOpenShop();
       this.state.dismissLevelUp();
@@ -568,6 +596,7 @@ export class Game {
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
     this.equipmentShopPreview.setClassId(null);
+    this.potionShopPreview.setActiveOffers([]);
     this.levelUp.hide();
     this.gameOver.hide();
     this.state.clearSelectedClass();
@@ -601,6 +630,14 @@ export class Game {
     if (result.success) {
       this.scene.setPlayerSpecialEquipmentEquipped(true);
     }
+    this.updateHud();
+  }
+
+  private buyPotionOffer(offerId: PotionOfferId): void {
+    if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
+      return;
+    }
+    this.state.buyPotionOffer(offerId);
     this.updateHud();
   }
 
@@ -648,6 +685,7 @@ export class Game {
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
     this.equipmentShopPreview.setClassId(null);
+    this.potionShopPreview.setActiveOffers([]);
     this.scene.beginMerchantLeaveFx(left.row, left.col);
     this.setPhase({ kind: 'idle' });
     this.updateHud();
@@ -677,6 +715,9 @@ export class Game {
     this.merchantShopPreview.setVisible(shopView !== null);
     this.equipmentShopPreview.setClassId(
       shopView?.specialOffer?.classId ?? null,
+    );
+    this.potionShopPreview.setActiveOffers(
+      shopView?.potionOffers.map((offer) => offer.id) ?? [],
     );
     if (shopView) {
       this.shop.render(shopView);

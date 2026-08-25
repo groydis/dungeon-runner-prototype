@@ -1,5 +1,8 @@
 import {
+  POTION_OFFER_IDS,
   SHOP_OFFER_IDS,
+  type PotionOfferId,
+  type PotionOfferView,
   type ShopOfferId,
   type ShopOfferView,
   type ShopView,
@@ -17,12 +20,21 @@ export class ShopOverlayView {
   private readonly specialStatsEl: HTMLElement;
   private readonly specialCostEl: HTMLElement;
   private readonly specialReasonEl: HTMLElement;
+  private readonly potionSectionTitle: HTMLElement;
+  private readonly potionShelf: HTMLElement;
   private readonly buttons: Record<ShopOfferId, HTMLButtonElement>;
   private readonly titles: Record<ShopOfferId, HTMLElement>;
   private readonly costs: Record<ShopOfferId, HTMLElement>;
   private readonly descs: Record<ShopOfferId, HTMLElement>;
   private readonly reasons: Record<ShopOfferId, HTMLElement>;
+  private readonly potionButtons: Record<PotionOfferId, HTMLButtonElement>;
+  private readonly potionTitles: Record<PotionOfferId, HTMLElement>;
+  private readonly potionCosts: Record<PotionOfferId, HTMLElement>;
+  private readonly potionDescs: Record<PotionOfferId, HTMLElement>;
+  private readonly potionReasons: Record<PotionOfferId, HTMLElement>;
   private readonly handlers: Partial<Record<ShopOfferId, () => void>> = {};
+  private readonly potionHandlers: Partial<Record<PotionOfferId, () => void>> =
+    {};
   private leaveHandler: (() => void) | null = null;
   private specialHandler: (() => void) | null = null;
 
@@ -40,6 +52,8 @@ export class ShopOverlayView {
     this.specialStatsEl = requireElement(root, '#shop-special-stats');
     this.specialCostEl = requireElement(root, '#shop-special-cost');
     this.specialReasonEl = requireElement(root, '#shop-special-reason');
+    this.potionSectionTitle = requireElement(root, '#shop-potion-section-title');
+    this.potionShelf = requireElement(root, '#shop-potion-shelf');
     this.buttons = {
       vitality: requireElement(root, '#shop-offer-vitality') as HTMLButtonElement,
       sharpened: requireElement(root, '#shop-offer-sharpened') as HTMLButtonElement,
@@ -70,6 +84,36 @@ export class ShopOverlayView {
       armoured: requireElement(root, '#shop-armoured-reason'),
       evasive: requireElement(root, '#shop-evasive-reason'),
     };
+    this.potionButtons = {
+      small: requireElement(root, '#shop-potion-small') as HTMLButtonElement,
+      medium: requireElement(root, '#shop-potion-medium') as HTMLButtonElement,
+      large: requireElement(root, '#shop-potion-large') as HTMLButtonElement,
+      greater: requireElement(root, '#shop-potion-greater') as HTMLButtonElement,
+    };
+    this.potionTitles = {
+      small: requireElement(root, '#shop-potion-small-title'),
+      medium: requireElement(root, '#shop-potion-medium-title'),
+      large: requireElement(root, '#shop-potion-large-title'),
+      greater: requireElement(root, '#shop-potion-greater-title'),
+    };
+    this.potionCosts = {
+      small: requireElement(root, '#shop-potion-small-cost'),
+      medium: requireElement(root, '#shop-potion-medium-cost'),
+      large: requireElement(root, '#shop-potion-large-cost'),
+      greater: requireElement(root, '#shop-potion-greater-cost'),
+    };
+    this.potionDescs = {
+      small: requireElement(root, '#shop-potion-small-desc'),
+      medium: requireElement(root, '#shop-potion-medium-desc'),
+      large: requireElement(root, '#shop-potion-large-desc'),
+      greater: requireElement(root, '#shop-potion-greater-desc'),
+    };
+    this.potionReasons = {
+      small: requireElement(root, '#shop-potion-small-reason'),
+      medium: requireElement(root, '#shop-potion-medium-reason'),
+      large: requireElement(root, '#shop-potion-large-reason'),
+      greater: requireElement(root, '#shop-potion-greater-reason'),
+    };
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
   }
 
@@ -77,6 +121,12 @@ export class ShopOverlayView {
     this.detachOffer(offerId);
     this.handlers[offerId] = handler;
     this.buttons[offerId].addEventListener('click', handler);
+  }
+
+  onPotion(offerId: PotionOfferId, handler: () => void): void {
+    this.detachPotion(offerId);
+    this.potionHandlers[offerId] = handler;
+    this.potionButtons[offerId].addEventListener('click', handler);
   }
 
   onLeave(handler: () => void): void {
@@ -105,6 +155,7 @@ export class ShopOverlayView {
     for (const id of SHOP_OFFER_IDS) {
       this.renderOffer(view.offers.find((offer) => offer.id === id));
     }
+    this.renderPotionShelf(view.potionOffers);
     const special = view.specialOffer;
     this.specialButton.hidden = special === null;
     if (special) {
@@ -128,9 +179,42 @@ export class ShopOverlayView {
     for (const id of SHOP_OFFER_IDS) {
       this.detachOffer(id);
     }
+    for (const id of POTION_OFFER_IDS) {
+      this.detachPotion(id);
+    }
     this.detachLeave();
     this.detachSpecialEquipment();
     this.overlayEl.removeEventListener('pointerdown', this.blockPointer);
+  }
+
+  private renderPotionShelf(offers: PotionOfferView[]): void {
+    const stocked = new Set(offers.map((offer) => offer.id));
+    const hasStock = stocked.size > 0;
+    this.potionSectionTitle.hidden = !hasStock;
+    this.potionShelf.hidden = !hasStock;
+    for (const id of POTION_OFFER_IDS) {
+      const offer = offers.find((entry) => entry.id === id);
+      const button = this.potionButtons[id];
+      if (!offer) {
+        button.hidden = true;
+        continue;
+      }
+      button.hidden = false;
+      this.potionTitles[id].textContent = offer.title;
+      this.potionCosts[id].textContent = `${offer.cost} G`;
+      this.potionDescs[id].textContent = offer.description;
+      this.potionReasons[id].textContent = offer.available
+        ? ''
+        : (offer.reasonText ?? '');
+      button.disabled = !offer.available;
+      const reason = offer.available
+        ? offer.description
+        : (offer.reasonText ?? 'Unavailable');
+      button.setAttribute(
+        'aria-label',
+        `${offer.title}, ${offer.cost} gold. ${reason}`,
+      );
+    }
   }
 
   private renderOffer(offer: ShopOfferView | undefined): void {
@@ -162,6 +246,15 @@ export class ShopOverlayView {
     }
     this.buttons[offerId].removeEventListener('click', handler);
     delete this.handlers[offerId];
+  }
+
+  private detachPotion(offerId: PotionOfferId): void {
+    const handler = this.potionHandlers[offerId];
+    if (!handler) {
+      return;
+    }
+    this.potionButtons[offerId].removeEventListener('click', handler);
+    delete this.potionHandlers[offerId];
   }
 
   private detachLeave(): void {

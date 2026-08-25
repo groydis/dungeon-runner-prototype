@@ -126,8 +126,9 @@ library.
 | Target under `items/kaykit/` | Runtime status |
 |---|---|
 | `potion_small_red.glb` | Active pooled health pickup |
-| `potion_medium_red.glb` | Reserved future healing tier; not loaded |
-| `potion_large_red.glb` | Reserved future healing tier; not loaded |
+| `potion_medium_red.glb` | Merchant shelf (Medium Potion); reserved for future floor tiers |
+| `potion_large_red.glb` | Merchant shelf (Large Potion); reserved for future floor tiers |
+| `potion_huge_red.glb` | Merchant shelf (Greater Potion); reserved for future floor tiers |
 
 ## Merchants
 

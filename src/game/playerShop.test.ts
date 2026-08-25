@@ -274,6 +274,51 @@ describe('shop offers', () => {
 });
 
 describe('GameState shop flow', () => {
+  it('stocks healing potions by Merchant row and drinks them immediately', () => {
+    const early = openSeededShop();
+    expect(early.getShopView()?.potionOffers.map((offer) => offer.id)).toEqual([
+      'small',
+    ]);
+    early.takeDamage(6);
+    early.addGold(2);
+    const damaged = early.getHudSnapshot().health;
+    expect(early.buyPotionOffer('small')).toMatchObject({
+      success: true,
+      goldSpent: 2,
+      healthRestored: 4,
+      status: 'Bought Small Potion. Restored 4 HP.',
+    });
+    expect(early.getHudSnapshot().health).toBe(damaged + 4);
+    expect(early.getShopView()?.offers.find((o) => o.id === 'vitality')?.cost).toBe(
+      2,
+    );
+    expect(early.buyPotionOffer('medium').reason).toBe('notInStock');
+
+    const deep = createState({
+      playerClass: 'ranger',
+      createRng: () => mulberry32(123),
+      rollAvoidance: () => true,
+    });
+    walkTo(deep, 41, 1);
+    deep.resolveCompletedMove(shopColAt(deep, 42));
+    expect(deep.shopOpen).toBe(true);
+    expect(deep.getShopView()?.potionOffers.map((offer) => offer.id)).toEqual([
+      'small',
+      'medium',
+      'large',
+      'greater',
+    ]);
+    deep.takeDamage(1);
+    expect(deep.buyPotionOffer('greater').reason).toBe('unaffordable');
+    deep.addGold(9);
+    expect(deep.buyPotionOffer('greater')).toMatchObject({
+      success: true,
+      goldSpent: 9,
+      healthRestored: 1,
+    });
+    expect(deep.buyPotionOffer('small').reason).toBe('fullHealth');
+  });
+
   it('offers and equips only the selected class special equipment', () => {
     for (const classId of PLAYER_CLASS_IDS) {
       const state = openSeededShop(

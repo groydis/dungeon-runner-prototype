@@ -727,7 +727,138 @@ body {
   cursor: not-allowed;
 }
 
-.shop-special-offer + .shop-section-title {
+.shop-special-offer + .shop-section-title,
+#shop-potion-section-title {
+  margin-top: 13px;
+}
+
+.shop-potion-shelf {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 4px;
+}
+
+.shop-potion-shelf[hidden],
+#shop-potion-section-title[hidden] {
+  display: none;
+}
+
+.shop-potion-offer {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 9px;
+  min-height: 96px;
+  border: 2px solid var(--ui-border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: var(--ui-panel-raised);
+  color: var(--hud);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.shop-potion-offer:not(:disabled):hover {
+  border-color: #a27d58;
+  background: var(--ui-panel-soft);
+  transform: translateY(-1px);
+}
+
+.shop-potion-offer:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.shop-potion-offer:focus-visible {
+  outline: 2px solid #c3a27c;
+  outline-offset: 2px;
+}
+
+.shop-potion-preview-stage {
+  position: relative;
+  display: block;
+  min-height: 74px;
+  overflow: hidden;
+  border: 2px solid var(--ui-border);
+  border-radius: 8px;
+  background: #2b2d2e;
+}
+
+.shop-potion-preview-stage canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  pointer-events: none;
+}
+
+.shop-potion-preview-loading {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  color: rgba(191, 165, 134, 0.5);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  transform: translate(-50%, -50%);
+  transition: opacity 180ms ease;
+}
+
+.shop-potion-preview-stage canvas[data-ready="true"] + .shop-potion-preview-loading {
+  opacity: 0;
+}
+
+.shop-potion-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.shop-potion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.shop-potion-title {
+  color: #ddd0be;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.shop-potion-desc {
+  color: #bdb1a1;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.shop-potion-reason {
+  margin-top: auto;
+  color: var(--ui-reason);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+.shop-potion-reason:empty {
+  display: none;
+}
+
+.shop-potion-shelf + .shop-section-title {
   margin-top: 13px;
 }
 
@@ -1289,6 +1420,28 @@ body {
 
   .shop-special-preview-stage {
     min-height: 78px;
+  }
+
+  .shop-potion-shelf {
+    gap: 7px;
+  }
+
+  .shop-potion-offer {
+    grid-template-columns: 60px minmax(0, 1fr);
+    min-height: 86px;
+    padding: 8px 9px;
+  }
+
+  .shop-potion-preview-stage {
+    min-height: 66px;
+  }
+
+  .shop-potion-title {
+    font-size: 0.82rem;
+  }
+
+  .shop-potion-desc {
+    font-size: 0.7rem;
   }
 
   .shop-special-title {

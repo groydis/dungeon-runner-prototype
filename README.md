@@ -13,7 +13,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Floor tiles use a rotated KayKit geometric-stone GLB, with a wood floor for Merchant tiles and an animated KayKit spike assembly for Alarm/Trip tiles. Pooled dark-box and rune meshes remain loading/failure fallbacks.
 - Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, and scaffolds. Gated openings cast a restrained warm light spill, while periodically mounted torches add gently flickering emissive glows and short-range pooled lights.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
-- Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium and large red variants are retained for future healing tiers but are not loaded.
+- Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium, large, and greater URLs are retained for the Merchant shelf (and future floor tiers); only small loads for board pickups.
 - Lorekeeper is a playable balanced magic class using the KayKit Lorekeeper GLB, shared `Rig_Medium` clips, and the existing staff equipment progression.
 - Travelling Merchants use the fully equipped KayKit Hoarder GLB—backpack, raised face mask, and front-pouch sword—with the shared `Rig_Medium` idle animation. The previous stylised stall figure remains its loading/failure fallback.
 - Rows can contain empty lanes, Skeleton Minions, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
@@ -48,7 +48,7 @@ Included:
 - A full-screen **Choose Your Class** carousel with animated KayKit model previews; board input stays locked until a class is selected
 - HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
-- A rare Travelling Merchant shop overlay with an animated Hoarder portrait, speech bubble, gold purse, and compact two-column upgrade inventory
+- A rare Travelling Merchant shop overlay with an animated Hoarder portrait, speech bubble, gold purse, class equipment product preview, healing-potion shelf with GLB previews, and compact two-column upgrade inventory
 - One-time class equipment offers from KayKit Fantasy Weapons Bits: each class sees only its own named weapon/set with a live 3D product preview, receives a capped multi-stat bonus on purchase, and visibly equips it for the rest of that run
 - Universal run caps shared by Merchant upgrades and level-up rewards
 - Death overlay; Restart Run returns to class selection without reloading the page
@@ -174,7 +174,8 @@ src/
     Trap.ts               Alarm Trap entity and consume state
     alarm.ts              Closest-enemy pick and one-tile advance
     Merchant.ts           Shop entity, used/purchased state
-    shop.ts               Stat-upgrade offers, escalating prices, and shop views
+    shop.ts               Stat-upgrade offers, escalating prices, potions, and shop views
+    merchantPotions.ts    Distance-banded Merchant potion catalog and eligibility
     progression.ts        Cumulative XP thresholds and level progress
     levelUp.ts            Level-up choices, views, and Player applications
     Player.ts             Position, gold, XP, class, and run-scoped combat stats
@@ -208,6 +209,8 @@ src/
     ClassSelectionPreview.ts Idle KayKit class-carousel model renderer
     MerchantShopPreview.ts Animated Hoarder portrait while the shop is open
     EquipmentShopPreview.ts Class special-equipment product view
+    PotionShopPreview.ts  Spinning KayKit potion product views for the shelf
+    EquipmentShopPreview.ts Class special-equipment product view
     preloadAssets.ts      Boot, class-select background, and per-class preload stages
     playerAssets.ts       KayKit player GLB URLs
     playerEquipment.ts    Per-class visual-only KayKit equipment loadouts
@@ -239,7 +242,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Asset preloading** has two boundaries. `main.ts` shows the title screen immediately. **Play** then blocks on measured carousel/opening-dungeon groups before constructing the game. While class selection is visible, `preloadAssets.ts` warms core combat, early-enemy, and Merchant promises in the background; highlighting a ranged class also requests its ranged bundle. Beginning a run waits on only the highlighted class and shows `Preparing [class]…` if that work is still outstanding. Later enemies, advanced potions, future equipment, and reserved animations remain lazy.
 - **Domain objects** (`Player`, `Monster`, `Collectible`, `Trap`, `Merchant`) own their own state transitions: movement, gold, XP, healing, evade, damage, collection, trap consume, and Merchant purchases.
 - **Pure rule modules** (`combat.ts`, `encounters.ts`, `alarm.ts`, `rowGeneration.ts`, `shop.ts`, `progression.ts`, `levelUp.ts`) stay function-based. Combat still resolves immediately into an ordered log; `GameState` applies that log one entry at a time so playback can update HP per hit.
-- **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. Overlay previews share `PreviewStage` for transparent renderer, resize, visibility-aware render, and dispose. `ClassSelectionPreview.ts` still owns carousel models, load tokens, and idle playback. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
+- **UI views** under `src/ui` update HTML only. They render class-selection / `ShopView` / `LevelUpView` / HUD snapshots and do not import Three.js or mutate `GameState` internals. Class starting stats are not duplicated in views. Overlay previews share `PreviewStage` for transparent renderer, resize, visibility-aware render, and dispose. `ClassSelectionPreview.ts` still owns carousel models, load tokens, and idle playback. The shop's animated Hoarder portrait stays in `MerchantShopPreview.ts`; the current class offer is rendered by `EquipmentShopPreview.ts`; stocked potions use `PotionShopPreview.ts`. Each preview reuses cached GLBs and renders only while its overlay is visible.
 - **Death telemetry** records only the player level at death. `Game.ts` posts `{ level }` to `/api/telemetry/deaths` with `credentials: 'omit'`. The Worker writes `player_level` and a server timestamp to D1. No class, distance, cookies, IPs, or other identifiers are stored.
 - **iOS waitlist** posts `{ email }` to `/api/waitlist`. The Worker stores a normalised address in `ios_waitlist` (`INSERT OR IGNORE`, so duplicates still succeed). A filled honeypot field is discarded with the same 204. No IP is stored. Privacy and Support pages live at `/privacy` and `/support`. The class gallery lives at `/classes`.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
@@ -248,7 +251,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Enemy presentation** maps definition-layer `EnemyRenderKey` values (currently one per `EnemyType`) to KayKit GLBs in `enemyAssets.ts`. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only and does not own the key union.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
-- **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium and large URLs are registered but never requested by the current runtime.
+- **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium, large, and greater URLs are registered for the Merchant shelf; only small is requested for board pickups.
 - **Merchant presentation** mounts the fully equipped KayKit Hoarder in each pooled merchant slot, explicitly requiring its backpack, raised face-mask, and front-pouch sword meshes, and plays the shared `Rig_Medium` idle clip. The existing leave/shrink/fade sequence operates on the wrapper, while the previous geometric merchant remains a loading/failure fallback.
 - **Dungeon floors** use self-contained KayKit GLBs over pooled box fallbacks. The large geometric stone tile is the normal floor and receives deterministic quarter-turn rotations to break up repetition without adding pooled models. Merchant tiles use the large wood floor, and Alarm/Trip tiles use a separately loaded spike assembly whose named spike node rises during the trigger effect. These choices remain presentation-only and do not affect generation or saved game state.
 - **Dungeon walls** are part of the same recycled row pool: each logical row owns a left and right section just beyond the outer lanes. A deterministic row/side hash selects mostly plain masonry with occasional damaged, windowed, gated, decorated, or scaffold variants. Gated openings activate a narrow, shadowless warm spotlight from just outside the wall; closed and boarded windows remain dark. Mounted torches recur every seven rows and alternate sides on forced plain-stone wall modules, with a small emissive flame and short-range point light; walls between those mounts keep the weighted random mix. Their light intensity, halo volume, and tiny vertical flame offset use layered deterministic sine waves for restrained irregular flicker without consuming gameplay RNG. All lighting stays in the recycled wall slots. Wall selection has no collision, generation, or saved-state role, and simple stone boxes remain loading/failure fallbacks.
@@ -439,7 +442,21 @@ Landing on a Merchant tile pauses the run and opens a centred shop overlay. The 
 
 Each Merchant may be used once. After Leave, the Merchant is marked used and removed from the board. Movement then continues from that tile. Returning in normal forward play is impossible; leftover state still treats a used Merchant as empty.
 
-Opening the shop does not spend gold. Each visit offers the same four run-scoped stat upgrades. A purchase adds exactly `+1` to that stat. Each stat has its own escalating price track: only that stat’s next price increases by 1 gold. Prices persist for the run, not for a single Merchant visit.
+Opening the shop does not spend gold. Each visit offers healing potions (stocked by Merchant distance), the selected class’s special equipment, and four run-scoped stat upgrades. Upgrade purchases add exactly `+1` to that stat. Each upgrade has its own escalating price track: only that stat’s next price increases by 1 gold. Potion prices stay fixed. Prices for upgrades persist for the run, not for a single Merchant visit.
+
+### Healing potions
+
+Immediate-use shelf stock. Buying a potion spends gold and heals now — there is no inventory. Stock depends on the Merchant’s absolute row; prices never rise.
+
+| Merchant rows | Stock | Heal | Price |
+|---|---|---:|---:|
+| 14–27 | Small | 4 | 2 |
+| 28–41 | Small, Medium | 4 / 8 | 2 / 4 |
+| 42+ | Small–Greater | 4 / 8 / 12 / 16 | 2 / 4 / 6 / 9 |
+
+Potion buttons disable at full health or when gold is short. Each offer shows a spinning KayKit red potion GLB preview (same PreviewStage pattern as class equipment): small / medium / large / huge for Greater.
+
+### Run upgrades
 
 | Offer | Effect | Cap | First price |
 |---|---|---:|---:|
@@ -457,9 +474,9 @@ Rules:
 - Gold never becomes negative. Unaffordable and capped offers cannot be purchased.
 - Vitality never heals current HP.
 - EVA has a hard maximum of 20. Merchant Evasive and level-up Evasive both stop there.
-- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats can still be bought.
+- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats and potions can still be bought.
 - Successful Sharpened purchases also advance class-specific visual weapon tiers: Rogue dagger→axe, Ranger bow→crossbows, Mage staff→wand/spellbook, and Barbarian axe→two-handed swords. Successful Armoured purchases advance the Knight through the retained shield variants. These swaps do not add stats beyond the existing shop purchase.
-- Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts`. Rendering only shows the resulting view.
+- Shop costs, caps, eligibility, and stat changes live in `src/game/shop.ts` and `src/game/merchantPotions.ts`. Rendering only shows the resulting view.
 
 Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, Merchant prices and purchase counts, merchant entities, and meshes.
 
@@ -599,7 +616,7 @@ Restart Run clears the prior run and returns to **Choose Your Class** without re
 - Equipment, skill trees, crits, and unique enemy abilities
 - Use `approach: 'surprise'` for further combat advantages beyond the 150% opener
 - Further evade/perception tuning and more defined level thresholds
-- More shop stock or meta progression; more loot kinds
+- More loot kinds or meta progression
 - Damaging traps, more trap kinds, doors, and authored biomes
 - Interactive doors, room transitions, more dungeon props, and authored biomes
 - Mobile optimisation (pixel-ratio toggle, cheaper materials, VFX pooling)

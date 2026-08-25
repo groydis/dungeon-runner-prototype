@@ -42,8 +42,10 @@ describe('UI view boundaries', () => {
     expect(shopSource).not.toMatch(/shopOfferPrice/);
     expect(shopSource).not.toMatch(/evaluateShopOffer/);
     expect(shopSource).not.toMatch(/evaluateSpecialEquipmentOffer/);
+    expect(shopSource).not.toMatch(/evaluatePotionOffer/);
     expect(shopSource).not.toMatch(/applyShopPurchase/);
     expect(shopSource).not.toMatch(/applySpecialEquipmentPurchase/);
+    expect(shopSource).not.toMatch(/applyPotionPurchase/);
     expect(shopSource).not.toMatch(/increaseAttack|increaseDefence|trySpendGold/);
   });
 });

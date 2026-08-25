@@ -66,6 +66,8 @@ import { RunWorld } from './RunWorld';
 import { ShopSession } from './ShopSession';
 import {
   shopStatSnapshot,
+  type PotionOfferId,
+  type PotionPurchaseResult,
   type ShopOfferId,
   type ShopProgress,
   type ShopPurchaseResult,
@@ -409,6 +411,14 @@ export class GameState {
 
   buySpecialEquipment(): ShopPurchaseResult {
     const result = this.shopSession.buySpecialEquipment(this._player);
+    if (this._player && this.shopSession.isOpen) {
+      this._status = result.status;
+    }
+    return result;
+  }
+
+  buyPotionOffer(offerId: PotionOfferId): PotionPurchaseResult {
+    const result = this.shopSession.buyPotion(this._player, offerId);
     if (this._player && this.shopSession.isOpen) {
       this._status = result.status;
     }

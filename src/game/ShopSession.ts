@@ -1,8 +1,14 @@
 import { freezeReadModel } from './BoardSnapshot';
 import { type DeepReadonly } from './freeze';
 import { type Merchant } from './Merchant';
+import {
+  MERCHANT_POTION_CATALOG,
+  potionUnavailableReasonText,
+  type PotionOfferId,
+} from './merchantPotions';
 import { type Player } from './Player';
 import {
+  applyPotionPurchase,
   applyShopPurchase,
   applySpecialEquipmentPurchase,
   buildShopView,
@@ -12,6 +18,7 @@ import {
   evaluateSpecialEquipmentOffer,
   shopStatSnapshot,
   type ActiveShop,
+  type PotionPurchaseResult,
   type ShopOfferId,
   type ShopProgress,
   type ShopPurchaseResult,
@@ -69,6 +76,7 @@ export class ShopSession {
       this.progress,
       player.classId,
       this.specialOwned,
+      player.stats.health,
     );
   }
 
@@ -152,6 +160,65 @@ export class ShopSession {
       this.specialOwned = true;
     }
     return result;
+  }
+
+  buyPotion(
+    player: Player | null,
+    offerId: PotionOfferId,
+  ): PotionPurchaseResult {
+    if (!player) {
+      return {
+        success: false,
+        offerId,
+        reason: 'noShop',
+        goldRemaining: 0,
+        goldSpent: 0,
+        healthRestored: 0,
+        status: 'Choose a class first.',
+      };
+    }
+    if (!this.active) {
+      return {
+        success: false,
+        offerId,
+        reason: 'noShop',
+        goldRemaining: player.gold,
+        goldSpent: 0,
+        healthRestored: 0,
+        status: potionUnavailableReasonText('noShop'),
+      };
+    }
+    const result = applyPotionPurchase(
+      this.active.merchant,
+      offerId,
+      player.gold,
+      player.stats.health,
+      player.stats.maxHealth,
+    );
+    if (!result.success) {
+      return result;
+    }
+    if (!player.trySpendGold(result.goldSpent)) {
+      return {
+        success: false,
+        offerId,
+        reason: 'unaffordable',
+        goldRemaining: player.gold,
+        goldSpent: 0,
+        healthRestored: 0,
+        status: potionUnavailableReasonText(
+          'unaffordable',
+          MERCHANT_POTION_CATALOG[offerId].price,
+        ),
+      };
+    }
+    const restored = player.heal(MERCHANT_POTION_CATALOG[offerId].healAmount);
+    return {
+      ...result,
+      goldRemaining: player.gold,
+      healthRestored: restored,
+      status: `Bought ${MERCHANT_POTION_CATALOG[offerId].name}. Restored ${restored} HP.`,
+    };
   }
 }
 
