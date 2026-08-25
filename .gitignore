@@ -7,3 +7,4 @@ dist
 .wrangler
 .dev.vars
 worker-configuration.d.ts
+*.code-workspace

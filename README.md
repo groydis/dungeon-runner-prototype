@@ -14,6 +14,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, and scaffolds. Gated openings cast a restrained warm light spill, while periodically mounted torches add gently flickering emissive glows and short-range pooled lights.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
 - Health pickups use distance-banded KayKit potion GLBs (small / medium / large / huge) over the existing pooled capsule fallback.
+- Gold pickups use distance-banded KayKit coin GLBs (coin / small stack / large stack) over the existing pooled disc fallback.
 - Lorekeeper is a playable balanced magic class using the KayKit Lorekeeper GLB, shared `Rig_Medium` clips, and the existing staff equipment progression.
 - Travelling Merchants use the fully equipped KayKit Hoarder GLB—backpack, raised face mask, and front-pouch sword—with the shared `Rig_Medium` idle animation. The previous stylised stall figure remains its loading/failure fallback.
 - Rows can contain empty lanes, Skeleton Minions, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
@@ -355,13 +356,17 @@ Gold and potions:
 - Potion pickups heal 4 / 8 / 12 / 16 HP by tier (small / medium / large / greater), capped at max HP, and are consumed even at full health.
   - Heal: `You drink a [tier] and restore [N] HP.`
   - Full: `You find a [tier], but are already at full health.`
+- Floor gold tiers by generated row (category odds unchanged; tier picked without advancing the generation stream):
+  - Rows `0–19`: Coin only
+  - Rows `20–39`: Coin 70 / Small Stack 30
+  - Rows `40+`: Coin 40 / Small Stack 40 / Large Hoard 20
 - Floor potion tiers by generated row (category odds unchanged; tier picked without advancing the generation stream):
   - Rows `0–19`: Small only
   - Rows `20–39`: Small 60 / Medium 30 / Large 10
   - Rows `40+`: Small 35 / Medium 35 / Large 22 / Greater 8
 - Enemy drops use the same tier bands from the monster’s row.
 - Pickup meshes pop/fade in place while the character plays `PickUp` or `Use_Item`; they do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
-- Board rendering mounts the matching KayKit red potion GLB (small / medium / large / huge) at the iOS per-tier world extents.
+- Board rendering mounts the matching KayKit coin GLB (coin / small stack / large stack) and red potion GLB (small / medium / large / huge) at the iOS per-tier world extents.
 - Defeated enemies can drop gold or a potion onto their cleared tile. The drop is a normal collectible and is **not** granted automatically. You only receive it by landing on that tile later.
 
 ## Enemy drops

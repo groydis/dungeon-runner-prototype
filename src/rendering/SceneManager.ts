@@ -58,7 +58,10 @@ import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type PlayerRenderKey } from '../game/definitions/classes';
 import { type EnemyDropResult } from '../game/definitions/enemies';
-import { potionModelSizeForPickup } from '../game/definitions/pickupCatalog';
+import {
+  coinModelSizeForPickup,
+  potionModelSizeForPickup,
+} from '../game/definitions/pickupCatalog';
 import {
   ENEMY_RENDER_KEYS,
   enemyAttackClip,
@@ -97,6 +100,12 @@ import {
   playerAttackClip,
   type PlayerClipMap,
 } from './playerAssets';
+import {
+  FLOOR_COIN_MODEL_SIZES,
+  fitCoinModel,
+  loadCoinTemplate,
+  type CoinModelSize,
+} from './coinAssets';
 import {
   FLOOR_POTION_MODEL_SIZES,
   fitPotionModel,
@@ -287,6 +296,7 @@ export class SceneManager {
   private readonly necromancerMaterial: MeshStandardMaterial;
   private readonly goldMaterial: MeshStandardMaterial;
   private readonly potionMaterial: MeshStandardMaterial;
+  private readonly coinTemplates = new Map<CoinModelSize, Group>();
   private readonly potionTemplates = new Map<PotionModelSize, Group>();
   private readonly merchantStallMaterial: MeshStandardMaterial;
   private readonly merchantPillarMaterial: MeshStandardMaterial;
@@ -477,6 +487,7 @@ export class SceneManager {
     void this.installDungeonFloorModels();
     void this.installDungeonWallModels();
     void this.installDungeonTrapModels();
+    void this.installCoinModels();
     void this.installPotionModels();
     void this.installMerchantModels();
     const player = this.createPlayer();
@@ -1212,6 +1223,8 @@ export class SceneManager {
     const cryptGuardGeo = new CapsuleGeometry(0.16, 0.52, 4, 8);
     const boneBruteGeo = new BoxGeometry(0.5, 0.62, 0.5);
     const goldGeo = new CylinderGeometry(0.16, 0.16, 0.05, 14);
+    // Bake flat-coin orientation so parent rotation stays identity for child GLBs.
+    goldGeo.rotateX(Math.PI / 2);
     const potionGeo = new CapsuleGeometry(0.09, 0.16, 3, 8);
     const stallGeo = new BoxGeometry(0.38, 0.16, 0.26);
     const pillarGeo = new CylinderGeometry(0.07, 0.09, 0.7, 8);
@@ -1256,7 +1269,6 @@ export class SceneManager {
 
         const gold = new Mesh(goldGeo, this.goldMaterial.clone());
         gold.position.set(laneWorldX(col), 0.38, 0);
-        gold.rotation.x = Math.PI / 2;
         gold.visible = false;
 
         const potion = new Mesh(potionGeo, this.potionMaterial.clone());
@@ -1553,6 +1565,42 @@ export class SceneManager {
     }
   }
 
+  private async installCoinModels(): Promise<void> {
+    try {
+      await Promise.all(
+        FLOOR_COIN_MODEL_SIZES.map(async (size) => {
+          this.coinTemplates.set(size, await loadCoinTemplate(size));
+        }),
+      );
+      for (const view of this.rowViews) {
+        for (const gold of view.golds) {
+          this.mountCoinModel(gold, 'coin');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load KayKit coin models', error);
+    }
+  }
+
+  private mountCoinModel(gold: Mesh, size: CoinModelSize): void {
+    for (const child of [...gold.children]) {
+      if (child.name.startsWith('kaykitCoin-')) {
+        child.removeFromParent();
+      }
+    }
+    const template = this.coinTemplates.get(size);
+    if (!template) {
+      return;
+    }
+    const model = template.clone(true);
+    cloneMeshMaterials(model);
+    fitCoinModel(model, size);
+    model.name = `kaykitCoin-${size}`;
+    gold.add(model);
+    (gold.material as MeshStandardMaterial).visible = false;
+    gold.userData.coinSize = size;
+  }
+
   private async installPotionModels(): Promise<void> {
     try {
       await Promise.all(
@@ -1705,6 +1753,16 @@ export class SceneManager {
       const merchant = view.merchants[col];
       const tile = tileAt(snapshot, view.assignedRow, col);
 
+      if (tile?.content.type === 'gold') {
+        const size = coinModelSizeForPickup(tile.content.pickupId ?? 'gold');
+        if (
+          gold.userData.coinSize !== size &&
+          this.coinTemplates.has(size)
+        ) {
+          this.mountCoinModel(gold, size);
+        }
+      }
+
       if (tile?.content.type === 'potion') {
         const size = potionModelSizeForPickup(tile.content.pickupId ?? 'potion');
         if (
@@ -1762,7 +1820,7 @@ export class SceneManager {
       const spawningGold = this.dropSpawnFx?.mesh === gold;
       const spawningPotion = this.dropSpawnFx?.mesh === potion;
       if (!collectingGold && !spawningGold) {
-        this.resetCollectibleMesh(gold, col, 0.38, Math.PI / 2);
+        this.resetCollectibleMesh(gold, col, 0.38, 0);
       }
       if (!collectingPotion && !spawningPotion) {
         this.resetCollectibleMesh(potion, col, 0.42, 0);

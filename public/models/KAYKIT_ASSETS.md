@@ -118,13 +118,18 @@ the game repository.
 
 ## Collectibles
 
-Each potion target was exported from the matching `.gltf` and `.bin` under
+Gold targets were packaged from the matching `.gltf` and `.bin` under
+`KayKit Dungeon Pack 1.1/Assets/gltf/`, embedding `dungeon_texture.png`. Each
+potion target was exported from the matching `.gltf` and `.bin` under
 `KayKit Adventurers 2.0/Assets/gltf/`, embedding the referenced
-`druid_texture.png`. The editable source remains in the purchased KayKit
+`druid_texture.png`. The editable sources remain in the purchased KayKit
 library.
 
 | Target under `items/kaykit/` | Runtime status |
 |---|---|
+| `coin.glb` | Floor pickup (Gold Coin) |
+| `coin_stack_small.glb` | Floor pickup (Small Gold Stack, row 20+) |
+| `coin_stack_large.glb` | Floor pickup (Large Gold Hoard, row 40+) |
 | `potion_small_red.glb` | Floor pickup + Merchant shelf (Small) |
 | `potion_medium_red.glb` | Floor pickup (row 20+) + Merchant shelf (Medium) |
 | `potion_large_red.glb` | Floor pickup (row 20+) + Merchant shelf (Large) |

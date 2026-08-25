@@ -114,6 +114,20 @@ export function goldGrantAmount(id: PickupId): number {
   return effect.amount;
 }
 
+/** Map gold pickup IDs to KayKit coin model sizes. */
+export function coinModelSizeForPickup(
+  id: PickupId,
+): 'coin' | 'coinStackSmall' | 'coinStackLarge' {
+  switch (id) {
+    case 'gold_stack':
+      return 'coinStackSmall';
+    case 'gold_hoard':
+      return 'coinStackLarge';
+    default:
+      return 'coin';
+  }
+}
+
 /** Map potion pickup IDs to KayKit model sizes. */
 export function potionModelSizeForPickup(
   id: PickupId,
