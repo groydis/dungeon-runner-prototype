@@ -58,6 +58,7 @@ import { type CollectibleKind } from '../game/Collectible';
 import { type EncounterEvent } from '../game/encounters';
 import { type PlayerRenderKey } from '../game/definitions/classes';
 import { type EnemyDropResult } from '../game/definitions/enemies';
+import { potionModelSizeForPickup } from '../game/definitions/pickupCatalog';
 import {
   ENEMY_RENDER_KEYS,
   enemyAttackClip,
@@ -97,9 +98,10 @@ import {
   type PlayerClipMap,
 } from './playerAssets';
 import {
-  ACTIVE_POTION_MODEL_SIZE,
+  FLOOR_POTION_MODEL_SIZES,
   fitPotionModel,
   loadPotionTemplate,
+  type PotionModelSize,
 } from './potionAssets';
 import {
   fitMerchantModel,
@@ -285,6 +287,7 @@ export class SceneManager {
   private readonly necromancerMaterial: MeshStandardMaterial;
   private readonly goldMaterial: MeshStandardMaterial;
   private readonly potionMaterial: MeshStandardMaterial;
+  private readonly potionTemplates = new Map<PotionModelSize, Group>();
   private readonly merchantStallMaterial: MeshStandardMaterial;
   private readonly merchantPillarMaterial: MeshStandardMaterial;
   private readonly merchantHoodMaterial: MeshStandardMaterial;
@@ -847,6 +850,7 @@ export class SceneManager {
   beginItemConsumeFx(kind: CollectibleKind, row: number, col: number): void {
     this.beginCollectFx({
       kind,
+      pickupId: kind === 'gold' ? 'gold' : 'potion',
       id: '',
       row,
       col,
@@ -1551,20 +1555,38 @@ export class SceneManager {
 
   private async installPotionModels(): Promise<void> {
     try {
-      const template = await loadPotionTemplate(ACTIVE_POTION_MODEL_SIZE);
+      await Promise.all(
+        FLOOR_POTION_MODEL_SIZES.map(async (size) => {
+          this.potionTemplates.set(size, await loadPotionTemplate(size));
+        }),
+      );
       for (const view of this.rowViews) {
         for (const potion of view.potions) {
-          const model = template.clone(true);
-          cloneMeshMaterials(model);
-          fitPotionModel(model);
-          model.name = 'kaykitPotion-small-red';
-          potion.add(model);
-          (potion.material as MeshStandardMaterial).visible = false;
+          this.mountPotionModel(potion, 'small');
         }
       }
     } catch (error) {
-      console.error('Failed to load KayKit potion model', error);
+      console.error('Failed to load KayKit potion models', error);
     }
+  }
+
+  private mountPotionModel(potion: Mesh, size: PotionModelSize): void {
+    for (const child of [...potion.children]) {
+      if (child.name.startsWith('kaykitPotion-')) {
+        child.removeFromParent();
+      }
+    }
+    const template = this.potionTemplates.get(size);
+    if (!template) {
+      return;
+    }
+    const model = template.clone(true);
+    cloneMeshMaterials(model);
+    fitPotionModel(model, size);
+    model.name = `kaykitPotion-${size}-red`;
+    potion.add(model);
+    (potion.material as MeshStandardMaterial).visible = false;
+    potion.userData.potionSize = size;
   }
 
   private async installMerchantModels(): Promise<void> {
@@ -1682,6 +1704,16 @@ export class SceneManager {
       const trap = view.traps[col];
       const merchant = view.merchants[col];
       const tile = tileAt(snapshot, view.assignedRow, col);
+
+      if (tile?.content.type === 'potion') {
+        const size = potionModelSizeForPickup(tile.content.pickupId ?? 'potion');
+        if (
+          potion.userData.potionSize !== size &&
+          this.potionTemplates.has(size)
+        ) {
+          this.mountPotionModel(potion, size);
+        }
+      }
 
       mesh.userData.row = view.assignedRow;
       mesh.userData.col = col;

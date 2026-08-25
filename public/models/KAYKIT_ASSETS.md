@@ -125,10 +125,10 @@ library.
 
 | Target under `items/kaykit/` | Runtime status |
 |---|---|
-| `potion_small_red.glb` | Active pooled health pickup |
-| `potion_medium_red.glb` | Merchant shelf (Medium Potion); reserved for future floor tiers |
-| `potion_large_red.glb` | Merchant shelf (Large Potion); reserved for future floor tiers |
-| `potion_huge_red.glb` | Merchant shelf (Greater Potion); reserved for future floor tiers |
+| `potion_small_red.glb` | Floor pickup + Merchant shelf (Small) |
+| `potion_medium_red.glb` | Floor pickup (row 20+) + Merchant shelf (Medium) |
+| `potion_large_red.glb` | Floor pickup (row 20+) + Merchant shelf (Large) |
+| `potion_huge_red.glb` | Floor pickup (row 40+) + Merchant shelf (Greater) |
 
 ## Merchants
 

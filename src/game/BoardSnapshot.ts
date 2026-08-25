@@ -10,6 +10,7 @@ import {
 } from './config';
 import { type PlayerClassId, type PlayerRenderKey } from './definitions/classes';
 import { type EnemyRenderKey, type EnemyType } from './definitions/enemies';
+import { type PickupId } from './definitions/pickupCatalog';
 import { deepFreeze, type DeepReadonly } from './freeze';
 import { type GridPosition, type TileContentType } from './Tile';
 import { type TrapKind } from './Trap';
@@ -17,6 +18,8 @@ import { type TrapKind } from './Trap';
 export interface TileContentSnapshot {
   readonly type: TileContentType;
   readonly id?: string;
+  /** Present for gold/potion tiles so rendering can pick the tier model. */
+  readonly pickupId?: PickupId;
 }
 
 export interface TileMonsterView {
@@ -93,6 +96,7 @@ export interface PlayerSnapshot {
 export interface CollectibleSnapshot {
   readonly id: string;
   readonly kind: CollectibleKind;
+  readonly pickupId: PickupId;
   readonly row: number;
   readonly col: number;
   readonly collected: boolean;
@@ -108,6 +112,7 @@ export interface TrapSnapshot {
 
 export interface PickupResult {
   kind: CollectibleKind;
+  pickupId: PickupId;
   id: string;
   row: number;
   col: number;

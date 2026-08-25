@@ -26,6 +26,7 @@ import {
   dropRngFactoryFromSearch,
   evadeRngFactoryFromSearch,
   rngFactoryFromSearch,
+  seedFromSearch,
 } from './random';
 import { InputController, type TilePick } from './InputController';
 import { type LevelUpChoice } from './levelUp';
@@ -59,6 +60,7 @@ export class Game {
     createRng: rngFactoryFromSearch(window.location.search),
     createDropRng: dropRngFactoryFromSearch(window.location.search),
     createEvadeRng: evadeRngFactoryFromSearch(window.location.search),
+    runSeed: seedFromSearch(window.location.search),
   });
   private readonly camera: CameraController;
   private readonly scene: SceneManager;

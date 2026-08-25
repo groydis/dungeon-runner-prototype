@@ -17,9 +17,7 @@ import {
   freezeReadModel,
 } from './BoardSnapshot';
 import {
-  GOLD_AMOUNT,
   LANE_COUNT,
-  POTION_HEAL,
   gameplayVisibleRowRange,
 } from './config';
 import {
@@ -61,7 +59,16 @@ import {
 import { Player } from './Player';
 import { type ExperienceGain } from './progression';
 import { type Rng } from './random';
-import { createRowRecipe, type RowRecipeFactory } from './rowGeneration';
+import { createRowRecipeFactory, type RowRecipeFactory } from './rowGeneration';
+import {
+  goldGrantAmount,
+  pickupDefinition,
+  potionHealAmount,
+} from './definitions/pickupCatalog';
+import {
+  pickPickupDenomination,
+  pickupDiscriminatorForText,
+} from './definitions/pickupDenominations';
 import { RunWorld } from './RunWorld';
 import { ShopSession } from './ShopSession';
 import {
@@ -122,6 +129,8 @@ export interface GameStateOptions {
   createRng?: () => Rng;
   createDropRng?: () => Rng;
   createEvadeRng?: () => Rng;
+  /** Seeds pickup tiers without advancing the generation stream. */
+  runSeed?: number;
   createRowRecipe?: RowRecipeFactory;
   enemyExperience?: (type: EnemyType) => number;
 }
@@ -143,14 +152,19 @@ export class GameState {
   private readonly createRng: () => Rng;
   private readonly createDropRng: () => Rng;
   private readonly createEvadeRng: () => Rng;
+  private readonly runSeed: number;
   private rng: Rng;
   private dropRng: Rng;
   private evadeRng: Rng;
 
   constructor(options: GameStateOptions = {}) {
+    this.runSeed =
+      options.runSeed !== undefined
+        ? options.runSeed >>> 0
+        : (Math.random() * 0x1_0000_0000) >>> 0;
     this.world = new RunWorld(
       options.createEnemyStats ?? createEnemyStats,
-      options.createRowRecipe ?? createRowRecipe,
+      options.createRowRecipe ?? createRowRecipeFactory(this.runSeed),
     );
     this.enemyExperience = options.enemyExperience;
     this.createRng = options.createRng ?? (() => Math.random);
@@ -523,8 +537,8 @@ export class GameState {
       if (drop) {
         this._status +=
           drop.kind === 'gold'
-            ? ` It drops ${GOLD_AMOUNT} gold.`
-            : ' It drops a potion.';
+            ? ` It drops ${goldGrantAmount(drop.pickupId)} gold.`
+            : ` It drops a ${pickupDefinition(drop.pickupId).name.toLowerCase()}.`;
       }
       return {
         drop,
@@ -730,27 +744,31 @@ export class GameState {
     this.world.clearContent(player.row, player.col);
 
     if (collectible.kind === 'gold') {
-      player.addGold(GOLD_AMOUNT);
-      this._status = `You found ${GOLD_AMOUNT} gold.`;
+      const gained = goldGrantAmount(collectible.pickupId);
+      player.addGold(gained);
+      this._status = `You found ${gained} gold.`;
       return {
         kind: 'gold',
+        pickupId: collectible.pickupId,
         id: collectible.id,
         row: collectible.row,
         col: collectible.col,
-        goldGained: GOLD_AMOUNT,
+        goldGained: gained,
         healthRestored: 0,
         alreadyFull: false,
       };
     }
 
-    const restored = player.heal(POTION_HEAL);
+    const heal = potionHealAmount(collectible.pickupId);
+    const restored = player.heal(heal);
     this._status =
       restored > 0
-        ? `You drink a potion and restore ${restored} HP.`
-        : 'You find a potion, but are already at full health.';
+        ? `You drink a ${pickupDefinition(collectible.pickupId).name.toLowerCase()} and restore ${restored} HP.`
+        : `You find a ${pickupDefinition(collectible.pickupId).name.toLowerCase()}, but are already at full health.`;
 
     return {
       kind: 'potion',
+      pickupId: collectible.pickupId,
       id: collectible.id,
       row: collectible.row,
       col: collectible.col,
@@ -881,18 +899,26 @@ export class GameState {
       return null;
     }
 
+    const pickupId = pickPickupDenomination(
+      kind,
+      monster.row,
+      this.runSeed,
+      pickupDiscriminatorForText(monster.id),
+    );
     const collectibleId = enemyDropCollectibleId(kind, monster.id);
     this.world.createCollectibleOnTile(
       collectibleId,
       kind,
       monster.row,
       monster.col,
+      pickupId,
     );
 
     return {
       enemyId: monster.id,
       enemyType: monster.type,
       kind,
+      pickupId,
       collectibleId,
       row: monster.row,
       col: monster.col,

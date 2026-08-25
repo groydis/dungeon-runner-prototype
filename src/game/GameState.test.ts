@@ -24,12 +24,12 @@ import { GameState, type CombatFinishResult, type GameStateOptions, type TurnRes
 import { mulberry32 } from './random';
 import {
   alarmLane,
+  collectibleLane,
   emptyRow,
   monsterLane,
   type LaneRecipe,
   type RowRecipeFactory,
 } from './rowGeneration';
-import { collectibleId } from './Collectible';
 import { evadeHudText } from '../ui/HudView';
 
 
@@ -469,7 +469,7 @@ describe('alarm item consumption', () => {
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
       10: [
         emptyRow()[0],
-        { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
+        collectibleLane('gold', 10, 1),
         emptyRow()[2],
       ],
       11: [emptyRow()[0], monsterLane('gold-eater', 'skeletonMinion'), emptyRow()[2]],
@@ -491,7 +491,7 @@ describe('alarm item consumption', () => {
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
       10: [
         emptyRow()[0],
-        { kind: 'potion', entityId: collectibleId('potion', 10, 1) },
+        collectibleLane('potion', 10, 1),
         emptyRow()[2],
       ],
       11: [emptyRow()[0], monsterLane('potion-eater', 'boneBrute'), emptyRow()[2]],
@@ -617,7 +617,7 @@ describe('alarm reset and pruning', () => {
       8: [emptyRow()[0], alarmLane(8, 1), emptyRow()[2]],
       10: [
         emptyRow()[0],
-        { kind: 'gold', entityId: collectibleId('gold', 10, 1) },
+        collectibleLane('gold', 10, 1),
         emptyRow()[2],
       ],
       11: [emptyRow()[0], monsterLane('gold-eater', 'skeletonMinion'), emptyRow()[2]],
@@ -682,6 +682,7 @@ describe('enemy drops', () => {
     expect(state.getTile(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.content).toEqual({
       type: 'gold',
       id: drop?.id,
+      pickupId: 'gold',
     });
     expect(state.status).toBe('You defeated the Skeleton Minion. It drops 1 gold.');
     expect(state.gold).toBe(0);
@@ -704,7 +705,9 @@ describe('enemy drops', () => {
     expect(state.getCollectibleAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.kind).toBe(
       'potion',
     );
-    expect(state.status).toBe('You defeated the Skeleton Minion. It drops a potion.');
+    expect(state.status).toBe(
+      'You defeated the Skeleton Minion. It drops a small potion.',
+    );
 
     const pickup = state.resolveCompletedMove(DEMO_MONSTER_COL);
     expect(pickup.pickup?.kind).toBe('potion');
@@ -1471,11 +1474,11 @@ describe('board snapshots and no-class APIs', () => {
         5: [
           monsterLane('minion-5', 'skeletonMinion'),
           monsterLane('guard-5', 'cryptGuard'),
-          { kind: 'gold', entityId: 'gold-5' },
+          collectibleLane('gold', 5, 2),
         ],
         6: [
           monsterLane('brute-6', 'boneBrute'),
-          { kind: 'potion', entityId: 'potion-6' },
+          collectibleLane('potion', 6, 1),
           alarmLane(6, 2),
         ],
         7: [

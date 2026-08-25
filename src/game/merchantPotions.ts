@@ -1,8 +1,9 @@
+import { potionHealAmount } from './definitions/pickupCatalog';
 import { SHOP_ROW_INTERVAL } from './config';
 
 /**
  * Merchant potion shelf. Prices and distance stock live here; heal amounts
- * match the future floor-tier values used on iOS (`PickupCatalog`).
+ * come from `PickupCatalog` (same values as floor tiers).
  */
 export const POTION_OFFER_IDS = [
   'small',
@@ -33,25 +34,25 @@ export const MERCHANT_POTION_CATALOG: Record<
   small: {
     id: 'small',
     name: 'Small Potion',
-    healAmount: 4,
+    healAmount: potionHealAmount('potion'),
     price: 2,
   },
   medium: {
     id: 'medium',
     name: 'Medium Potion',
-    healAmount: 8,
+    healAmount: potionHealAmount('potion_medium'),
     price: 4,
   },
   large: {
     id: 'large',
     name: 'Large Potion',
-    healAmount: 12,
+    healAmount: potionHealAmount('potion_large'),
     price: 6,
   },
   greater: {
     id: 'greater',
     name: 'Greater Potion',
-    healAmount: 16,
+    healAmount: potionHealAmount('potion_greater'),
     price: 9,
   },
 };

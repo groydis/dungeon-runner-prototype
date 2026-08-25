@@ -13,7 +13,7 @@ Rows ahead can hold monsters, loot, hazards, doors, shops, and later biome decor
 - Floor tiles use a rotated KayKit geometric-stone GLB, with a wood floor for Merchant tiles and an animated KayKit spike assembly for Alarm/Trip tiles. Pooled dark-box and rune meshes remain loading/failure fallbacks.
 - Pooled KayKit masonry modules form continuous visual-only wall rails outside the three playable lanes. Common stone and cracked sections are mixed with rarer windows, gates, shelves, insets, and scaffolds. Gated openings cast a restrained warm light spill, while periodically mounted torches add gently flickering emissive glows and short-range pooled lights.
 - The player is a KayKit Adventurers GLB for the selected class, with the old green capsule as a loading/failure fallback. Every current class carries visual-only KayKit equipment; it does not change combat stats.
-- Health pickups use the small red KayKit potion GLB over the existing pooled capsule fallback. Medium, large, and greater URLs are retained for the Merchant shelf (and future floor tiers); only small loads for board pickups.
+- Health pickups use distance-banded KayKit potion GLBs (small / medium / large / huge) over the existing pooled capsule fallback.
 - Lorekeeper is a playable balanced magic class using the KayKit Lorekeeper GLB, shared `Rig_Medium` clips, and the existing staff equipment progression.
 - Travelling Merchants use the fully equipped KayKit Hoarder GLB—backpack, raised face mask, and front-pouch sword—with the shared `Rig_Medium` idle animation. The previous stylised stall figure remains its loading/failure fallback.
 - Rows can contain empty lanes, Skeleton Minions, Crypt Guards, Bone Brutes, Skeleton Mages, rare elite Necromancers, gold, health potions, or Alarm Traps. All enemies use compatible KayKit models with simple placeholders as loading fallbacks.
@@ -251,7 +251,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **Enemy presentation** maps definition-layer `EnemyRenderKey` values (currently one per `EnemyType`) to KayKit GLBs in `enemyAssets.ts`. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only and does not own the key union.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
-- **Potion presentation** mounts the small red KayKit potion inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. Medium, large, and greater URLs are registered for the Merchant shelf; only small is requested for board pickups.
+- **Potion presentation** mounts the matching KayKit potion size inside each existing pooled potion object, so bob, spawn, collect, fade, and enemy-crush effects are preserved. Its capsule stays as a loading/failure fallback. All four sizes preload with the dungeon boot group.
 - **Merchant presentation** mounts the fully equipped KayKit Hoarder in each pooled merchant slot, explicitly requiring its backpack, raised face-mask, and front-pouch sword meshes, and plays the shared `Rig_Medium` idle clip. The existing leave/shrink/fade sequence operates on the wrapper, while the previous geometric merchant remains a loading/failure fallback.
 - **Dungeon floors** use self-contained KayKit GLBs over pooled box fallbacks. The large geometric stone tile is the normal floor and receives deterministic quarter-turn rotations to break up repetition without adding pooled models. Merchant tiles use the large wood floor, and Alarm/Trip tiles use a separately loaded spike assembly whose named spike node rises during the trigger effect. These choices remain presentation-only and do not affect generation or saved game state.
 - **Dungeon walls** are part of the same recycled row pool: each logical row owns a left and right section just beyond the outer lanes. A deterministic row/side hash selects mostly plain masonry with occasional damaged, windowed, gated, decorated, or scaffold variants. Gated openings activate a narrow, shadowless warm spotlight from just outside the wall; closed and boarded windows remain dark. Mounted torches recur every seven rows and alternate sides on forced plain-stone wall modules, with a small emissive flame and short-range point light; walls between those mounts keep the weighted random mix. Their light intensity, halo volume, and tiny vertical flame offset use layered deterministic sine waves for restrained irregular flicker without consuming gameplay RNG. All lighting stays in the recycled wall slots. Wall selection has no collision, generation, or saved-state role, and simple stone boxes remain loading/failure fallbacks.
@@ -351,11 +351,17 @@ Merchant rows override those weights on a fixed cadence (`SHOP_ROW_INTERVAL = 14
 
 Gold and potions:
 
-- Gold starts at `0`. Landing on gold adds `1` and removes the item: `You found 1 gold.`
-- A potion heals `4` HP, capped at max HP, and is consumed even at full health.
-  - Heal: `You drink a potion and restore [N] HP.`
-  - Full: `You find a potion, but are already at full health.`
+- Gold starts at `0`. Landing on gold adds a distance-banded amount (1 / 5 / 10) and removes the item: `You found [N] gold.`
+- Potion pickups heal 4 / 8 / 12 / 16 HP by tier (small / medium / large / greater), capped at max HP, and are consumed even at full health.
+  - Heal: `You drink a [tier] and restore [N] HP.`
+  - Full: `You find a [tier], but are already at full health.`
+- Floor potion tiers by generated row (category odds unchanged; tier picked without advancing the generation stream):
+  - Rows `0–19`: Small only
+  - Rows `20–39`: Small 60 / Medium 30 / Large 10
+  - Rows `40+`: Small 35 / Medium 35 / Large 22 / Greater 8
+- Enemy drops use the same tier bands from the monster’s row.
 - Pickup meshes pop/fade in place while the character plays `PickUp` or `Use_Item`; they do not block extra input time. Recycled row meshes reset so collected items cannot reappear.
+- Board rendering mounts the matching KayKit red potion GLB (small / medium / large / huge) at the iOS per-tier world extents.
 - Defeated enemies can drop gold or a potion onto their cleared tile. The drop is a normal collectible and is **not** granted automatically. You only receive it by landing on that tile later.
 
 ## Enemy drops

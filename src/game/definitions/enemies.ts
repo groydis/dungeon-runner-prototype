@@ -1,5 +1,6 @@
 import { type CombatStats, createCombatStats } from '../Combatant';
 import { deepFreeze, type DeepReadonly } from '../freeze';
+import { type PickupId } from './pickupCatalog';
 import { pickWeighted, type Rng } from '../random';
 
 export type EnemyType =
@@ -38,6 +39,7 @@ export interface EnemyDropResult {
   enemyId: string;
   enemyType: EnemyType;
   kind: Exclude<EnemyDropKind, 'none'>;
+  pickupId: PickupId;
   collectibleId: string;
   row: number;
   col: number;

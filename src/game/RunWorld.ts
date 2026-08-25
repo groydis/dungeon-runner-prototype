@@ -19,6 +19,7 @@ import {
   type EnemyStatsFactory,
   type EnemyType,
 } from './definitions/enemies';
+import { type PickupId } from './definitions/pickupCatalog';
 import { Grid } from './Grid';
 import { createMerchant, type Merchant } from './Merchant';
 import { createMonster, type Monster } from './Monster';
@@ -211,6 +212,7 @@ export class RunWorld {
     this.writeLaneRecipe(collectible.row, collectible.col, {
       kind: collectible.kind,
       entityId: collectible.id,
+      pickupId: collectible.pickupId,
     });
   }
 
@@ -219,8 +221,9 @@ export class RunWorld {
     kind: 'gold' | 'potion',
     row: number,
     col: number,
+    pickupId?: PickupId,
   ): Collectible {
-    const collectible = createCollectible(id, kind, row, col);
+    const collectible = createCollectible(id, kind, row, col, pickupId);
     this.placeCollectible(collectible);
     return collectible;
   }
@@ -275,6 +278,7 @@ export class RunWorld {
     return freezeReadModel({
       id: item.id,
       kind: item.kind,
+      pickupId: item.pickupId,
       row: item.row,
       col: item.col,
       collected: item.collected,
@@ -286,9 +290,14 @@ export class RunWorld {
   }
 
   private toTileSnapshot(tile: Tile): TileSnapshot {
+    const collectible =
+      tile.content.type === 'gold' || tile.content.type === 'potion'
+        ? this.collectibles.get(tile.content.id ?? '')
+        : undefined;
     const content: TileSnapshot['content'] = {
       type: tile.content.type,
       ...(tile.content.id ? { id: tile.content.id } : {}),
+      ...(collectible ? { pickupId: collectible.pickupId } : {}),
     };
     const occupant = this.monsterAt(tile.row, tile.col);
     return {
@@ -431,7 +440,7 @@ export class RunWorld {
       if (!existing) {
         this.collectibles.set(
           lane.entityId,
-          createCollectible(lane.entityId, lane.kind, row, col),
+          createCollectible(lane.entityId, lane.kind, row, col, lane.pickupId),
         );
       }
       return createTile(row, col, { type: lane.kind, id: lane.entityId });

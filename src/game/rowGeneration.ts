@@ -11,6 +11,11 @@ import {
 import { collectibleId, type CollectibleKind } from './Collectible';
 import { pickEnemyTypeForRow } from './definitions/encounterPools';
 import { type EnemyType } from './definitions/enemies';
+import { pickPickupDenomination } from './definitions/pickupDenominations';
+import {
+  defaultPickupIdForCategory,
+  type PickupId,
+} from './definitions/pickupCatalog';
 import { merchantId } from './Merchant';
 import { pickWeighted, randomInt, type Rng } from './random';
 import { type TrapKind, trapId } from './Trap';
@@ -30,6 +35,7 @@ export interface MonsterLaneRecipe {
 export interface CollectibleLaneRecipe {
   kind: 'gold' | 'potion';
   entityId: string;
+  pickupId: PickupId;
 }
 
 export interface ShopLaneRecipe {
@@ -83,7 +89,23 @@ export type RowPattern =
 
 const LAST_SAFE_ROW = START_ROW + SAFE_ROWS_AFTER_START;
 
-export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
+/**
+ * Builds a row recipe factory that denominations pickups from `runSeed`
+ * without advancing the generation stream (iOS `PickupDenominations` parity).
+ */
+export function createRowRecipeFactory(runSeed?: number): RowRecipeFactory {
+  const denominationSeed =
+    runSeed !== undefined
+      ? runSeed >>> 0
+      : (Math.random() * 0x1_0000_0000) >>> 0;
+  return (row, rng) => createRowRecipe(row, rng, denominationSeed);
+}
+
+export function createRowRecipe(
+  row: number,
+  rng: Rng,
+  runSeed = 0,
+): LaneRecipe[] {
   const empty = emptyRow();
 
   if (row <= LAST_SAFE_ROW) {
@@ -106,7 +128,7 @@ export function createRowRecipe(row: number, rng: Rng): LaneRecipe[] {
 
   const weights =
     row < TRAP_START_ROW ? EARLY_ROW_PATTERN_WEIGHTS : ROW_PATTERN_WEIGHTS;
-  return recipeFromPattern(row, pickWeighted(weights, rng), rng);
+  return recipeFromPattern(row, pickWeighted(weights, rng), rng, runSeed);
 }
 
 export function isMerchantRow(row: number): boolean {
@@ -133,7 +155,25 @@ export function alarmLane(row: number, col: number): TrapLaneRecipe {
   };
 }
 
-function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneRecipe[] {
+export function collectibleLane(
+  kind: CollectibleKind,
+  row: number,
+  col: number,
+  pickupId: PickupId = defaultPickupIdForCategory(kind),
+): CollectibleLaneRecipe {
+  return {
+    kind,
+    entityId: collectibleId(pickupId, row, col),
+    pickupId,
+  };
+}
+
+function recipeFromPattern(
+  row: number,
+  pattern: RowPattern,
+  rng: Rng,
+  runSeed: number,
+): LaneRecipe[] {
   const lanes = emptyRow();
 
   if (pattern === 'empty') {
@@ -151,10 +191,7 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
 
   if (pattern === 'gold' || pattern === 'potion') {
     const col = randomInt(rng, LANE_COUNT);
-    place(lanes, col, {
-      kind: pattern,
-      entityId: collectibleId(pattern, row, col),
-    });
+    place(lanes, col, denominatedCollectible(pattern, row, col, runSeed));
     return lanes;
   }
 
@@ -174,11 +211,18 @@ function recipeFromPattern(row: number, pattern: RowPattern, rng: Rng): LaneReci
 
   const lootKind: CollectibleKind = rng() < 0.5 ? 'gold' : 'potion';
   place(lanes, first, monsterLane(`monster-${row}`, pickEnemyTypeForRow(row, rng)));
-  place(lanes, second, {
-    kind: lootKind,
-    entityId: collectibleId(lootKind, row, second),
-  });
+  place(lanes, second, denominatedCollectible(lootKind, row, second, runSeed));
   return lanes;
+}
+
+function denominatedCollectible(
+  kind: CollectibleKind,
+  row: number,
+  col: number,
+  runSeed: number,
+): CollectibleLaneRecipe {
+  const pickupId = pickPickupDenomination(kind, row, runSeed, col >>> 0);
+  return collectibleLane(kind, row, col, pickupId);
 }
 
 function pickTwoDistinctCols(rng: Rng): [number, number] {

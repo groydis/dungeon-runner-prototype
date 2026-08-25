@@ -19,7 +19,7 @@ import {
   loadPlayerEquipmentTemplate,
   playerEquipmentLoadout,
 } from './playerEquipment';
-import { ACTIVE_POTION_MODEL_SIZE, loadPotionTemplate } from './potionAssets';
+import { FLOOR_POTION_MODEL_SIZES, loadPotionTemplate } from './potionAssets';
 import {
   loadRigMediumClips,
   loadRigMediumIdleClip,
@@ -71,7 +71,7 @@ export function preloadBootAssets(
       run: () =>
         Promise.all([
           loadDungeonTrapTemplate(),
-          loadPotionTemplate(ACTIVE_POTION_MODEL_SIZE),
+          ...FLOOR_POTION_MODEL_SIZES.map(loadPotionTemplate),
         ]),
     },
     {
