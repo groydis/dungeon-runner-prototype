@@ -3,6 +3,7 @@ import {
   type EnemyDefinition,
   type EnemyRenderKey,
   type EnemyType,
+  enemyExperienceAtRow,
   getEnemyDefinition,
 } from './definitions/enemies';
 import { type EnemyWeaponVariant } from './definitions/enemyWeapons';
@@ -57,7 +58,7 @@ export class Monster {
   }
 
   get experience(): number {
-    return this.definition.experience;
+    return enemyExperienceAtRow(this.type, this._row);
   }
 
   get elite(): boolean {
@@ -74,7 +75,11 @@ export class Monster {
 
   /** Read-only copy so callers cannot mutate live combat stats. */
   get stats(): CombatStats {
-    return createCombatStats(this._stats);
+    return createCombatStats({
+      ...this._stats,
+      attack: this._stats.attack + (this._weaponVariant?.attackBonus ?? 0),
+      armor: this._stats.armor + (this._weaponVariant?.defenceBonus ?? 0),
+    });
   }
 
   takeDamage(amount: number): number {

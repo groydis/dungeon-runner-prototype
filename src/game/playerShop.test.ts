@@ -119,7 +119,7 @@ describe('Player', () => {
 
     player.takeDamage(3);
     expect(player.heal(5)).toBe(3);
-    expect(player.stats.health).toBe(15);
+    expect(player.stats.health).toBe(20);
   });
 
   it('never lets gold become negative', () => {
@@ -150,11 +150,11 @@ describe('Player', () => {
     expect(player.nextLevelExperience).toBe(3);
   });
 
-  it('raises max HP without healing current HP', () => {
+  it('keeps MIG separate from VIG-derived maximum HP', () => {
     const player = new Player('ranger');
     player.takeDamage(5);
     expect(player.increaseStr(1)).toBe(1);
-    expect(player.stats.maxHealth).toBe(rangerClass().startingStats.maxHealth + 1);
+    expect(player.stats.maxHealth).toBe(rangerClass().startingStats.maxHealth);
     expect(player.stats.health).toBe(rangerClass().startingStats.health - 5);
   });
 
@@ -164,14 +164,14 @@ describe('Player', () => {
     expect(player.stats.defence).toBe(rangerClass().startingStats.defence + 1);
   });
 
-  it('grows DEX without a hard max and restores class DEX on reset', () => {
+  it('caps FIN at 20 and restores class FIN on reset', () => {
     const player = new Player('ranger');
     const startDex = rangerClass().startingStats.dex;
     expect(player.stats.dex).toBe(startDex);
     expect(player.increaseDex(5)).toBe(5);
     expect(player.stats.dex).toBe(startDex + 5);
-    expect(player.increaseDex(100)).toBe(100);
-    expect(player.stats.dex).toBe(startDex + 105);
+    expect(player.increaseDex(100)).toBe(0);
+    expect(player.stats.dex).toBe(20);
     player.reset();
     expect(player.stats.dex).toBe(startDex);
   });
@@ -349,7 +349,7 @@ describe('GameState shop flow', () => {
     expect(state.shopOpen).toBe(false);
   });
 
-  it('lets level-up allocation raise DEX by auto +1 plus free points', () => {
+  it('lets a class-authored level choice raise FIN by 2', () => {
     const state = createState({
       createDropRng: () => () => 0,
       rollAvoidance: () => true,
@@ -371,9 +371,9 @@ describe('GameState shop flow', () => {
 
     expect(state.chooseLevelUp({ str: 0, con: 0, def: 0, dex: 2 })).toMatchObject({
       success: true,
-      dexGained: 3,
+      dexGained: 2,
     });
-    expect(playerOf(state).stats.dex).toBe(startDex + 3);
+    expect(playerOf(state).stats.dex).toBe(startDex + 2);
   });
 
   it('leaves a Merchant and restores inventory on Restart Run', () => {
@@ -495,9 +495,9 @@ describe('GameState shop ownership', () => {
   });
 });
 
-describe('dex HUD', () => {
-  it('displays DEX without a percent sign', () => {
-    expect(evadeHudText(1)).toBe('DEX: 1');
-    expect(evadeHudText(6)).toBe('DEX: 6');
+describe('FIN HUD', () => {
+  it('displays FIN and an optional evade bonus', () => {
+    expect(evadeHudText(1)).toBe('FIN: 1');
+    expect(evadeHudText(6, 15)).toBe('FIN: 6 · EVA +15%');
   });
 });

@@ -1,5 +1,9 @@
 import { type Merchant } from './Merchant';
-import { type PlayerClassId } from './definitions/classes';
+import {
+  shieldArmorForTier,
+  weaponProfileForClass,
+  type PlayerClassId,
+} from './definitions/classes';
 import {
   KNIGHT_SHIELD_PROGRESSION,
   PLAYER_WEAPON_PROGRESSION,
@@ -229,7 +233,7 @@ export function applyWeaponTierPurchase(
     goldSpent: cost,
     attackBonus: bonus,
     defenceBonus: 0,
-    status: `You equip ${title}. +${bonus} ATK.`,
+    status: `You equip ${title}. ${weaponStatLine(classId, nextIndex - 1, nextIndex)}.`,
   };
 }
 
@@ -256,7 +260,7 @@ export function applyShieldTierPurchase(
     goldSpent: cost,
     attackBonus: 0,
     defenceBonus: bonus,
-    status: `You equip ${title}. +${bonus} DEF.`,
+    status: `You equip ${title}. +1 Armor.`,
   };
 }
 
@@ -361,22 +365,14 @@ function buildPotionOfferView(
   };
 }
 
-function attackDeltaLine(currentBonus: number, nextBonus: number): string {
-  const delta = nextBonus - currentBonus;
-  if (delta === 0) {
-    return `+${nextBonus} ATK`;
-  }
-  const sign = delta > 0 ? '+' : '';
-  return `${sign}${delta} ATK → +${nextBonus}`;
-}
-
-function defenceDeltaLine(currentBonus: number, nextBonus: number): string {
-  const delta = nextBonus - currentBonus;
-  if (delta === 0) {
-    return `+${nextBonus} DEF`;
-  }
-  const sign = delta > 0 ? '+' : '';
-  return `${sign}${delta} DEF → +${nextBonus}`;
+function weaponStatLine(classId: PlayerClassId, currentIndex: number, nextIndex: number): string {
+  const current = weaponProfileForClass(classId, currentIndex);
+  const next = weaponProfileForClass(classId, nextIndex);
+  const parts = [`+${next.basePower - current.basePower} Power`];
+  if (next.critChance > current.critChance) parts.push(`+${next.critChance - current.critChance}% Crit`);
+  if (next.pierce > current.pierce) parts.push(`+${next.pierce - current.pierce}% Pierce`);
+  if (next.ward > current.ward) parts.push(`+${next.ward - current.ward} Ward`);
+  return parts.join(' · ');
 }
 
 function buildWeaponOfferView(
@@ -405,10 +401,7 @@ function buildWeaponOfferView(
     title: weaponTierDisplayName(classId, displayIndex),
     description: weaponTierFlavour(classId, displayIndex),
     currentTitle: weaponTierDisplayName(classId, currentIndex),
-    statLine: attackDeltaLine(
-      weaponTierBonus(currentIndex),
-      weaponTierBonus(displayIndex),
-    ),
+    statLine: weaponStatLine(classId, currentIndex, displayIndex),
     classId,
     cost: weaponTierCost(displayIndex),
     tierIndex: displayIndex,
@@ -442,10 +435,7 @@ function buildShieldOfferView(
     title: shieldTierDisplayName(displayIndex),
     description: shieldTierFlavour(displayIndex),
     currentTitle: shieldTierDisplayName(currentIndex),
-    statLine: defenceDeltaLine(
-      shieldTierBonus(currentIndex),
-      shieldTierBonus(displayIndex),
-    ),
+    statLine: `+${shieldArmorForTier(displayIndex) - shieldArmorForTier(currentIndex)} Armor`,
     cost: shieldTierCost(displayIndex),
     tierIndex: displayIndex,
     available: evaluation.available,

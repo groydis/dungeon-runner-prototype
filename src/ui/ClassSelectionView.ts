@@ -26,7 +26,12 @@ export class ClassSelectionView {
   private readonly healthEl: HTMLElement;
   private readonly attackEl: HTMLElement;
   private readonly defenceEl: HTMLElement;
+  private readonly wardEl: HTMLElement | null;
   private readonly evadeEl: HTMLElement;
+  private readonly mightEl: HTMLElement | null;
+  private readonly vigorEl: HTMLElement | null;
+  private readonly willEl: HTMLElement | null;
+  private readonly featureEl: HTMLElement | null;
   private readonly previousButton: HTMLButtonElement;
   private readonly nextButton: HTMLButtonElement;
   private readonly selectButton: HTMLButtonElement;
@@ -46,7 +51,12 @@ export class ClassSelectionView {
     this.healthEl = requireElement(root, '#class-stat-health');
     this.attackEl = requireElement(root, '#class-stat-attack');
     this.defenceEl = requireElement(root, '#class-stat-defence');
+    this.wardEl = root.querySelector('#class-stat-ward');
     this.evadeEl = requireElement(root, '#class-stat-evade');
+    this.mightEl = root.querySelector('#class-stat-might');
+    this.vigorEl = root.querySelector('#class-stat-vigor');
+    this.willEl = root.querySelector('#class-stat-will');
+    this.featureEl = root.querySelector('#class-current-feature');
     this.previousButton = requireElement(
       root,
       '#class-previous',
@@ -138,11 +148,16 @@ export class ClassSelectionView {
     }
     this.nameEl.textContent = option.name;
     this.descriptionEl.textContent = option.description;
+    if (this.featureEl) this.featureEl.textContent = option.featureText;
     this.positionEl.textContent = `${this.currentIndex + 1} / ${this.classes.length}`;
     this.healthEl.textContent = String(option.maxHealth);
     this.attackEl.textContent = String(option.attack);
-    this.defenceEl.textContent = String(option.defence);
-    this.evadeEl.textContent = String(option.dex);
+    this.defenceEl.textContent = String(option.armor);
+    if (this.wardEl) this.wardEl.textContent = String(option.ward);
+    if (this.mightEl) this.mightEl.textContent = String(option.attributes.might);
+    this.evadeEl.textContent = String(option.attributes.finesse);
+    if (this.vigorEl) this.vigorEl.textContent = String(option.attributes.vigor);
+    if (this.willEl) this.willEl.textContent = String(option.attributes.will);
     this.selectButton.textContent = this.preparing
       ? `PREPARING ${option.name.toUpperCase()}…`
       : `BEGIN AS ${option.name.toUpperCase()}`;

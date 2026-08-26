@@ -1,132 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { createPlayerStats } from './Combatant';
+import { createCombatStats, createPlayerStats } from './Combatant';
 import { calculateDamage, calculateSurpriseDamage, resolveAutomaticCombat } from './combat';
-import {
-  ENEMY_DEFINITIONS,
-  createEnemyStats,
-  enemyStatsFactoryFromSearch,
-} from './definitions/enemies';
-
-const player = createPlayerStats();
-const skeletonMinion = createEnemyStats('skeletonMinion');
+import { createEnemyStats, enemyStatsFactoryFromSearch } from './definitions/enemies';
 
 describe('combat', () => {
-  it('deals existing Skeleton Minion damage values', () => {
-    expect(calculateDamage(player.attack, skeletonMinion.defence)).toBe(4);
-    expect(calculateDamage(skeletonMinion.attack, player.defence)).toBe(4);
-    expect(calculateSurpriseDamage(player.attack, skeletonMinion.defence)).toBe(6);
+  it('uses smooth mitigation, pierce, and a 25% ambush bonus', () => {
+    expect(calculateDamage(10, 0)).toBe(10);
+    expect(calculateDamage(10, 6)).toBe(7);
+    expect(calculateDamage(10, 6, 40)).toBe(8);
+    expect(calculateSurpriseDamage(10, 0)).toBe(13);
   });
 
-  it('resolves front-on Skeleton Minion combat with the existing hit sequence', () => {
-    const result = resolveAutomaticCombat(player, skeletonMinion, 'frontOn', {
-      id: 'minion-1',
-      name: 'Skeleton Minion',
-    });
-
-    expect(result.winner).toBe('player');
-    expect(result.playerHealthAfter).toBe(8);
-    expect(result.log.map((entry) => ({
-      attacker: entry.attacker,
-      damage: entry.damage,
-      bonusDamage: entry.bonusDamage,
-      targetHealthAfter: entry.targetHealthAfter,
-      isSurpriseStrike: entry.isSurpriseStrike,
-    }))).toEqual([
-      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 11, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 16, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 7, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 12, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 3, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 8, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 0, isSurpriseStrike: false },
-    ]);
+  it('resolves normal fights player-first and failed evades monster-first', () => {
+    const player = createPlayerStats();
+    const minion = createEnemyStats('skeletonMinion', 4);
+    const normal = resolveAutomaticCombat(player, minion, 'frontOn', { id: 'normal', name: 'Skeleton Minion' });
+    const ambush = resolveAutomaticCombat(player, minion, 'surprise', { id: 'ambush', name: 'Skeleton Minion' });
+    expect(normal.log[0]?.attacker).toBe('player');
+    expect(ambush.log[0]).toMatchObject({ attacker: 'monster', isSurpriseStrike: true });
   });
 
-  it('attributes clamped weapon bonus damage on monster strikes', () => {
-    const armed = {
-      ...skeletonMinion,
-      attack: skeletonMinion.attack + 3,
-    };
-    const result = resolveAutomaticCombat(
-      player,
-      armed,
-      'frontOn',
-      { id: 'armed-minion', name: 'Skeleton Minion' },
-      undefined,
-      3,
-    );
-    const monsterHit = result.log.find((entry) => entry.attacker === 'monster');
-    expect(monsterHit).toMatchObject({
-      damage: 7,
-      bonusDamage: 3,
-    });
+  it('uses Ward against arcane and Armor against physical attacks', () => {
+    const defender = createCombatStats({ maxHealth: 30, health: 30, armor: 8, ward: 0 });
+    const physical = createCombatStats({ maxHealth: 30, health: 30, attack: 10, damageChannel: 'physical' });
+    const arcane = createCombatStats({ ...physical, damageChannel: 'arcane' });
+    const physicalDamage = resolveAutomaticCombat(defender, physical, 'surprise', { id: 'p', name: 'P' }).log[0]!.damage;
+    const arcaneDamage = resolveAutomaticCombat(defender, arcane, 'surprise', { id: 'a', name: 'A' }).log[0]!.damage;
+    expect(arcaneDamage).toBeGreaterThan(physicalDamage);
   });
 
-  it('gives Surprise Attack the existing 150% rounded opening hit', () => {
-    const result = resolveAutomaticCombat(player, skeletonMinion, 'surprise', {
-      id: 'minion-1',
-      name: 'Skeleton Minion',
-    });
-
-    expect(result.winner).toBe('player');
-    expect(result.playerHealthAfter).toBe(8);
-    expect(result.log[0]).toMatchObject({
-      attacker: 'player',
-      damage: 6,
-      bonusDamage: 0,
-      isSurpriseStrike: true,
-      targetHealthAfter: 9,
-    });
-    expect(result.log.length).toBeGreaterThan(1);
+  it('applies first-hit reduction and reports weapon bonus contribution', () => {
+    const knight = createCombatStats({ maxHealth: 30, health: 30, attack: 5, armor: 3, firstIncomingReduction: 30 });
+    const enemy = createCombatStats({ maxHealth: 20, health: 20, attack: 9 });
+    const result = resolveAutomaticCombat(knight, enemy, 'surprise', { id: 'guard', name: 'Guard' }, undefined, 2);
+    expect(result.log[0]).toMatchObject({ attacker: 'monster', bonusDamage: 2 });
+    expect(result.log[0]!.damage).toBeLessThan(calculateSurpriseDamage(9, 3));
   });
 
-  it('uses definition stats for the default Skeleton Minion', () => {
-    expect(skeletonMinion).toEqual(ENEMY_DEFINITIONS.skeletonMinion.startingStats);
-  });
-
-  it('resolves Crypt Guard and Bone Brute with the existing damage formula', () => {
-    const guard = createEnemyStats('cryptGuard');
-    const brute = createEnemyStats('boneBrute');
-
-    expect(calculateDamage(player.attack, guard.defence)).toBe(3);
-    expect(calculateDamage(guard.attack, player.defence)).toBe(5);
-    expect(calculateDamage(player.attack, brute.defence)).toBe(2);
-    expect(calculateDamage(brute.attack, player.defence)).toBe(7);
-
-    const guardFight = resolveAutomaticCombat(player, guard, 'frontOn', {
-      id: 'guard-1',
-      name: 'Crypt Guard',
-    });
-    expect(guardFight.winner).toBe('monster');
-    expect(guardFight.monsterName).toBe('Crypt Guard');
-    expect(guardFight.playerHealthAfter).toBe(0);
-
-    const bruteFight = resolveAutomaticCombat(player, brute, 'frontOn', {
-      id: 'brute-1',
-      name: 'Bone Brute',
-    });
-    expect(bruteFight.winner).toBe('monster');
-    expect(bruteFight.monsterName).toBe('Bone Brute');
-    expect(bruteFight.playerHealthAfter).toBe(0);
-  });
-
-  it('lets injected fatal minion stats kill the player', () => {
-    const fatalMinion = enemyStatsFactoryFromSearch('?fatal=1')('skeletonMinion', 60);
-    expect(fatalMinion.attack).not.toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.attack);
-    expect(fatalMinion.maxHealth).toBe(ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth);
-    const result = resolveAutomaticCombat(player, fatalMinion, 'frontOn', {
-      id: 'fatal-minion',
-      name: 'Skeleton Minion',
-    });
-
-    expect(result.winner).toBe('monster');
-    expect(result.playerHealthAfter).toBe(0);
-    expect(result.log[0]?.attacker).toBe('player');
-    expect(result.log[1]).toMatchObject({
-      attacker: 'monster',
-      damage: 98,
-      bonusDamage: 0,
-      targetHealthAfter: 0,
-    });
+  it('keeps the fatal query override available for deterministic test scenarios', () => {
+    expect(enemyStatsFactoryFromSearch('?fatal=1')('skeletonMinion', 4).attack).toBe(99);
   });
 });

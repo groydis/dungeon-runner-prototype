@@ -1,211 +1,90 @@
-import { type CombatStats, createCombatStats } from '../Combatant';
+import { attributeModifier, clamp, createCombatStats, type CombatStats, type CoreAttribute, type DamageChannel } from '../Combatant';
 import { deepFreeze, type DeepReadonly } from '../freeze';
-import { type PickupId } from './pickupCatalog';
 import { pickWeighted, type Rng } from '../random';
+import { type PickupId } from './pickupCatalog';
 
-export type EnemyType =
-  | 'skeletonMinion'
-  | 'cryptGuard'
-  | 'skeletonWarrior'
-  | 'boneBrute'
-  | 'skeletonMage'
-  | 'necromancer';
-
-/**
- * Render keys map to loaded KayKit enemy models.
- */
-export type EnemyRenderKey =
-  | 'skeletonMinion'
-  | 'cryptGuard'
-  | 'skeletonWarrior'
-  | 'boneBrute'
-  | 'skeletonMage'
-  | 'necromancer';
-
+export type EnemyType = 'skeletonMinion' | 'cryptGuard' | 'skeletonWarrior' | 'boneBrute' | 'skeletonMage' | 'necromancer';
+export type EnemyRenderKey = EnemyType;
 export type EnemyDropKind = 'none' | 'gold' | 'potion';
-
-export interface EnemyDropTableEntry {
-  readonly item: EnemyDropKind;
-  readonly weight: number;
-}
-
-/** Shared first-version table. Swap per enemy later without changing GameState. */
-export const DEFAULT_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> =
-  deepFreeze([
-    { item: 'none', weight: 60 },
-    { item: 'gold', weight: 25 },
-    { item: 'potion', weight: 15 },
-  ]);
-
-export const ELITE_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> =
-  deepFreeze([
-    { item: 'none', weight: 20 },
-    { item: 'gold', weight: 50 },
-    { item: 'potion', weight: 30 },
-  ]);
-
-export interface EnemyDropResult {
-  enemyId: string;
-  enemyType: EnemyType;
-  kind: Exclude<EnemyDropKind, 'none'>;
-  pickupId: PickupId;
-  collectibleId: string;
-  row: number;
-  col: number;
-}
-
+export type EnemyGrowthProfile = 'skirmisher' | 'guardian' | 'warrior' | 'brute' | 'caster' | 'eliteCaster';
+export interface EnemyDropTableEntry { readonly item: EnemyDropKind; readonly weight: number }
+export const DEFAULT_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> = deepFreeze([
+  { item: 'none', weight: 60 }, { item: 'gold', weight: 25 }, { item: 'potion', weight: 15 },
+]);
+export const ELITE_ENEMY_DROP_TABLE: DeepReadonly<EnemyDropTableEntry[]> = deepFreeze([
+  { item: 'none', weight: 20 }, { item: 'gold', weight: 50 }, { item: 'potion', weight: 30 },
+]);
+export interface EnemyDropResult { enemyId: string; enemyType: EnemyType; kind: Exclude<EnemyDropKind, 'none'>; pickupId: PickupId; collectibleId: string; row: number; col: number }
 export interface EnemyDefinition {
-  readonly type: EnemyType;
-  readonly name: string;
-  readonly startingStats: Readonly<CombatStats>;
-  readonly experience: number;
-  readonly elite: boolean;
-  readonly renderKey: EnemyRenderKey;
-  readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
+  readonly type: EnemyType; readonly name: string;
+  readonly attributes: { might: number; finesse: number; vigor: number; will: number };
+  readonly baseHealth: number; readonly attackBase: number; readonly attackAttribute: CoreAttribute;
+  readonly baseArmor: number; readonly baseWard: number; readonly damageChannel: DamageChannel;
+  readonly baseAwareness: number; readonly introRow: number; readonly growth: EnemyGrowthProfile;
+  readonly startingStats: Readonly<CombatStats>; readonly experience: number; readonly elite: boolean;
+  readonly renderKey: EnemyRenderKey; readonly dropTable: ReadonlyArray<Readonly<EnemyDropTableEntry>>;
 }
-
 export type EnemyStatsFactory = (type: EnemyType, row: number) => CombatStats;
-
-/** Testing-only Skeleton Minion attack used by `?fatal=1`. */
 export const FATAL_SKELETON_MINION_ATTACK = 99;
+export const ENEMY_SCALING_START_ROW = 4;
+export const ENEMY_SCALING_ROW_INTERVAL = 20;
 
-export const ENEMY_SCALING_START_ROW = 60;
-export const ENEMY_SCALING_ROW_INTERVAL = 15;
+const packages = {
+  skeletonMinion: enemy('skeletonMinion', 'Skeleton Minion', { might: 10, finesse: 10, vigor: 8, will: 8 }, 10, 3, 'finesse', 0, 0, 'physical', 0, 4, 'skirmisher', 1, false),
+  cryptGuard: enemy('cryptGuard', 'Crypt Guard', { might: 12, finesse: 10, vigor: 12, will: 8 }, 12, 3, 'might', 2, 0, 'physical', 2, 20, 'guardian', 2, false),
+  skeletonWarrior: enemy('skeletonWarrior', 'Skeleton Warrior', { might: 14, finesse: 12, vigor: 14, will: 10 }, 16, 4, 'might', 2, 0, 'physical', 2, 40, 'warrior', 4, false),
+  boneBrute: enemy('boneBrute', 'Bone Brute', { might: 18, finesse: 8, vigor: 16, will: 8 }, 18, 4, 'might', 0, 0, 'physical', -1, 40, 'brute', 5, false),
+  skeletonMage: enemy('skeletonMage', 'Skeleton Mage', { might: 8, finesse: 12, vigor: 12, will: 16 }, 12, 5, 'will', 0, 0, 'arcane', 3, 20, 'caster', 4, false),
+  necromancer: enemy('necromancer', 'Necromancer', { might: 10, finesse: 14, vigor: 18, will: 18 }, 28, 6, 'will', 2, 0, 'arcane', 4, 60, 'eliteCaster', 10, true),
+} satisfies Record<EnemyType, EnemyDefinition>;
 
-function enemyStats(
-  hp: number,
-  str: number,
-  con: number,
-  def: number,
-  dex: number,
-): CombatStats {
+export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>> = deepFreeze(packages);
+
+function enemy(
+  type: EnemyType, name: string, attributes: EnemyDefinition['attributes'], baseHealth: number,
+  attackBase: number, attackAttribute: CoreAttribute, baseArmor: number, baseWard: number,
+  damageChannel: DamageChannel, baseAwareness: number, introRow: number, growth: EnemyGrowthProfile,
+  experience: number, elite: boolean,
+): EnemyDefinition {
+  const definition = { type, name, attributes, baseHealth, attackBase, attackAttribute, baseArmor, baseWard,
+    damageChannel, baseAwareness, introRow, growth, experience, elite, renderKey: type,
+    dropTable: elite ? ELITE_ENEMY_DROP_TABLE : DEFAULT_ENEMY_DROP_TABLE };
+  return { ...definition, startingStats: statsAtRank(definition as EnemyDefinition, 0) };
+}
+
+function statsAtRank(d: EnemyDefinition, rank: number): CombatStats {
+  const maxHealth = d.baseHealth + 2 * attributeModifier(d.attributes.vigor) + 2 * rank;
+  const armorGrowth = d.growth === 'guardian' || d.growth === 'warrior' ? Math.floor(rank / 2) : 0;
+  const wardGrowth = d.growth === 'caster' || d.growth === 'eliteCaster' ? rank : 0;
   return createCombatStats({
-    maxHealth: hp,
-    health: hp,
-    attack: str,
-    defence: def,
-    str,
-    con,
-    dex,
+    maxHealth, health: maxHealth,
+    attack: d.attackBase + attributeModifier(d.attributes[d.attackAttribute]) + rank,
+    armor: d.baseArmor + armorGrowth,
+    ward: d.baseWard + Math.max(0, attributeModifier(d.attributes.will)) + wardGrowth,
+    ...d.attributes, damageChannel: d.damageChannel,
+    awareness: clamp(d.baseAwareness + rank, -6, 6),
   });
 }
 
-export const ENEMY_DEFINITIONS: DeepReadonly<Record<EnemyType, EnemyDefinition>> =
-  deepFreeze({
-    skeletonMinion: {
-      type: 'skeletonMinion',
-      name: 'Skeleton Minion',
-      startingStats: enemyStats(15, 5, 5, 1, 9),
-      experience: 1,
-      elite: false,
-      renderKey: 'skeletonMinion',
-      dropTable: DEFAULT_ENEMY_DROP_TABLE,
-    },
-    cryptGuard: {
-      type: 'cryptGuard',
-      name: 'Crypt Guard',
-      startingStats: enemyStats(18, 6, 6, 2, 6),
-      experience: 2,
-      elite: false,
-      renderKey: 'cryptGuard',
-      dropTable: DEFAULT_ENEMY_DROP_TABLE,
-    },
-    skeletonWarrior: {
-      type: 'skeletonWarrior',
-      name: 'Skeleton Warrior',
-      startingStats: enemyStats(21, 7, 7, 3, 3),
-      experience: 4,
-      elite: false,
-      renderKey: 'skeletonWarrior',
-      dropTable: DEFAULT_ENEMY_DROP_TABLE,
-    },
-    boneBrute: {
-      type: 'boneBrute',
-      name: 'Bone Brute',
-      startingStats: enemyStats(24, 8, 8, 3, 1),
-      experience: 4,
-      elite: false,
-      renderKey: 'boneBrute',
-      dropTable: DEFAULT_ENEMY_DROP_TABLE,
-    },
-    skeletonMage: {
-      type: 'skeletonMage',
-      name: 'Skeleton Mage',
-      startingStats: enemyStats(27, 9, 9, 1, 1),
-      experience: 4,
-      elite: false,
-      renderKey: 'skeletonMage',
-      dropTable: DEFAULT_ENEMY_DROP_TABLE,
-    },
-    necromancer: {
-      type: 'necromancer',
-      name: 'Necromancer',
-      startingStats: enemyStats(30, 10, 10, 5, 5),
-      experience: 10,
-      elite: true,
-      renderKey: 'necromancer',
-      dropTable: ELITE_ENEMY_DROP_TABLE,
-    },
-  });
-
-export function getEnemyDefinition(type: EnemyType): DeepReadonly<EnemyDefinition> {
-  return ENEMY_DEFINITIONS[type];
+export function getEnemyDefinition(type: EnemyType): DeepReadonly<EnemyDefinition> { return ENEMY_DEFINITIONS[type]; }
+export function enemyRank(type: EnemyType, row: number): number {
+  const d = getEnemyDefinition(type);
+  return Math.floor(Math.max(0, row - d.introRow) / ENEMY_SCALING_ROW_INTERVAL);
 }
-
-export function rollEnemyDrop(
-  table: readonly EnemyDropTableEntry[],
-  rng: Rng,
-): EnemyDropKind {
-  return pickWeighted(table, rng);
+export function createEnemyStats(type: EnemyType, row?: number): CombatStats {
+  const d = getEnemyDefinition(type);
+  return statsAtRank(d as EnemyDefinition, row === undefined ? 0 : enemyRank(type, row));
 }
-
-export function enemyDropCollectibleId(
-  kind: Exclude<EnemyDropKind, 'none'>,
-  enemyId: string,
-): string {
-  return `drop-${kind}-${enemyId}`;
+export function enemyExperienceAtRow(type: EnemyType, row: number): number {
+  const d = getEnemyDefinition(type);
+  return d.experience + Math.floor(enemyRank(type, row) / 2);
 }
-
-/** Default spawn stats: definition baseline plus optional row scaling. */
-export function createEnemyStats(type: EnemyType, row: number = 60): CombatStats {
-  const base = getEnemyDefinition(type).startingStats;
-  const increment = Math.floor(
-    Math.max(0, row - ENEMY_SCALING_START_ROW) / ENEMY_SCALING_ROW_INTERVAL,
-  );
-  const str = base.str + increment;
-  const con = base.con + increment;
-  const def = base.defence + increment;
-  const dex = base.dex + increment;
-  const maxHealth = str + con * 2;
-  return createCombatStats({
-    maxHealth,
-    health: maxHealth,
-    attack: str,
-    defence: def,
-    str,
-    con,
-    dex,
-  });
-}
-
-/**
- * Query-string testing helper. `?fatal=1` overrides Skeleton Minion attack only;
- * every other value still comes from the enemy definition.
- */
+export function rollEnemyDrop(table: readonly EnemyDropTableEntry[], rng: Rng): EnemyDropKind { return pickWeighted(table, rng); }
+export function enemyDropCollectibleId(kind: Exclude<EnemyDropKind, 'none'>, enemyId: string): string { return `drop-${kind}-${enemyId}`; }
 export function enemyStatsFactoryFromSearch(search: string): EnemyStatsFactory {
-  const params = new URLSearchParams(
-    search.startsWith('?') ? search.slice(1) : search,
-  );
-  const fatal = params.get('fatal') === '1';
-
+  const fatal = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search).get('fatal') === '1';
   return (type, row) => {
     const stats = createEnemyStats(type, row);
-    if (fatal && type === 'skeletonMinion') {
-      return createCombatStats({
-        ...stats,
-        attack: FATAL_SKELETON_MINION_ATTACK,
-      });
-    }
-    return stats;
+    return fatal && type === 'skeletonMinion' ? createCombatStats({ ...stats, attack: FATAL_SKELETON_MINION_ATTACK }) : stats;
   };
 }

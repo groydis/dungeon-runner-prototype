@@ -3,10 +3,11 @@ import {
   DROP_SPAWN_FX_SEC,
   ENCOUNTER_FX_SEC,
   ENEMY_ADVANCE_FX_SEC,
-  EVADE_FX_SEC,
   MOVE_DURATION_SEC,
   TILE_PITCH,
   TRAP_FX_SEC,
+  evadeDurationSec,
+  fleeHopCount,
   laneWorldX,
 } from './config';
 import { type CombatResult } from './combat';
@@ -33,7 +34,6 @@ import {
   weaponRngFactoryFromSearch,
 } from './random';
 import { InputController, type TilePick } from './InputController';
-import { type LevelUpAllocation } from './levelUp';
 import {
   POTION_OFFER_IDS,
   type PotionOfferId,
@@ -361,18 +361,21 @@ export class Game {
     if (event.kind === 'evade') {
       this.state.applyEvade(event.monster);
       this.updateHud();
-      this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
+      const player = this.requirePlayerSnapshot();
+      const hops = fleeHopCount(event.monster.row, player.row);
+      this.scene.beginEncounterFx([event], player.col, player.row);
       this.setPhase({
         kind: 'encounter',
         event,
         elapsed: 0,
-        durationSec: EVADE_FX_SEC,
+        durationSec: evadeDurationSec(hops),
       });
       return;
     }
 
     this.scene.playEnemyTaunt(event.monster);
-    this.scene.beginEncounterFx([event], this.requirePlayerSnapshot().col);
+    const player = this.requirePlayerSnapshot();
+    this.scene.beginEncounterFx([event], player.col, player.row);
     this.setPhase({
       kind: 'encounter',
       event,
@@ -649,8 +652,11 @@ export class Game {
       return;
     }
 
-    const allocation: LevelUpAllocation = this.levelUp.getAllocation();
-    const result = this.state.chooseLevelUp(allocation);
+    const choiceId = this.levelUp.getChoiceId();
+    if (!choiceId) {
+      return;
+    }
+    const result = this.state.chooseLevelUp(choiceId);
     this.updateHud();
     if (!result.success) {
       return;

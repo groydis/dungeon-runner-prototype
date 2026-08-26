@@ -31,8 +31,16 @@ export function rollEvadeContest(
   enemyDex: number,
   random: () => number = Math.random,
 ): boolean {
-  const d10 = () => Math.floor(random() * 10) + 1;
-  return playerDex + d10() > enemyDex + d10();
+  return random() * 100 < calculateEvadeChance(playerDex, enemyDex);
+}
+
+export function calculateEvadeChance(
+  playerFinesse: number,
+  enemyAwareness: number,
+  evadeBonus = 0,
+): number {
+  const modifier = Math.floor((playerFinesse - 10) / 2);
+  return Math.min(80, Math.max(20, 50 + 5 * (modifier - enemyAwareness) + evadeBonus));
 }
 
 /**
@@ -92,7 +100,7 @@ function isOnMonsterTile(
 
 /** Pure checks. Does not mutate monsters or tiles. */
 export function findAlignedMonsterEncounters(
-  player: Pick<Player, 'row' | 'col'> & { dex: number },
+  player: Pick<Player, 'row' | 'col'> & { dex: number; evadeBonus?: number },
   monsters: Iterable<Monster>,
   forceRoll?: AvoidanceRoll,
   random: () => number = Math.random,
@@ -123,7 +131,11 @@ export function findAlignedMonsterEncounters(
 
     const evaded = forceRoll
       ? forceRoll()
-      : rollEvadeContest(player.dex, monster.stats.dex, random);
+      : random() * 100 < calculateEvadeChance(
+          player.dex,
+          monster.stats.awareness,
+          player.evadeBonus ?? 0,
+        );
     if (evaded) {
       events.push({ kind: 'evade', monster: view });
     } else {
@@ -144,7 +156,7 @@ export function encounterStartText(event: EncounterEvent): string {
     return `You slip past the ${name}.`;
   }
   if (event.approach === 'surprise') {
-    return `You catch the ${name} off guard!`;
+    return `The ${name} catches you off guard!`;
   }
   return `A ${name} blocks your path!`;
 }

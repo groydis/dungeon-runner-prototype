@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createCombatStats } from './Combatant';
 import {
   PLAYER_CLASS_IDS,
   getPlayerClassDefinition,
@@ -45,6 +46,13 @@ function playerOf(state: GameState) {
 function createState(options: GameStateOptions = {}): GameState {
   return new GameState({ playerClass: 'ranger', ...options });
 }
+
+const fatalTankStats: GameStateOptions['createEnemyStats'] = (type, row) => {
+  const stats = enemyStatsFactoryFromSearch('?fatal=1')(type, row);
+  return type === 'skeletonMinion'
+    ? createCombatStats({ ...stats, maxHealth: 100, health: 100 })
+    : stats;
+};
 
 function seededState(): GameState {
   return createState({
@@ -149,7 +157,7 @@ describe('enemy definitions', () => {
 
   it('applies the fatal query-string override on top of the Skeleton Minion definition', () => {
     const state = createState({
-      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createEnemyStats: fatalTankStats,
       createWeaponRng: () => () => 0,
       rollAvoidance: () => true,
     });
@@ -166,7 +174,7 @@ describe('enemy definitions', () => {
       99,
     );
     expect(state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL)?.stats.maxHealth).toBe(
-      ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
+      100,
     );
 
     const result = state.createCombatResult(combat);
@@ -184,7 +192,7 @@ describe('enemy definitions', () => {
 describe('turn action validity', () => {
   it('rejects movement after the run is over', () => {
     const state = createState({
-      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createEnemyStats: fatalTankStats,
       rollAvoidance: () => true,
     });
     walkTo(state, DEMO_MONSTER_ROW - 2, 1);
@@ -754,7 +762,7 @@ describe('enemy drops', () => {
 
   it('does not create a drop when the player dies', () => {
     const state = createState({
-      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createEnemyStats: fatalTankStats,
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -859,14 +867,14 @@ describe('dex and evade contest', () => {
     expect(playerOf(state).stats.dex).toBe(ranger.startingStats.dex);
     expect(state.getHudSnapshot().dex).toBe(ranger.startingStats.dex);
     expect(evadeHudText(state.getHudSnapshot().dex)).toBe(
-      `DEX: ${ranger.startingStats.dex}`,
+      `FIN: ${ranger.startingStats.dex}`,
     );
     expect(state.getHudSnapshot().className).toBe(ranger.name);
 
     state.increaseDex(5);
     expect(state.getHudSnapshot().dex).toBe(ranger.startingStats.dex + 5);
     expect(evadeHudText(state.getHudSnapshot().dex)).toBe(
-      `DEX: ${ranger.startingStats.dex + 5}`,
+      `FIN: ${ranger.startingStats.dex + 5}`,
     );
 
     state.reset();
@@ -971,7 +979,7 @@ describe('XP and level-up', () => {
     expect(evadeState.levelUpOpen).toBe(false);
 
     const deathState = createState({
-      createEnemyStats: enemyStatsFactoryFromSearch('?fatal=1'),
+      createEnemyStats: fatalTankStats,
       createDropRng: alwaysDrop(0.7),
       rollAvoidance: () => true,
     });
@@ -1011,7 +1019,7 @@ describe('XP and level-up', () => {
     expect(() => state.resolveCompletedMove(DEMO_MONSTER_COL)).not.toThrow();
   });
 
-  it('applies automatic +1 to all attributes plus a 2-point allocation', () => {
+  it('applies one authored class growth choice and its level heal', () => {
     const state = createState({
       createDropRng: alwaysDrop(0),
       rollAvoidance: () => true,
@@ -1035,22 +1043,20 @@ describe('XP and level-up', () => {
       dex: before.dex,
     });
 
-    expect(state.chooseLevelUp({ str: 2, con: 0, def: 0, dex: 0 })).toMatchObject({
+    expect(state.chooseLevelUp('ranger-finesse')).toMatchObject({
       success: true,
-      strGained: 3,
-      conGained: 1,
-      defGained: 1,
-      dexGained: 1,
+      strGained: 0,
+      conGained: 0,
+      defGained: 0,
+      dexGained: 2,
     });
     const after = playerOf(state).stats;
-    // +1 all, plus 2 free STR
-    expect(after.str).toBe(ranger.str + 3);
-    expect(after.con).toBe(ranger.con + 1);
-    expect(after.defence).toBe(ranger.defence + 1);
-    expect(after.dex).toBe(ranger.dex + 1);
-    // maxHP = str + 2*con → +3 str +1 con = +5 max HP; current HP unchanged
-    expect(after.maxHealth).toBe(ranger.maxHealth + 5);
-    expect(after.health).toBe(healthBefore);
+    expect(after.str).toBe(ranger.str);
+    expect(after.con).toBe(ranger.con);
+    expect(after.defence).toBe(ranger.defence);
+    expect(after.dex).toBe(ranger.dex + 2);
+    expect(after.maxHealth).toBe(ranger.maxHealth + 2);
+    expect(after.health).toBeGreaterThan(healthBefore);
   });
 
   it('queues one allocation at a time when a combat crosses several thresholds', () => {
@@ -1105,10 +1111,10 @@ describe('XP and level-up', () => {
     });
     state.addExperience(2);
     fightDemoMinionPending(state);
-    state.chooseLevelUp({ str: 0, con: 0, def: 0, dex: 2 });
+    state.chooseLevelUp('ranger-finesse');
     expect(playerOf(state).level).toBe(2);
     expect(playerOf(state).stats.dex).toBe(
-      getPlayerClassDefinition('ranger').startingStats.dex + 3,
+      getPlayerClassDefinition('ranger').startingStats.dex + 2,
     );
 
     state.reset();
@@ -1249,7 +1255,7 @@ describe('player class selection', () => {
     // Level-up auto +1 STR/+1 DEX (+2 ATK); free points went to DEF;
     // first purchasable weapon tier adds flat index-driven ATK bonus.
     expect(playerOf(state).stats.attack).toBe(
-      getPlayerClassDefinition('ranger').startingStats.attack + 2 + bonus,
+      getPlayerClassDefinition('ranger').startingStats.attack + 1 + bonus,
     );
 
     const knight = getPlayerClassDefinition('knight');

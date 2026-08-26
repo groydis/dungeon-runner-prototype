@@ -16,13 +16,17 @@ describe('progression thresholds', () => {
     expect(nextLevelExperience(0)).toBe(3);
   });
 
-  it('uses the cumulative thresholds 3, 7, 12, 18, and 25', () => {
+  it('uses the cumulative thresholds through level 10', () => {
     expect(LEVEL_XP_THRESHOLDS).toEqual([
       { level: 2, experience: 3 },
       { level: 3, experience: 7 },
       { level: 4, experience: 12 },
       { level: 5, experience: 18 },
       { level: 6, experience: 25 },
+      { level: 7, experience: 35 },
+      { level: 8, experience: 48 },
+      { level: 9, experience: 64 },
+      { level: 10, experience: 84 },
     ]);
 
     expect(levelForExperience(2)).toBe(1);
@@ -36,7 +40,8 @@ describe('progression thresholds', () => {
     expect(nextLevelExperience(7)).toBe(12);
     expect(nextLevelExperience(12)).toBe(18);
     expect(nextLevelExperience(18)).toBe(25);
-    expect(nextLevelExperience(25)).toBeNull();
+    expect(nextLevelExperience(25)).toBe(35);
+    expect(nextLevelExperience(84)).toBeNull();
   });
 
   it('queues every threshold crossed by a single XP gain', () => {

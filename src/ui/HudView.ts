@@ -4,8 +4,8 @@ import { experienceHudText, levelHudText } from './LevelUpOverlayView';
 
 export type { HudSnapshot };
 
-export function evadeHudText(dex: number): string {
-  return `DEX: ${dex}`;
+export function evadeHudText(finesse: number, evadeBonus = 0): string {
+  return `FIN: ${finesse}${evadeBonus > 0 ? ` · EVA +${evadeBonus}%` : ''}`;
 }
 
 export function goldHudText(gold: number): string {
@@ -25,6 +25,7 @@ export class HudView {
   private readonly goldEl: HTMLElement;
   private readonly attackEl: HTMLElement;
   private readonly defenceEl: HTMLElement;
+  private readonly wardEl: HTMLElement | null;
   private readonly evadeEl: HTMLElement;
   private readonly levelEl: HTMLElement;
   private readonly experienceEl: HTMLElement;
@@ -38,6 +39,7 @@ export class HudView {
     this.goldEl = requireElement(root, '#gold');
     this.attackEl = requireElement(root, '#attack');
     this.defenceEl = requireElement(root, '#defence');
+    this.wardEl = root.querySelector('#ward');
     this.evadeEl = requireElement(root, '#evade');
     this.levelEl = requireElement(root, '#level');
     this.experienceEl = requireElement(root, '#experience');
@@ -54,7 +56,8 @@ export class HudView {
     this.goldEl.textContent = goldHudText(snapshot.gold);
     this.attackEl.textContent = attackHudText(snapshot.attack);
     this.defenceEl.textContent = armourHudText(snapshot.defence);
-    this.evadeEl.textContent = evadeHudText(snapshot.dex);
+    if (this.wardEl) this.wardEl.textContent = `WRD: ${snapshot.ward ?? 0}`;
+    this.evadeEl.textContent = evadeHudText(snapshot.dex, snapshot.evadeBonus ?? 0);
     this.levelEl.textContent = levelHudText(snapshot.level);
     this.experienceEl.textContent = experienceHudText(
       snapshot.experience,

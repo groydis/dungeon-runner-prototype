@@ -1,132 +1,123 @@
+import { ARMOR_CAP, ATTRIBUTE_MAX, WARD_CAP, type CoreAttribute } from './Combatant';
 import { type Player } from './Player';
 import { nextLevelExperience } from './progression';
 
-/** Free points to distribute on each level-up (after the automatic +1 to all). */
-export const LEVEL_UP_FREE_POINTS = 2;
-
-export interface LevelUpAllocation {
-  str: number;
-  con: number;
-  def: number;
-  dex: number;
-}
-
-export type LevelUpUnavailableReason = 'noLevelUp' | 'invalidAllocation';
-
+/** Compatibility shape retained for old integrations; the live UI now selects one authored choice. */
+export interface LevelUpAllocation { str: number; con: number; def: number; dex: number }
 export type LevelUpAttributeId = keyof LevelUpAllocation;
+export const LEVEL_UP_ATTRIBUTES: readonly LevelUpAttributeId[] = ['str', 'con', 'def', 'dex'];
+export const LEVEL_UP_FREE_POINTS = 2;
+export type LevelUpChoiceId = string;
+export type LevelUpUnavailableReason = 'noLevelUp' | 'invalidAllocation' | 'invalidChoice';
 
-export const LEVEL_UP_ATTRIBUTES: readonly LevelUpAttributeId[] = [
-  'str',
-  'con',
-  'def',
-  'dex',
-];
-
+export interface LevelUpChoiceView {
+  id: LevelUpChoiceId;
+  title: string;
+  description: string;
+  available: boolean;
+}
 export interface LevelUpView {
   level: number;
   experience: number;
   nextLevelExperience: number | null;
-  freePoints: number;
-  /** Current attributes shown for context while allocating. */
-  attributes: LevelUpAllocation;
+  choices: LevelUpChoiceView[];
+  /** Compatibility fields. */ freePoints: number; attributes: LevelUpAllocation;
 }
-
 export interface LevelUpResult {
   success: boolean;
   reason?: LevelUpUnavailableReason;
+  choiceId?: LevelUpChoiceId;
   allocation?: LevelUpAllocation;
-  strGained: number;
-  conGained: number;
-  defGained: number;
-  dexGained: number;
+  strGained: number; conGained: number; defGained: number; dexGained: number;
   pendingRemaining: number;
   status: string;
 }
 
-export function emptyLevelUpAllocation(): LevelUpAllocation {
-  return { str: 0, con: 0, def: 0, dex: 0 };
-}
+interface ChoiceDefinition { id: string; title: string; description: string; kind: 'attribute' | 'armor' | 'ward' | 'technique' | 'specialization' | 'capstone'; value: string }
 
-export function allocationSum(allocation: LevelUpAllocation): number {
-  return allocation.str + allocation.con + allocation.def + allocation.dex;
-}
+const REGULAR_CHOICES: Record<Player['classId'], readonly ChoiceDefinition[]> = {
+  rogue: [attribute('rogue-finesse', 'Quick Hands', 'Increase FIN by 2.', 'finesse'), attribute('rogue-vigor', 'Hard to Kill', 'Increase VIG by 2.', 'vigor'), technique('shadowcraft', 'Shadowcraft', '+5% critical chance per rank.')],
+  ranger: [attribute('ranger-finesse', 'Sure Aim', 'Increase FIN by 2.', 'finesse'), attribute('ranger-vigor', 'Trail Hardened', 'Increase VIG by 2.', 'vigor'), technique('piercing', 'Piercing', '+5% Armor pierce per rank.')],
+  mage: [attribute('mage-will', 'Deep Study', 'Increase WIL by 2.', 'will'), ward('mage-ward', 'Arcane Ward', 'Increase Ward by 1.'), technique('arcaneSurge', 'Arcane Surge', '+5% opening damage per rank.')],
+  knight: [attribute('knight-might', 'Weapon Drill', 'Increase MIG by 2.', 'might'), armor('knight-armor', 'Heavy Plate', 'Increase Armor by 1.'), technique('bulwark', 'Bulwark', 'Reduce the first incoming hit by another 5% per rank.')],
+  barbarian: [attribute('barbarian-might', 'Brute Force', 'Increase MIG by 2.', 'might'), attribute('barbarian-vigor', 'Iron Gut', 'Increase VIG by 2.', 'vigor'), technique('fury', 'Fury', '+5% bloodied damage per rank.')],
+  lorekeeper: [attribute('lorekeeper-will', 'Forbidden Lore', 'Increase WIL by 2.', 'will'), ward('lorekeeper-ward', 'Warded Mind', 'Increase Ward by 1.'), technique('restoration', 'Restoration', 'Potions restore 10% more per rank.')],
+};
 
-export function isValidLevelUpAllocation(
-  allocation: LevelUpAllocation,
-): boolean {
-  for (const key of LEVEL_UP_ATTRIBUTES) {
-    const value = allocation[key];
-    if (!Number.isInteger(value) || value < 0) {
-      return false;
-    }
+const SPECIALIZATIONS: Record<Player['classId'], readonly ChoiceDefinition[]> = {
+  rogue: [spec('assassin', 'Assassin', '+10% critical chance.'), spec('acrobat', 'Acrobat', '+10% evade chance.'), spec('rogueDuelist', 'Duelist', '+10% Armor pierce.')],
+  ranger: [spec('sharpshooter', 'Sharpshooter', '+15% Armor pierce.'), spec('scout', 'Scout', '+10% evade chance.'), spec('survivor', 'Survivor', '+6 maximum HP.')],
+  mage: [spec('evoker', 'Evoker', '+15% opening damage.'), spec('spellbreaker', 'Spellbreaker', '+2 Ward and +10% pierce.'), spec('channeler', 'Channeler', '15% chance to strike twice.')],
+  knight: [spec('bastion', 'Bastion', '+2 Armor.'), spec('knightDuelist', 'Duelist', '+1 Power and +10% critical chance.'), spec('warden', 'Warden', '+2 Ward.')],
+  barbarian: [spec('berserker', 'Berserker', '+10% bloodied damage.'), spec('juggernaut', 'Juggernaut', '+6 maximum HP.'), spec('executioner', 'Executioner', '+10% critical chance.')],
+  lorekeeper: [spec('loreWarden', 'Warden', '+2 Ward.'), spec('apothecary', 'Apothecary', 'Potions restore 25% more.'), spec('seer', 'Seer', 'Reduce the first incoming hit by 25%.')],
+};
+
+const CAPSTONES: readonly ChoiceDefinition[] = [
+  { id: 'mastery', title: 'Mastery', description: 'Deepen your level 5 specialization.', kind: 'capstone', value: 'mastery' },
+  { id: 'resilience', title: 'Resilience', description: '+2 VIG and +1 Ward.', kind: 'capstone', value: 'resilience' },
+];
+
+export function buildLevelUpView(level: number, experience: number, subject: Player | LevelUpAllocation): LevelUpView {
+  if (!('classId' in subject)) {
+    return { level, experience, nextLevelExperience: nextLevelExperience(experience), freePoints: LEVEL_UP_FREE_POINTS, attributes: { ...subject }, choices: [] };
   }
-  return allocationSum(allocation) === LEVEL_UP_FREE_POINTS;
-}
-
-export function buildLevelUpView(
-  level: number,
-  experience: number,
-  attributes: LevelUpAllocation,
-): LevelUpView {
+  const player = subject;
+  const definitions = level === 5 ? SPECIALIZATIONS[player.classId] : level === 10 ? CAPSTONES : REGULAR_CHOICES[player.classId];
   return {
-    level,
-    experience,
-    nextLevelExperience: nextLevelExperience(experience),
-    freePoints: LEVEL_UP_FREE_POINTS,
-    attributes: { ...attributes },
+    level, experience, nextLevelExperience: nextLevelExperience(experience), freePoints: 0,
+    attributes: playerAttributeSnapshot(player),
+    choices: definitions.map((choice) => ({ ...choice, available: choiceAvailable(player, choice) })),
   };
 }
 
-/**
- * Automatic +1 to every attribute, plus the player's free-point allocation.
- * Rejects (no partial apply) if the allocation is invalid.
- */
-export function applyLevelUpAllocation(
-  player: Player,
-  allocation: LevelUpAllocation,
-): Omit<LevelUpResult, 'success' | 'pendingRemaining' | 'reason'> | null {
-  if (!isValidLevelUpAllocation(allocation)) {
-    return null;
-  }
+export function applyLevelUpChoice(player: Player, level: number, choiceId: LevelUpChoiceId): Omit<LevelUpResult, 'success' | 'pendingRemaining'> | null {
+  const definitions = level === 5 ? SPECIALIZATIONS[player.classId] : level === 10 ? CAPSTONES : REGULAR_CHOICES[player.classId];
+  const choice = definitions.find((entry) => entry.id === choiceId);
+  if (!choice || !choiceAvailable(player, choice)) return null;
+  let strGained = 0; let conGained = 0; let defGained = 0; let dexGained = 0;
+  if (choice.kind === 'attribute') {
+    const gained = player.increaseAttribute(choice.value as CoreAttribute, 2);
+    if (choice.value === 'might') strGained = gained;
+    if (choice.value === 'vigor') conGained = gained;
+    if (choice.value === 'finesse') dexGained = gained;
+  } else if (choice.kind === 'armor') defGained = player.increaseArmor(1);
+  else if (choice.kind === 'ward') player.increaseWard(1);
+  else if (choice.kind === 'technique') player.increaseTechnique(choice.value);
+  else if (choice.kind === 'specialization') player.chooseSpecialization(choice.value);
+  else if (choice.value === 'resilience') {
+    conGained = player.increaseAttribute('vigor', 2);
+    player.increaseWard(1);
+    player.chooseCapstone(choice.value);
+  } else player.chooseCapstone(choice.value);
+  const healed = player.healForLevelUp();
+  return { choiceId, strGained, conGained, defGained, dexGained, status: `Level ${level}: ${choice.title}. Restored ${healed} HP.` };
+}
 
-  const strGained = 1 + allocation.str;
-  const conGained = 1 + allocation.con;
-  const defGained = 1 + allocation.def;
-  const dexGained = 1 + allocation.dex;
+function choiceAvailable(player: Player, choice: ChoiceDefinition): boolean {
+  if (choice.kind === 'attribute') return player.attributes[choice.value as CoreAttribute] < ATTRIBUTE_MAX;
+  if (choice.kind === 'armor') return player.stats.armor < ARMOR_CAP;
+  if (choice.kind === 'ward') return player.stats.ward < WARD_CAP;
+  if (choice.kind === 'technique') return player.techniqueRank(choice.value) < 3;
+  if (choice.kind === 'specialization') return player.specialization === null;
+  if (choice.value === 'mastery') return player.specialization !== null && player.capstone === null;
+  return player.capstone === null && (player.attributes.vigor < ATTRIBUTE_MAX || player.stats.ward < WARD_CAP);
+}
 
-  player.increaseStr(strGained);
-  player.increaseCon(conGained);
-  player.increaseDef(defGained);
-  player.increaseDex(dexGained);
+function attribute(id: string, title: string, description: string, value: CoreAttribute): ChoiceDefinition { return { id, title, description, kind: 'attribute', value }; }
+function armor(id: string, title: string, description: string): ChoiceDefinition { return { id, title, description, kind: 'armor', value: 'armor' }; }
+function ward(id: string, title: string, description: string): ChoiceDefinition { return { id, title, description, kind: 'ward', value: 'ward' }; }
+function technique(id: string, title: string, description: string): ChoiceDefinition { return { id, title, description, kind: 'technique', value: id }; }
+function spec(id: string, title: string, description: string): ChoiceDefinition { return { id, title, description, kind: 'specialization', value: id }; }
 
+export function emptyLevelUpAllocation(): LevelUpAllocation { return { str: 0, con: 0, def: 0, dex: 0 }; }
+export function allocationSum(a: LevelUpAllocation): number { return a.str + a.con + a.def + a.dex; }
+export function isValidLevelUpAllocation(a: LevelUpAllocation): boolean {
+  return LEVEL_UP_ATTRIBUTES.every((key) => Number.isInteger(a[key]) && a[key] >= 0) && allocationSum(a) === LEVEL_UP_FREE_POINTS;
+}
+/** Deprecated adapter. Authored choices replace free allocation. */
+export function applyLevelUpAllocation(): null { return null; }
+export function playerAttributeSnapshot(player: { stats: { might?: number; finesse?: number; vigor?: number; str: number; con: number; dex: number } }): LevelUpAllocation {
   const stats = player.stats;
-  return {
-    allocation: { ...allocation },
-    strGained,
-    conGained,
-    defGained,
-    dexGained,
-    status:
-      `Level up: +1 all stats, plus ${allocationSummary(allocation)}. ` +
-      `Now STR ${stats.str} · CON ${stats.con} · DEF ${stats.defence} · DEX ${stats.dex}.`,
-  };
-}
-
-function allocationSummary(allocation: LevelUpAllocation): string {
-  const parts = LEVEL_UP_ATTRIBUTES.filter((key) => allocation[key] > 0).map(
-    (key) => `+${allocation[key]} ${key.toUpperCase()}`,
-  );
-  return parts.length > 0 ? parts.join(', ') : 'no free points spent';
-}
-
-export function playerAttributeSnapshot(player: {
-  stats: { str: number; con: number; defence: number; dex: number };
-}): LevelUpAllocation {
-  const stats = player.stats;
-  return {
-    str: stats.str,
-    con: stats.con,
-    def: stats.defence,
-    dex: stats.dex,
-  };
+  return { str: stats.might ?? stats.str, con: stats.vigor ?? stats.con, def: 'defence' in stats ? Number(stats.defence) : 0, dex: stats.finesse ?? stats.dex };
 }

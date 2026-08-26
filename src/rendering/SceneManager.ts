@@ -48,6 +48,7 @@ import {
   TILE_PITCH,
   TILE_SIZE,
   TRAILING_ROW_COUNT,
+  fleeHopCount,
   laneWorldX,
   rowWorldZ,
 } from '../game/config';
@@ -162,6 +163,8 @@ interface EnemySlot {
   dying: boolean;
   deathFadeStartedAt: number | null;
   attackSequence: number;
+  /** Successful evade requested a walk loop; honor after async model attach. */
+  fleeing: boolean;
 }
 
 interface DungeonWallSlot {
@@ -206,6 +209,7 @@ interface EncounterFxView {
   monsterBaseRotationY: number;
   playerBaseX: number;
   playerBaseRotationY: number;
+  fleeHopCount: number;
 }
 
 interface CombatHitFx {
@@ -972,7 +976,11 @@ export class SceneManager {
   }
 
   /** Visual-only: show the resolved monster again so the outcome can play. */
-  beginEncounterFx(events: EncounterEvent[], playerCol: number): void {
+  beginEncounterFx(
+    events: EncounterEvent[],
+    playerCol: number,
+    playerRow: number,
+  ): void {
     this.encounterFx = [];
     const playerBaseRotationY = this.playerMesh.rotation.y;
     for (const event of events) {
@@ -992,14 +1000,18 @@ export class SceneManager {
       this.setEnemyOpacity(mesh, 1);
       const monsterBaseRotationY = mesh.rotation.y;
       this.facePlayerAndEnemy(mesh);
+      const hops =
+        event.kind === 'evade'
+          ? fleeHopCount(event.monster.row, playerRow)
+          : 1;
       if (event.kind === 'evade') {
         const slot = this.findSlotByGroup(mesh);
         if (slot) {
-          this.playEnemyLocomotion(slot, true, false);
+          slot.fleeing = true;
+          this.playEnemyLocomotion(slot, true, true);
         }
-        const fleeDirection =
-          Math.sign(mesh.position.x - laneWorldX(playerCol)) || 1;
-        mesh.rotation.y = fleeDirection * (Math.PI / 2);
+        // KayKit skeletons face +Z at yaw 0; π faces −Z (corridor depth / back of maze).
+        mesh.rotation.y = Math.PI;
       }
       this.encounterFx.push({
         event,
@@ -1010,6 +1022,7 @@ export class SceneManager {
         monsterBaseRotationY,
         playerBaseX: laneWorldX(playerCol),
         playerBaseRotationY,
+        fleeHopCount: hops,
       });
     }
   }
@@ -1032,18 +1045,26 @@ export class SceneManager {
   updateEncounterFx(t: number): void {
     for (const fx of this.encounterFx) {
       if (fx.event.kind === 'evade') {
-        // The skeleton leg cycle is authored KayKit animation; this off-board
-        // wrapper translation and late fade are procedural Three.js motion.
-        const eased = t * t * (3 - 2 * t);
-        const fleeDirection = Math.sign(fx.monsterBaseX - fx.playerBaseX) || 1;
-        fx.monsterMesh.position.x =
-          fx.monsterBaseX + fleeDirection * TILE_PITCH * 2.4 * eased;
-        fx.monsterMesh.position.y = fx.monsterBaseY;
+        // Chain of player-paced hops (easeOutCubic + hop arc) to the far tile.
+        const hops = Math.max(1, fx.fleeHopCount);
+        const total = Math.min(Math.max(t, 0), 1) * hops;
+        let completedHops: number;
+        let hopLocal: number;
+        if (t >= 1) {
+          completedHops = hops - 1;
+          hopLocal = 1;
+        } else {
+          completedHops = Math.min(Math.floor(total), hops - 1);
+          hopLocal = total - completedHops;
+        }
+        const eased = 1 - (1 - hopLocal) ** 3;
+        const hopY = Math.sin(hopLocal * Math.PI) * 0.22;
+        fx.monsterMesh.position.x = fx.monsterBaseX;
+        fx.monsterMesh.position.y = fx.monsterBaseY + hopY;
+        fx.monsterMesh.position.z =
+          fx.monsterBaseZ - TILE_PITCH * (completedHops + eased);
         fx.monsterMesh.scale.setScalar(1);
-        this.setEnemyOpacity(
-          fx.monsterMesh,
-          t > 0.68 ? 1 - (t - 0.68) / 0.32 : 1,
-        );
+        this.setEnemyOpacity(fx.monsterMesh, 1);
       }
     }
   }
@@ -1187,8 +1208,11 @@ export class SceneManager {
       this.playerMesh.position.x = fx.playerBaseX;
       this.playerMesh.rotation.y = fx.playerBaseRotationY;
       const slot = this.findSlotByGroup(fx.monsterMesh);
-      if (slot && !evaded) {
-        this.playEnemyLocomotion(slot, false, false);
+      if (slot) {
+        slot.fleeing = false;
+        if (!evaded) {
+          this.playEnemyLocomotion(slot, false, false);
+        }
       }
     }
     this.playerMesh.scale.setScalar(1);
@@ -1261,7 +1285,7 @@ export class SceneManager {
       throw new Error('Failed to create 2D canvas context for damage numbers');
     }
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.font = 'bold 72px sans-serif';
+    context.font = '72px BoldPixels, monospace';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.lineWidth = 10;
@@ -2222,6 +2246,7 @@ export class SceneManager {
       dying: false,
       deathFadeStartedAt: null,
       attackSequence: 0,
+      fleeing: false,
     };
   }
 
@@ -3013,6 +3038,10 @@ export class SceneManager {
       );
       return;
     }
+    if (slot.fleeing) {
+      this.playEnemyLocomotion(slot, true, true);
+      return;
+    }
     this.playEnemyOneShot(slot, enemySpawnClip(slot.key, clips), 'spawn');
   }
 
@@ -3038,6 +3067,7 @@ export class SceneManager {
     slot.dying = false;
     slot.deathFadeStartedAt = null;
     slot.attackSequence = 0;
+    slot.fleeing = false;
     this.detachEnemyModel(slot);
     slot.group.visible = false;
     slot.group.position.set(laneWorldX(slot.col), monsterBaseY(slot.group), 0);

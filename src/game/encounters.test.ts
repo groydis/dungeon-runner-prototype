@@ -81,31 +81,18 @@ describe('encounters', () => {
   });
 });
 
-describe('opposed DEX evade contest', () => {
-  it('wins only when player total is strictly greater', () => {
-    // playerDex 5 + roll 3 = 8; enemyDex 5 + roll 3 = 8 → tie fails
+describe('FIN and awareness evade contest', () => {
+  it('rolls once against the bounded percentage chance', () => {
     let calls = 0;
-    const tie = () => {
-      calls += 1;
-      return 0.2; // floor(0.2*10)+1 = 3
-    };
-    expect(rollEvadeContest(5, 5, tie)).toBe(false);
-    expect(calls).toBe(2);
-
-    // player 10+1=11 > enemy 5+10=15? use controlled rolls
-    const sequence = [0.0, 0.9]; // d10=1 then d10=10 → 8+1=9 vs 5+10=15 fail
-    let i = 0;
-    expect(rollEvadeContest(8, 5, () => sequence[i++]!)).toBe(false);
-
-    const winSeq = [0.9, 0.0]; // 5+10=15 > 10+1=11
-    i = 0;
-    expect(rollEvadeContest(5, 10, () => winSeq[i++]!)).toBe(true);
+    expect(rollEvadeContest(10, 0, () => { calls += 1; return 0.49; })).toBe(true);
+    expect(rollEvadeContest(10, 0, () => 0.5)).toBe(false);
+    expect(calls).toBe(1);
   });
 
-  it('uses each enemy’s dex attribute in side-pass contests', () => {
-    expect(ENEMY_DEFINITIONS.skeletonMinion.startingStats.dex).toBe(9);
-    expect(ENEMY_DEFINITIONS.cryptGuard.startingStats.dex).toBe(6);
-    expect(ENEMY_DEFINITIONS.boneBrute.startingStats.dex).toBe(1);
+  it('uses each enemy’s awareness in side-pass contests', () => {
+    expect(ENEMY_DEFINITIONS.skeletonMinion.startingStats.awareness).toBe(0);
+    expect(ENEMY_DEFINITIONS.cryptGuard.startingStats.awareness).toBe(2);
+    expect(ENEMY_DEFINITIONS.boneBrute.startingStats.awareness).toBe(-1);
 
     const guard = createMonster('guard-1', 'cryptGuard', 5, 2);
     const rolls: number[] = [];
@@ -118,7 +105,7 @@ describe('opposed DEX evade contest', () => {
         return 0.5;
       },
     );
-    expect(rolls).toHaveLength(2);
+    expect(rolls).toHaveLength(1);
   });
 
   it('omits chance text from side-pass status', () => {

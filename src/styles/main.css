@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --ui-font: "BoldPixels", ui-monospace, monospace;
   --bg: #151617;
   --hud: #eee7dc;
   --hud-muted: #b9afa2;
@@ -18,8 +19,17 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
+@font-face {
+  font-family: "BoldPixels";
+  src: url("/fonts/BoldPixels.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 900;
+}
+
 * {
   box-sizing: border-box;
+  font-family: var(--ui-font) !important;
 }
 
 html,
@@ -37,12 +47,7 @@ body,
 }
 
 body {
-  font-family:
-    "EB Garamond",
-    "Iowan Old Style",
-    Palatino,
-    "Times New Roman",
-    serif;
+  font-family: var(--ui-font);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -370,27 +375,12 @@ body {
   margin: 0 0 4px;
 }
 
-.level-up-stat-row {
+.level-up-choices {
   display: grid;
-  grid-template-columns: 3rem 2.5rem 1fr 2.5rem;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 8px;
+  gap: 9px;
 }
 
-.level-up-stat-label {
-  color: #d5c7b5;
-  font-weight: 600;
-}
-
-.level-up-stat-value {
-  text-align: center;
-  color: var(--hud);
-  font-size: 0.95rem;
-}
-
-.level-up-step,
+.level-up-choice,
 .level-up-confirm {
   appearance: none;
   border: 1px solid var(--ui-border);
@@ -401,9 +391,30 @@ body {
   cursor: pointer;
 }
 
-.level-up-step {
-  min-height: 36px;
-  padding: 0;
+.level-up-choice {
+  display: flex;
+  min-height: 64px;
+  padding: 10px 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+}
+
+.level-up-choice strong {
+  color: #e5d4bd;
+  font-size: 0.9rem;
+}
+
+.level-up-choice span {
+  color: var(--hud-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.level-up-choice.selected {
+  border-color: #c3a27c;
+  background: var(--ui-panel-soft);
 }
 
 .level-up-confirm {
@@ -413,7 +424,7 @@ body {
   padding: 12px 14px;
 }
 
-.level-up-step:disabled,
+.level-up-choice:disabled,
 .level-up-confirm:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1176,6 +1187,13 @@ body {
   line-height: 1.35;
 }
 
+.class-current-feature {
+  margin: -3px 0 0;
+  color: #b99a7b;
+  font-size: clamp(0.72rem, 1.7vw, 0.88rem);
+  line-height: 1.35;
+}
+
 .class-current-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1535,4 +1553,3 @@ body {
     margin-top: 9px;
   }
 }
-

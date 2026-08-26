@@ -16,7 +16,6 @@ export const PLAYER_WORLD_Z = TRAILING_ROW_COUNT * TILE_PITCH;
 
 export const MOVE_DURATION_SEC = 0.36;
 export const ENCOUNTER_FX_SEC = 0.42;
-export const EVADE_FX_SEC = 0.7;
 export const COMBAT_HIT_SEC = 0.3;
 export const DAMAGE_NUMBER_FX_SEC = 0.9;
 export const ENEMY_DEATH_FADE_SEC = 0.28;
@@ -24,6 +23,20 @@ export const COLLECT_FX_SEC = 0.38;
 export const DROP_SPAWN_FX_SEC = 0.32;
 export const TRAP_FX_SEC = 0.34;
 export const ENEMY_ADVANCE_FX_SEC = 0.32;
+
+/** Last visible corridor row ahead of the player (matches the pooled far row). */
+export function lastVisibleRow(playerRow: number): number {
+  return playerRow + ROW_POOL_SIZE - TRAILING_ROW_COUNT - 1;
+}
+
+/** Player-paced hops from the monster to the far end of the visible corridor. */
+export function fleeHopCount(monsterRow: number, playerRow: number): number {
+  return Math.max(1, lastVisibleRow(playerRow) - monsterRow);
+}
+
+export function evadeDurationSec(hopCount: number): number {
+  return MOVE_DURATION_SEC * Math.max(1, hopCount);
+}
 
 /** Rows 1..N after the start row stay empty so the first N moves are safe. */
 export const SAFE_ROWS_AFTER_START = 3;

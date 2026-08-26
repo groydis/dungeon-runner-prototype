@@ -12,7 +12,13 @@ export const LEVEL_XP_THRESHOLDS: readonly { level: number; experience: number }
     { level: 4, experience: 12 },
     { level: 5, experience: 18 },
     { level: 6, experience: 25 },
+    { level: 7, experience: 35 },
+    { level: 8, experience: 48 },
+    { level: 9, experience: 64 },
+    { level: 10, experience: 84 },
   ];
+
+export const MAX_PLAYER_EXPERIENCE = 84;
 
 export function levelForExperience(experience: number): number {
   let level = PLAYER_START_LEVEL;

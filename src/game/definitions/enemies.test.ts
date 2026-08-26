@@ -19,57 +19,9 @@ describe('enemy definitions', () => {
   });
 
   it('defines Crypt Guard, Skeleton Warrior, and Bone Brute with the specified data', () => {
-    expect(ENEMY_DEFINITIONS.cryptGuard).toEqual({
-      type: 'cryptGuard',
-      name: 'Crypt Guard',
-      startingStats: {
-        maxHealth: 18,
-        health: 18,
-        attack: 6,
-        defence: 2,
-        str: 6,
-        con: 6,
-        dex: 6,
-      },
-      experience: 2,
-      elite: false,
-      renderKey: 'cryptGuard',
-      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
-    });
-    expect(ENEMY_DEFINITIONS.skeletonWarrior).toEqual({
-      type: 'skeletonWarrior',
-      name: 'Skeleton Warrior',
-      startingStats: {
-        maxHealth: 21,
-        health: 21,
-        attack: 7,
-        defence: 3,
-        str: 7,
-        con: 7,
-        dex: 3,
-      },
-      experience: 4,
-      elite: false,
-      renderKey: 'skeletonWarrior',
-      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
-    });
-    expect(ENEMY_DEFINITIONS.boneBrute).toEqual({
-      type: 'boneBrute',
-      name: 'Bone Brute',
-      startingStats: {
-        maxHealth: 24,
-        health: 24,
-        attack: 8,
-        defence: 3,
-        str: 8,
-        con: 8,
-        dex: 1,
-      },
-      experience: 4,
-      elite: false,
-      renderKey: 'boneBrute',
-      dropTable: ENEMY_DEFINITIONS.skeletonMinion.dropTable,
-    });
+    expect(ENEMY_DEFINITIONS.cryptGuard).toMatchObject({ type: 'cryptGuard', name: 'Crypt Guard', attributes: { might: 12, finesse: 10, vigor: 12, will: 8 }, startingStats: { maxHealth: 14, attack: 4, armor: 2 }, experience: 2 });
+    expect(ENEMY_DEFINITIONS.skeletonWarrior).toMatchObject({ type: 'skeletonWarrior', attributes: { might: 14, finesse: 12, vigor: 14, will: 10 }, startingStats: { maxHealth: 20, attack: 6, armor: 2 }, experience: 4 });
+    expect(ENEMY_DEFINITIONS.boneBrute).toMatchObject({ type: 'boneBrute', attributes: { might: 18, finesse: 8, vigor: 16, will: 8 }, startingStats: { maxHealth: 24, attack: 8, armor: 0 }, experience: 5 });
   });
 
   it('defines Skeleton Mage as normal and Necromancer as an elite', () => {
@@ -91,13 +43,13 @@ describe('enemy definitions', () => {
     );
   });
 
-  it('awards 1 / 2 / 4 XP on Skeleton Minion, Crypt Guard, and Bone Brute', () => {
+  it('awards 1 / 2 / 5 XP on Skeleton Minion, Crypt Guard, and Bone Brute', () => {
     expect(ENEMY_DEFINITIONS.skeletonMinion.experience).toBe(1);
     expect(ENEMY_DEFINITIONS.cryptGuard.experience).toBe(2);
-    expect(ENEMY_DEFINITIONS.boneBrute.experience).toBe(4);
+    expect(ENEMY_DEFINITIONS.boneBrute.experience).toBe(5);
     expect(createMonster('xp-minion', 'skeletonMinion', 4, 1).experience).toBe(1);
     expect(createMonster('xp-guard', 'cryptGuard', 4, 1).experience).toBe(2);
-    expect(createMonster('xp-brute', 'boneBrute', 4, 1).experience).toBe(4);
+    expect(createMonster('xp-brute', 'boneBrute', 4, 1).experience).toBe(5);
   });
 
   it('does not let public definition access corrupt a fresh Monster', () => {
@@ -124,8 +76,8 @@ describe('enemy definitions', () => {
     const second = createMonster('guard-b', 'cryptGuard', 20, 1);
 
     first.takeDamage(5);
-    expect(first.stats.health).toBe(13);
-    expect(second.stats.health).toBe(18);
+    expect(first.stats.health).toBe(9);
+    expect(second.stats.health).toBe(14);
     expect(second.stats).toEqual(ENEMY_DEFINITIONS.cryptGuard.startingStats);
   });
 
@@ -133,33 +85,34 @@ describe('enemy definitions', () => {
     const factory = enemyStatsFactoryFromSearch('?fatal=1');
     expect(factory('skeletonMinion', 60).attack).toBe(99);
     expect(factory('skeletonMinion', 60).maxHealth).toBe(
-      ENEMY_DEFINITIONS.skeletonMinion.startingStats.maxHealth,
+      createEnemyStats('skeletonMinion', 60).maxHealth,
     );
-    expect(factory('cryptGuard', 60)).toEqual(createEnemyStats('cryptGuard'));
-    expect(factory('skeletonWarrior', 60)).toEqual(createEnemyStats('skeletonWarrior'));
-    expect(factory('boneBrute', 60)).toEqual(createEnemyStats('boneBrute'));
-    expect(factory('skeletonMage', 60)).toEqual(createEnemyStats('skeletonMage'));
-    expect(factory('necromancer', 60)).toEqual(createEnemyStats('necromancer'));
+    expect(factory('cryptGuard', 60)).toEqual(createEnemyStats('cryptGuard', 60));
+    expect(factory('skeletonWarrior', 60)).toEqual(createEnemyStats('skeletonWarrior', 60));
+    expect(factory('boneBrute', 60)).toEqual(createEnemyStats('boneBrute', 60));
+    expect(factory('skeletonMage', 60)).toEqual(createEnemyStats('skeletonMage', 60));
+    expect(factory('necromancer', 60)).toEqual(createEnemyStats('necromancer', 60));
   });
 
   it('scales enemy stats by row after ENEMY_SCALING_START_ROW', () => {
     const baseline = createEnemyStats('necromancer', 60);
     expect(baseline).toEqual(ENEMY_DEFINITIONS.necromancer.startingStats);
-    expect(baseline.maxHealth).toBe(30);
+    expect(baseline.maxHealth).toBe(36);
     expect(baseline.attack).toBe(10);
-    expect(baseline.defence).toBe(5);
+    expect(baseline.defence).toBe(2);
     expect(baseline.str).toBe(10);
-    expect(baseline.con).toBe(10);
-    expect(baseline.dex).toBe(5);
+    expect(baseline.con).toBe(18);
+    expect(baseline.dex).toBe(14);
 
     expect(createEnemyStats('necromancer', 74)).toEqual(baseline);
 
     const scaled = createEnemyStats('necromancer', 100);
-    expect(scaled.str).toBe(12);
-    expect(scaled.con).toBe(12);
-    expect(scaled.defence).toBe(7);
-    expect(scaled.dex).toBe(7);
+    expect(scaled.str).toBe(10);
+    expect(scaled.con).toBe(18);
+    expect(scaled.defence).toBe(2);
+    expect(scaled.ward).toBe(6);
+    expect(scaled.dex).toBe(14);
     expect(scaled.attack).toBe(12);
-    expect(scaled.maxHealth).toBe(36);
+    expect(scaled.maxHealth).toBe(40);
   });
 });

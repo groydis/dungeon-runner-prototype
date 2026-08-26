@@ -92,11 +92,12 @@
       imagesrcset="/images/website-hero-1280.jpg 1280w, /images/website-hero.jpg 1920w"
       imagesizes="100vw"
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      href="/fonts/BoldPixels.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
     />
   </head>
   <body>
@@ -530,7 +531,8 @@
             <p id="gold">G: 0</p>
             <p id="attack">ATK: —</p>
             <p id="defence">ARM: —</p>
-            <p id="evade">DEX: —</p>
+            <p id="ward">WRD: —</p>
+            <p id="evade">FIN: —</p>
           </div>
         </header>
         <div class="hud-bottom">
@@ -728,31 +730,11 @@
           <h2 id="level-up-title">LEVEL UP</h2>
           <p id="level-up-level">Level 2</p>
           <p id="level-up-xp">XP: 3 / 7</p>
-          <p id="level-up-points">Free points remaining: 2 / 2</p>
-          <p class="level-up-hint">+1 to every attribute is automatic. Assign 2 free points:</p>
-          <div class="level-up-stat-row">
-            <span class="level-up-stat-label">STR</span>
-            <button type="button" id="level-up-str-minus" class="level-up-step" aria-label="Decrease STR">−</button>
-            <span id="level-up-str-value" class="level-up-stat-value">0</span>
-            <button type="button" id="level-up-str-plus" class="level-up-step" aria-label="Increase STR">+</button>
-          </div>
-          <div class="level-up-stat-row">
-            <span class="level-up-stat-label">CON</span>
-            <button type="button" id="level-up-con-minus" class="level-up-step" aria-label="Decrease CON">−</button>
-            <span id="level-up-con-value" class="level-up-stat-value">0</span>
-            <button type="button" id="level-up-con-plus" class="level-up-step" aria-label="Increase CON">+</button>
-          </div>
-          <div class="level-up-stat-row">
-            <span class="level-up-stat-label">DEF</span>
-            <button type="button" id="level-up-def-minus" class="level-up-step" aria-label="Decrease DEF">−</button>
-            <span id="level-up-def-value" class="level-up-stat-value">0</span>
-            <button type="button" id="level-up-def-plus" class="level-up-step" aria-label="Increase DEF">+</button>
-          </div>
-          <div class="level-up-stat-row">
-            <span class="level-up-stat-label">DEX</span>
-            <button type="button" id="level-up-dex-minus" class="level-up-step" aria-label="Decrease DEX">−</button>
-            <span id="level-up-dex-value" class="level-up-stat-value">0</span>
-            <button type="button" id="level-up-dex-plus" class="level-up-step" aria-label="Increase DEX">+</button>
+          <p id="level-up-points">Choose one way to grow.</p>
+          <div id="level-up-choices" class="level-up-choices">
+            <button type="button" id="level-up-choice-0" class="level-up-choice"><strong id="level-up-choice-0-title"></strong><span id="level-up-choice-0-desc"></span></button>
+            <button type="button" id="level-up-choice-1" class="level-up-choice"><strong id="level-up-choice-1-title"></strong><span id="level-up-choice-1-desc"></span></button>
+            <button type="button" id="level-up-choice-2" class="level-up-choice"><strong id="level-up-choice-2-title"></strong><span id="level-up-choice-2-desc"></span></button>
           </div>
           <button type="button" id="level-up-confirm" class="level-up-confirm" disabled>
             Confirm
@@ -797,11 +779,16 @@
           </div>
           <section class="class-select-details" aria-live="polite">
             <p id="class-current-desc" class="class-current-desc">Nimble survivor with the best chance to slip past threats.</p>
+            <p id="class-current-feature" class="class-current-feature">+15% evade and +5% critical chance.</p>
             <div id="class-current-stats" class="class-current-stats" aria-label="Starting stats">
               <span><small>HEALTH</small><strong id="class-stat-health">18</strong></span>
-              <span><small>ATTACK</small><strong id="class-stat-attack">5</strong></span>
-              <span><small>DEFENCE</small><strong id="class-stat-defence">1</strong></span>
-              <span><small>DEX</small><strong id="class-stat-evade">8</strong></span>
+              <span><small>POWER</small><strong id="class-stat-attack">5</strong></span>
+              <span><small>ARMOR</small><strong id="class-stat-defence">1</strong></span>
+              <span><small>WARD</small><strong id="class-stat-ward">0</strong></span>
+              <span><small>MIG</small><strong id="class-stat-might">10</strong></span>
+              <span><small>FIN</small><strong id="class-stat-evade">16</strong></span>
+              <span><small>VIG</small><strong id="class-stat-vigor">10</strong></span>
+              <span><small>WIL</small><strong id="class-stat-will">12</strong></span>
             </div>
             <button type="button" id="class-select-current">BEGIN AS ROGUE</button>
             <p class="class-swipe-hint">SWIPE OR USE THE ARROWS</p>

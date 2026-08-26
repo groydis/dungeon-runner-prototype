@@ -34,11 +34,11 @@ import {
   type EnemyType,
 } from './definitions/enemies';
 import {
-  applyLevelUpAllocation,
+  applyLevelUpChoice,
   buildLevelUpView,
   isValidLevelUpAllocation,
-  playerAttributeSnapshot,
   type LevelUpAllocation,
+  type LevelUpChoiceId,
   type LevelUpResult,
   type LevelUpView,
 } from './levelUp';
@@ -110,7 +110,9 @@ export interface HudSnapshot {
   gold: number;
   attack: number;
   defence: number;
+  ward?: number;
   dex: number;
+  evadeBonus?: number;
   level: number;
   experience: number;
   nextLevelExperience: number | null;
@@ -229,7 +231,9 @@ export class GameState {
         gold: 0,
         attack: 0,
         defence: 0,
+        ward: 0,
         dex: 0,
+        evadeBonus: 0,
         level: 1,
         experience: 0,
         nextLevelExperience: 3,
@@ -245,7 +249,9 @@ export class GameState {
       gold: this._player.gold,
       attack: stats.attack,
       defence: stats.defence,
+      ward: stats.ward,
       dex: stats.dex,
+      evadeBonus: stats.evadeBonus,
       level: this._player.level,
       experience: this._player.experience,
       nextLevelExperience: this._player.nextLevelExperience,
@@ -467,6 +473,8 @@ export class GameState {
       kind: 'evade',
       monster: encounterMonsterView(monster),
     });
+    const gain = this.requirePlayer().addExperience(Math.floor(monster.experience / 2));
+    this.pendingLevelUps.push(...gain.levelsReached);
     this.world.removeMonster(monster);
   }
 
@@ -567,14 +575,10 @@ export class GameState {
     if (level === undefined || !this._player) {
       return null;
     }
-    return buildLevelUpView(
-      level,
-      this._player.experience,
-      playerAttributeSnapshot(this._player),
-    );
+    return buildLevelUpView(level, this._player.experience, this._player);
   }
 
-  chooseLevelUp(allocation: LevelUpAllocation): LevelUpResult {
+  chooseLevelUp(choice: LevelUpChoiceId | LevelUpAllocation): LevelUpResult {
     if (this.pendingLevelUps.length === 0 || !this._player) {
       return {
         success: false,
@@ -588,22 +592,42 @@ export class GameState {
       };
     }
 
-    if (!isValidLevelUpAllocation(allocation)) {
+    if (typeof choice !== 'string') {
+      if (isValidLevelUpAllocation(choice)) {
+        const fallback = this.getLevelUpView()?.choices.find((entry) => entry.available);
+        if (fallback) {
+          return this.chooseLevelUp(fallback.id);
+        }
+      }
       return {
         success: false,
         reason: 'invalidAllocation',
-        allocation: { ...allocation },
+        allocation: { ...choice },
         strGained: 0,
         conGained: 0,
         defGained: 0,
         dexGained: 0,
         pendingRemaining: this.pendingLevelUps.length,
-        status: 'Spend exactly 2 points across STR, CON, DEF, and DEX.',
+        status: 'Choose one of the available level rewards.',
       };
     }
 
+    const level = this.pendingLevelUps[0]!;
+    const applied = applyLevelUpChoice(this._player, level, choice);
+    if (!applied) {
+      return {
+        success: false,
+        reason: 'invalidChoice',
+        choiceId: choice,
+        strGained: 0,
+        conGained: 0,
+        defGained: 0,
+        dexGained: 0,
+        pendingRemaining: this.pendingLevelUps.length,
+        status: 'That level reward is unavailable.',
+      };
+    }
     this.pendingLevelUps.shift();
-    const applied = applyLevelUpAllocation(this._player, allocation)!;
     this._status = applied.status;
     return {
       success: true,
@@ -759,7 +783,7 @@ export class GameState {
     }
 
     const heal = potionHealAmount(collectible.pickupId);
-    const restored = player.heal(heal);
+    const restored = player.healPotion(heal);
     this._status =
       restored > 0
         ? `You drink a ${pickupDefinition(collectible.pickupId).name.toLowerCase()} and restore ${restored} HP.`
@@ -863,6 +887,7 @@ export class GameState {
         row: this._player.row,
         col: this._player.col,
         dex: this._player.stats.dex,
+        evadeBonus: this._player.stats.evadeBonus,
       },
       this.world.livingMonsters(),
       this.forceAvoidance,

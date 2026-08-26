@@ -22,27 +22,27 @@ const CLASS_PACKAGES: Record<
     dex: number;
   }
 > = {
-  rogue: { name: 'Rogue', maxHealth: 16, attack: 13, defence: 2, str: 6, con: 5, dex: 7 },
-  ranger: { name: 'Ranger', maxHealth: 15, attack: 13, defence: 2, str: 5, con: 5, dex: 8 },
-  mage: { name: 'Mage', maxHealth: 13, attack: 13, defence: 4, str: 3, con: 5, dex: 8 },
-  knight: { name: 'Knight', maxHealth: 18, attack: 13, defence: 5, str: 8, con: 5, dex: 2 },
+  rogue: { name: 'Rogue', maxHealth: 18, attack: 8, defence: 1, str: 10, con: 10, dex: 16 },
+  ranger: { name: 'Ranger', maxHealth: 20, attack: 8, defence: 1, str: 10, con: 12, dex: 15 },
+  mage: { name: 'Mage', maxHealth: 16, attack: 9, defence: 0, str: 10, con: 10, dex: 12 },
+  knight: { name: 'Knight', maxHealth: 26, attack: 9, defence: 3, str: 14, con: 16, dex: 8 },
   barbarian: {
     name: 'Barbarian',
-    maxHealth: 26,
-    attack: 18,
-    defence: 1,
-    str: 10,
-    con: 8,
-    dex: 1,
+    maxHealth: 28,
+    attack: 11,
+    defence: 0,
+    str: 16,
+    con: 14,
+    dex: 10,
   },
   lorekeeper: {
     name: 'Lorekeeper',
-    maxHealth: 15,
-    attack: 10,
-    defence: 5,
-    str: 5,
-    con: 5,
-    dex: 5,
+    maxHealth: 22,
+    attack: 8,
+    defence: 2,
+    str: 10,
+    con: 14,
+    dex: 10,
   },
 };
 
@@ -159,40 +159,39 @@ describe('Player class construction', () => {
 
   it('recomputes maxHealth and attack when attributes change', () => {
     const player = new Player('lorekeeper');
-    expect(player.stats.maxHealth).toBe(15);
-    expect(player.stats.attack).toBe(10);
+    expect(player.stats.maxHealth).toBe(22);
+    expect(player.stats.attack).toBe(8);
     player.increaseStr(3);
-    expect(player.stats.str).toBe(8);
-    expect(player.stats.maxHealth).toBe(18);
-    expect(player.stats.attack).toBe(13);
-    expect(player.stats.health).toBe(15);
+    expect(player.stats.str).toBe(13);
+    expect(player.stats.maxHealth).toBe(22);
+    expect(player.stats.attack).toBe(8);
+    expect(player.stats.health).toBe(22);
   });
 });
 
-describe('uncapped player growth', () => {
-  it('lets Knight and Barbarian attribute gains keep rising', () => {
+describe('bounded player growth', () => {
+  it('caps attributes, Armor, and derived health', () => {
     const knightDef = getPlayerClassDefinition('knight');
     const knight = new Player('knight');
     expect(knight.stats.defence).toBe(knightDef.startingStats.defence);
-    expect(knight.increaseDef(20)).toBe(20);
-    expect(knight.stats.defence).toBe(knightDef.startingStats.defence + 20);
-    expect(knight.increaseDef(1)).toBe(1);
+    expect(knight.increaseDef(20)).toBe(9);
+    expect(knight.stats.defence).toBe(12);
+    expect(knight.increaseDef(1)).toBe(0);
     expect(isValidLevelUpAllocation({ str: 0, con: 0, def: 2, dex: 0 })).toBe(true);
 
     const barbarianDef = getPlayerClassDefinition('barbarian');
     const barbarian = new Player('barbarian');
     expect(barbarian.stats.maxHealth).toBe(barbarianDef.startingStats.maxHealth);
     const healthBefore = barbarian.stats.health;
-    expect(barbarian.increaseCon(10)).toBe(10);
-    expect(barbarian.stats.maxHealth).toBe(barbarianDef.startingStats.maxHealth + 20);
+    expect(barbarian.increaseCon(10)).toBe(6);
+    expect(barbarian.stats.maxHealth).toBe(barbarianDef.startingStats.maxHealth + 6);
     expect(barbarian.stats.health).toBe(healthBefore);
     expect(barbarian.increaseStr(1)).toBe(1);
     expect(isValidLevelUpAllocation({ str: 1, con: 1, def: 0, dex: 0 })).toBe(true);
 
     barbarian.increaseCon(10);
     barbarian.increaseDex(10);
-    expect(barbarian.stats.attack).toBe(barbarianDef.startingStats.attack + 21);
-    expect(barbarian.stats.dex).toBe(barbarianDef.startingStats.dex + 10);
+    expect(barbarian.stats.dex).toBe(20);
     expect(isValidLevelUpAllocation({ str: 0, con: 0, def: 0, dex: 2 })).toBe(true);
     expect(isValidLevelUpAllocation({ str: 3, con: 0, def: 0, dex: 0 })).toBe(false);
   });

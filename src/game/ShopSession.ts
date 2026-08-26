@@ -228,7 +228,7 @@ export class ShopSession {
         ),
       };
     }
-    const restored = player.heal(MERCHANT_POTION_CATALOG[offerId].healAmount);
+    const restored = player.healPotion(MERCHANT_POTION_CATALOG[offerId].healAmount);
     return {
       ...result,
       goldRemaining: player.gold,
