@@ -113,9 +113,9 @@ export class Game {
     }
     this.merchantShopPreview = new MerchantShopPreview(merchantPreviewCanvas);
     const equipmentPreviewCanvas =
-      document.querySelector<HTMLCanvasElement>('#shop-special-preview');
+      document.querySelector<HTMLCanvasElement>('#shop-weapon-preview');
     if (!equipmentPreviewCanvas) {
-      throw new Error('Missing required element: #shop-special-preview');
+      throw new Error('Missing required element: #shop-weapon-preview');
     }
     this.equipmentShopPreview = new EquipmentShopPreview(
       equipmentPreviewCanvas,
@@ -154,7 +154,8 @@ export class Game {
       this.shop.onPotion(offerId, () => this.buyPotionOffer(offerId));
     }
     this.shop.onLeave(() => this.leaveShop());
-    this.shop.onSpecialEquipment(() => this.buySpecialEquipment());
+    this.shop.onWeaponUpgrade(() => this.buyWeaponTier());
+    this.shop.onShieldUpgrade(() => this.buyShieldTier());
     this.levelUp.onConfirm(() => this.confirmLevelUp());
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
@@ -538,7 +539,7 @@ export class Game {
     if (this.state.runOver) {
       this.shop.hide();
       this.merchantShopPreview.setVisible(false);
-      this.equipmentShopPreview.setClassId(null);
+      this.equipmentShopPreview.setWeaponOffer(null);
       this.potionShopPreview.setActiveOffers([]);
       this.levelUp.hide();
       this.state.dismissOpenShop();
@@ -600,7 +601,7 @@ export class Game {
     this.scene.clearTransientFx();
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
-    this.equipmentShopPreview.setClassId(null);
+    this.equipmentShopPreview.setWeaponOffer(null);
     this.potionShopPreview.setActiveOffers([]);
     this.levelUp.hide();
     this.gameOver.hide();
@@ -612,13 +613,30 @@ export class Game {
     this.updateHud();
   }
 
-  private buySpecialEquipment(): void {
+  private buyWeaponTier(): void {
     if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
       return;
     }
-    const result = this.state.buySpecialEquipment();
+    const result = this.state.buyWeaponTier();
     if (result.success) {
-      this.scene.setPlayerSpecialEquipmentEquipped(true);
+      this.scene.setPlayerWeaponTiers(
+        this.state.weaponTierIndex,
+        this.state.shieldTierIndex,
+      );
+    }
+    this.updateHud();
+  }
+
+  private buyShieldTier(): void {
+    if (this.phase.kind !== 'shop' || !this.state.shopOpen) {
+      return;
+    }
+    const result = this.state.buyShieldTier();
+    if (result.success) {
+      this.scene.setPlayerWeaponTiers(
+        this.state.weaponTierIndex,
+        this.state.shieldTierIndex,
+      );
     }
     this.updateHud();
   }
@@ -675,7 +693,7 @@ export class Game {
 
     this.shop.hide();
     this.merchantShopPreview.setVisible(false);
-    this.equipmentShopPreview.setClassId(null);
+    this.equipmentShopPreview.setWeaponOffer(null);
     this.potionShopPreview.setActiveOffers([]);
     this.scene.beginMerchantLeaveFx(left.row, left.col);
     this.setPhase({ kind: 'idle' });
@@ -717,13 +735,12 @@ export class Game {
     this.hud.update(this.state.getHudSnapshot());
     const shopView = this.state.getShopView();
     this.syncPlayerEquipmentVisuals();
-    this.scene.setPlayerSpecialEquipmentEquipped(
-      this.state.hasSpecialEquipment,
+    this.scene.setPlayerWeaponTiers(
+      this.state.weaponTierIndex,
+      this.state.shieldTierIndex,
     );
     this.merchantShopPreview.setVisible(shopView !== null);
-    this.equipmentShopPreview.setClassId(
-      shopView?.specialOffer?.classId ?? null,
-    );
+    this.equipmentShopPreview.setWeaponOffer(shopView?.weaponOffer ?? null);
     this.potionShopPreview.setActiveOffers(
       shopView?.potionOffers.map((offer) => offer.id) ?? [],
     );

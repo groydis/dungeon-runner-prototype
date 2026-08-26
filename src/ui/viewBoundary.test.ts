@@ -41,7 +41,8 @@ describe('UI view boundaries', () => {
   it('does not calculate shop prices, eligibility, or stat effects', () => {
     expect(shopSource).not.toMatch(/shopOfferPrice/);
     expect(shopSource).not.toMatch(/evaluateShopOffer/);
-    expect(shopSource).not.toMatch(/evaluateSpecialEquipmentOffer/);
+    expect(shopSource).not.toMatch(/evaluateWeaponOffer/);
+    expect(shopSource).not.toMatch(/evaluateShieldOffer/);
     expect(shopSource).not.toMatch(/evaluatePotionOffer/);
     expect(shopSource).not.toMatch(/applyShopPurchase/);
     expect(shopSource).not.toMatch(/applySpecialEquipmentPurchase/);

@@ -2,7 +2,9 @@ import {
   POTION_OFFER_IDS,
   type PotionOfferId,
   type PotionOfferView,
+  type ShopShieldOfferView,
   type ShopView,
+  type ShopWeaponOfferView,
 } from '../game/shop';
 import { requireElement } from './dom';
 
@@ -10,13 +12,19 @@ export class ShopOverlayView {
   private readonly overlayEl: HTMLElement;
   private readonly goldEl: HTMLElement;
   private readonly leaveButton: HTMLButtonElement;
-  private readonly specialButton: HTMLButtonElement;
-  private readonly specialClassEl: HTMLElement;
-  private readonly specialTitleEl: HTMLElement;
-  private readonly specialDescEl: HTMLElement;
-  private readonly specialStatsEl: HTMLElement;
-  private readonly specialCostEl: HTMLElement;
-  private readonly specialReasonEl: HTMLElement;
+  private readonly weaponButton: HTMLButtonElement;
+  private readonly weaponClassEl: HTMLElement;
+  private readonly weaponTitleEl: HTMLElement;
+  private readonly weaponDescEl: HTMLElement;
+  private readonly weaponStatsEl: HTMLElement;
+  private readonly weaponCostEl: HTMLElement;
+  private readonly weaponReasonEl: HTMLElement;
+  private readonly shieldButton: HTMLButtonElement;
+  private readonly shieldTitleEl: HTMLElement;
+  private readonly shieldDescEl: HTMLElement;
+  private readonly shieldStatsEl: HTMLElement;
+  private readonly shieldCostEl: HTMLElement;
+  private readonly shieldReasonEl: HTMLElement;
   private readonly potionSectionTitle: HTMLElement;
   private readonly potionShelf: HTMLElement;
   private readonly potionButtons: Record<PotionOfferId, HTMLButtonElement>;
@@ -27,22 +35,32 @@ export class ShopOverlayView {
   private readonly potionHandlers: Partial<Record<PotionOfferId, () => void>> =
     {};
   private leaveHandler: (() => void) | null = null;
-  private specialHandler: (() => void) | null = null;
+  private weaponHandler: (() => void) | null = null;
+  private shieldHandler: (() => void) | null = null;
 
   constructor(root: ParentNode = document) {
     this.overlayEl = requireElement(root, '#shop');
     this.goldEl = requireElement(root, '#shop-gold');
     this.leaveButton = requireElement(root, '#shop-leave') as HTMLButtonElement;
-    this.specialButton = requireElement(
+    this.weaponButton = requireElement(
       root,
-      '#shop-special-equipment',
+      '#shop-weapon-upgrade',
     ) as HTMLButtonElement;
-    this.specialClassEl = requireElement(root, '#shop-special-class');
-    this.specialTitleEl = requireElement(root, '#shop-special-title');
-    this.specialDescEl = requireElement(root, '#shop-special-desc');
-    this.specialStatsEl = requireElement(root, '#shop-special-stats');
-    this.specialCostEl = requireElement(root, '#shop-special-cost');
-    this.specialReasonEl = requireElement(root, '#shop-special-reason');
+    this.weaponClassEl = requireElement(root, '#shop-weapon-class');
+    this.weaponTitleEl = requireElement(root, '#shop-weapon-title');
+    this.weaponDescEl = requireElement(root, '#shop-weapon-desc');
+    this.weaponStatsEl = requireElement(root, '#shop-weapon-stats');
+    this.weaponCostEl = requireElement(root, '#shop-weapon-cost');
+    this.weaponReasonEl = requireElement(root, '#shop-weapon-reason');
+    this.shieldButton = requireElement(
+      root,
+      '#shop-shield-upgrade',
+    ) as HTMLButtonElement;
+    this.shieldTitleEl = requireElement(root, '#shop-shield-title');
+    this.shieldDescEl = requireElement(root, '#shop-shield-desc');
+    this.shieldStatsEl = requireElement(root, '#shop-shield-stats');
+    this.shieldCostEl = requireElement(root, '#shop-shield-cost');
+    this.shieldReasonEl = requireElement(root, '#shop-shield-reason');
     this.potionSectionTitle = requireElement(root, '#shop-potion-section-title');
     this.potionShelf = requireElement(root, '#shop-potion-shelf');
     this.potionButtons = {
@@ -90,10 +108,16 @@ export class ShopOverlayView {
     this.leaveButton.addEventListener('click', handler);
   }
 
-  onSpecialEquipment(handler: () => void): void {
-    this.detachSpecialEquipment();
-    this.specialHandler = handler;
-    this.specialButton.addEventListener('click', handler);
+  onWeaponUpgrade(handler: () => void): void {
+    this.detachWeapon();
+    this.weaponHandler = handler;
+    this.weaponButton.addEventListener('click', handler);
+  }
+
+  onShieldUpgrade(handler: () => void): void {
+    this.detachShield();
+    this.shieldHandler = handler;
+    this.shieldButton.addEventListener('click', handler);
   }
 
   show(view: ShopView): void {
@@ -108,23 +132,8 @@ export class ShopOverlayView {
   render(view: ShopView): void {
     this.goldEl.textContent = String(view.gold);
     this.renderPotionShelf(view.potionOffers);
-    const special = view.specialOffer;
-    this.specialButton.hidden = special === null;
-    if (special) {
-      this.specialClassEl.textContent = `${special.classId.toUpperCase()} ONLY`;
-      this.specialTitleEl.textContent = special.title;
-      this.specialDescEl.textContent = special.description;
-      this.specialStatsEl.textContent = special.statLine;
-      this.specialCostEl.textContent = `${special.cost} G`;
-      this.specialReasonEl.textContent = special.available
-        ? ''
-        : (special.reasonText ?? 'Unavailable');
-      this.specialButton.disabled = !special.available;
-      this.specialButton.setAttribute(
-        'aria-label',
-        `${special.title}, ${special.classId} only, ${special.cost} gold. ${special.statLine}. ${special.available ? special.description : (special.reasonText ?? 'Unavailable')}`,
-      );
-    }
+    this.renderWeaponOffer(view.weaponOffer);
+    this.renderShieldOffer(view.shieldOffer);
   }
 
   dispose(): void {
@@ -132,8 +141,48 @@ export class ShopOverlayView {
       this.detachPotion(id);
     }
     this.detachLeave();
-    this.detachSpecialEquipment();
+    this.detachWeapon();
+    this.detachShield();
     this.overlayEl.removeEventListener('pointerdown', this.blockPointer);
+  }
+
+  private renderWeaponOffer(offer: ShopWeaponOfferView | null): void {
+    this.weaponButton.hidden = offer === null;
+    if (!offer) {
+      return;
+    }
+    this.weaponClassEl.textContent = `${offer.classId.toUpperCase()} WEAPON`;
+    this.weaponTitleEl.textContent = offer.title;
+    this.weaponDescEl.textContent = offer.description;
+    this.weaponStatsEl.textContent = offer.statLine;
+    this.weaponCostEl.textContent = `${offer.cost} G`;
+    this.weaponReasonEl.textContent = offer.available
+      ? ''
+      : (offer.reasonText ?? 'Unavailable');
+    this.weaponButton.disabled = !offer.available;
+    this.weaponButton.setAttribute(
+      'aria-label',
+      `${offer.title}, ${offer.classId} weapon upgrade, ${offer.cost} gold. ${offer.statLine}. ${offer.available ? offer.description : (offer.reasonText ?? 'Unavailable')}`,
+    );
+  }
+
+  private renderShieldOffer(offer: ShopShieldOfferView | null): void {
+    this.shieldButton.hidden = offer === null;
+    if (!offer) {
+      return;
+    }
+    this.shieldTitleEl.textContent = offer.title;
+    this.shieldDescEl.textContent = offer.description;
+    this.shieldStatsEl.textContent = offer.statLine;
+    this.shieldCostEl.textContent = `${offer.cost} G`;
+    this.shieldReasonEl.textContent = offer.available
+      ? ''
+      : (offer.reasonText ?? 'Unavailable');
+    this.shieldButton.disabled = !offer.available;
+    this.shieldButton.setAttribute(
+      'aria-label',
+      `${offer.title}, shield upgrade, ${offer.cost} gold. ${offer.statLine}. ${offer.available ? offer.description : (offer.reasonText ?? 'Unavailable')}`,
+    );
   }
 
   private renderPotionShelf(offers: PotionOfferView[]): void {
@@ -180,12 +229,20 @@ export class ShopOverlayView {
     this.leaveHandler = null;
   }
 
-  private detachSpecialEquipment(): void {
-    if (!this.specialHandler) {
+  private detachWeapon(): void {
+    if (!this.weaponHandler) {
       return;
     }
-    this.specialButton.removeEventListener('click', this.specialHandler);
-    this.specialHandler = null;
+    this.weaponButton.removeEventListener('click', this.weaponHandler);
+    this.weaponHandler = null;
+  }
+
+  private detachShield(): void {
+    if (!this.shieldHandler) {
+      return;
+    }
+    this.shieldButton.removeEventListener('click', this.shieldHandler);
+    this.shieldHandler = null;
   }
 
   private readonly blockPointer = (event: PointerEvent): void => {

@@ -33,6 +33,8 @@ export class Player {
   private _dex: number;
   /** Current HP — independent of maxHealth; raising max does not heal. */
   private _health: number;
+  private _weaponAttackBonus = 0;
+  private _shieldDefenceBonus = 0;
 
   constructor(classId: PlayerClassId) {
     this._classId = classId;
@@ -87,6 +89,14 @@ export class Player {
   /** Live-derived combat stats from attributes; callers get a copy. */
   get stats(): CombatStats {
     return createCombatStats(this.derivedStats());
+  }
+
+  get weaponAttackBonus(): number {
+    return this._weaponAttackBonus;
+  }
+
+  get shieldDefenceBonus(): number {
+    return this._shieldDefenceBonus;
   }
 
   moveTo(row: number, col: number): void {
@@ -144,6 +154,16 @@ export class Player {
     return this.applyAttributeGain('_dex', amount);
   }
 
+  /** Replace (do not stack) the run-scoped weapon attack bonus. */
+  setWeaponAttackBonus(amount: number): void {
+    this._weaponAttackBonus = Math.max(0, Math.floor(amount));
+  }
+
+  /** Replace (do not stack) the run-scoped shield defence bonus. */
+  setShieldDefenceBonus(amount: number): void {
+    this._shieldDefenceBonus = Math.max(0, Math.floor(amount));
+  }
+
   addExperience(amount: number): ExperienceGain {
     const gained = Math.max(0, Math.floor(amount));
     const from = this._experience;
@@ -166,6 +186,8 @@ export class Player {
     this._con = starting.con;
     this._def = starting.defence;
     this._dex = starting.dex;
+    this._weaponAttackBonus = 0;
+    this._shieldDefenceBonus = 0;
     this._health = computeMaxHealth(this._str, this._con);
   }
 
@@ -178,13 +200,14 @@ export class Player {
     return {
       maxHealth,
       health: this._health,
-      attack: computeClassDamage(this._classId, {
-        str: this._str,
-        con: this._con,
-        def: this._def,
-        dex: this._dex,
-      }),
-      defence: this._def,
+      attack:
+        computeClassDamage(this._classId, {
+          str: this._str,
+          con: this._con,
+          def: this._def,
+          dex: this._dex,
+        }) + this._weaponAttackBonus,
+      defence: this._def + this._shieldDefenceBonus,
       str: this._str,
       con: this._con,
       dex: this._dex,

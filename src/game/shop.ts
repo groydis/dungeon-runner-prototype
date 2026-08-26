@@ -1,6 +1,19 @@
 import { type Merchant } from './Merchant';
-import { type CombatStats } from './Combatant';
 import { type PlayerClassId } from './definitions/classes';
+import {
+  KNIGHT_SHIELD_PROGRESSION,
+  KNIGHT_SHIELD_TIER_FLAVOUR,
+  KNIGHT_SHIELD_TIER_NAMES,
+  PLAYER_WEAPON_PROGRESSION,
+  PLAYER_WEAPON_TIER_FLAVOUR,
+  PLAYER_WEAPON_TIER_NAMES,
+  isShieldLadderComplete,
+  isWeaponLadderComplete,
+  nextWeaponTierIndex,
+  shieldCatalogEntry,
+  weaponCatalogEntry,
+  weaponTierCost,
+} from './definitions/playerWeaponProgression';
 import {
   MERCHANT_POTION_CATALOG,
   evaluatePotionOffer,
@@ -11,13 +24,6 @@ import {
   type PotionOfferId,
   type PotionUnavailableReason,
 } from './merchantPotions';
-import {
-  applicableSpecialEquipmentGains,
-  hasSpecialEquipmentGain,
-  specialEquipmentForClass,
-  specialEquipmentStatLine,
-  type SpecialEquipmentId,
-} from './specialEquipment';
 
 export type {
   PotionOfferId,
@@ -35,26 +41,32 @@ export type ShopUnavailableReason =
   | 'unaffordable'
   | 'owned';
 
-/** Snapshot used when evaluating special-equipment gains. */
-export interface ShopStatSnapshot {
-  maxHealth: number;
-  attack: number;
-  defence: number;
-  evade: number;
-}
-
 export interface ActiveShop {
   merchant: Merchant;
 }
 
-export interface ShopSpecialOfferView {
-  id: 'specialEquipment';
-  equipmentId: SpecialEquipmentId;
+export interface ShopWeaponOfferView {
+  id: 'weaponUpgrade';
+  weaponId: string;
   title: string;
   description: string;
   statLine: string;
   classId: PlayerClassId;
   cost: number;
+  tierIndex: number;
+  available: boolean;
+  reason?: ShopUnavailableReason;
+  reasonText?: string;
+}
+
+export interface ShopShieldOfferView {
+  id: 'shieldUpgrade';
+  shieldId: string;
+  title: string;
+  description: string;
+  statLine: string;
+  cost: number;
+  tierIndex: number;
   available: boolean;
   reason?: ShopUnavailableReason;
   reasonText?: string;
@@ -74,20 +86,20 @@ export interface PotionOfferView {
 export interface ShopView {
   gold: number;
   potionOffers: PotionOfferView[];
-  specialOffer: ShopSpecialOfferView | null;
+  weaponOffer: ShopWeaponOfferView | null;
+  shieldOffer: ShopShieldOfferView | null;
 }
 
 export interface ShopPurchaseResult {
   success: boolean;
-  offerId?: 'specialEquipment';
-  specialEquipmentId?: SpecialEquipmentId;
+  offerId?: 'weaponUpgrade' | 'shieldUpgrade';
+  weaponId?: string;
+  shieldId?: string;
   reason?: ShopUnavailableReason;
   goldRemaining: number;
   goldSpent: number;
-  strGained: number;
-  conGained: number;
-  defGained: number;
-  dexGained: number;
+  attackBonus: number;
+  defenceBonus: number;
   status: string;
 }
 
@@ -105,25 +117,14 @@ export function createActiveShop(merchant: Merchant): ActiveShop {
   return { merchant };
 }
 
-export function shopStatSnapshot(player: {
-  stats: CombatStats;
-}): ShopStatSnapshot {
-  const stats = player.stats;
-  return {
-    maxHealth: stats.maxHealth,
-    attack: stats.attack,
-    defence: stats.defence,
-    evade: stats.dex,
-  };
-}
-
 export function buildShopView(
   merchant: Merchant | null,
   gold: number,
-  stats: ShopStatSnapshot,
-  playerClassId?: PlayerClassId,
-  specialEquipmentOwned = false,
-  health = stats.maxHealth,
+  playerClassId: PlayerClassId | undefined,
+  weaponTierIndex: number,
+  shieldTierIndex: number,
+  health: number,
+  maxHealth: number,
 ): ShopView | null {
   if (!merchant) {
     return null;
@@ -132,16 +133,15 @@ export function buildShopView(
   return {
     gold,
     potionOffers: merchantPotionStock(merchant.row).map((definition) =>
-      buildPotionOfferView(merchant, definition.id, gold, health, stats.maxHealth),
+      buildPotionOfferView(merchant, definition.id, gold, health, maxHealth),
     ),
-    specialOffer: playerClassId
-      ? buildSpecialEquipmentOfferView(
-          merchant,
-          playerClassId,
-          gold,
-          specialEquipmentOwned,
-        )
+    weaponOffer: playerClassId
+      ? buildWeaponOfferView(merchant, playerClassId, gold, weaponTierIndex)
       : null,
+    shieldOffer:
+      playerClassId === 'knight'
+        ? buildShieldOfferView(merchant, gold, shieldTierIndex)
+        : null,
   };
 }
 
@@ -150,7 +150,7 @@ export function unavailableReasonText(reason: ShopUnavailableReason): string {
     return 'Not enough gold';
   }
   if (reason === 'owned') {
-    return 'Already equipped';
+    return 'Fully upgraded.';
   }
   if (reason === 'noClass') {
     return 'Choose a class first.';
@@ -158,57 +158,98 @@ export function unavailableReasonText(reason: ShopUnavailableReason): string {
   return 'Unavailable';
 }
 
-export function evaluateSpecialEquipmentOffer(
+export function evaluateWeaponOffer(
   merchant: Merchant | null,
   classId: PlayerClassId,
   gold: number,
-  owned: boolean,
+  weaponTierIndex: number,
 ): { available: boolean; reason?: ShopUnavailableReason } {
   if (!merchant) {
     return { available: false, reason: 'noShop' };
   }
-  if (owned) {
+  if (isWeaponLadderComplete(classId, weaponTierIndex)) {
     return { available: false, reason: 'owned' };
   }
-  const definition = specialEquipmentForClass(classId);
-  const gains = applicableSpecialEquipmentGains(definition.gains);
-  if (!hasSpecialEquipmentGain(gains)) {
-    return { available: false, reason: 'owned' };
-  }
-  if (gold < definition.cost) {
+  const nextIndex = nextWeaponTierIndex(weaponTierIndex);
+  if (gold < weaponTierCost(nextIndex)) {
     return { available: false, reason: 'unaffordable' };
   }
   return { available: true };
 }
 
-export function applySpecialEquipmentPurchase(
+export function evaluateShieldOffer(
+  merchant: Merchant | null,
+  gold: number,
+  shieldTierIndex: number,
+): { available: boolean; reason?: ShopUnavailableReason } {
+  if (!merchant) {
+    return { available: false, reason: 'noShop' };
+  }
+  if (isShieldLadderComplete(shieldTierIndex)) {
+    return { available: false, reason: 'owned' };
+  }
+  const nextIndex = nextWeaponTierIndex(shieldTierIndex);
+  if (gold < weaponTierCost(nextIndex)) {
+    return { available: false, reason: 'unaffordable' };
+  }
+  return { available: true };
+}
+
+export function applyWeaponTierPurchase(
   merchant: Merchant | null,
   classId: PlayerClassId,
   gold: number,
-  owned: boolean,
+  weaponTierIndex: number,
 ): ShopPurchaseResult {
-  const definition = specialEquipmentForClass(classId);
-  const evaluation = evaluateSpecialEquipmentOffer(
+  const evaluation = evaluateWeaponOffer(
     merchant,
     classId,
     gold,
-    owned,
+    weaponTierIndex,
   );
   if (!evaluation.available) {
-    return emptyPurchase(gold, evaluation.reason ?? 'noShop');
+    return emptyPurchase(gold, evaluation.reason ?? 'noShop', 'weaponUpgrade');
   }
-  const gains = applicableSpecialEquipmentGains(definition.gains);
+  const nextIndex = nextWeaponTierIndex(weaponTierIndex);
+  const weaponId = PLAYER_WEAPON_PROGRESSION[classId][nextIndex]!;
+  const weapon = weaponCatalogEntry(weaponId);
+  const cost = weaponTierCost(nextIndex);
+  const title = PLAYER_WEAPON_TIER_NAMES[classId][nextIndex] ?? weaponId;
   return {
     success: true,
-    offerId: 'specialEquipment',
-    specialEquipmentId: definition.id,
-    goldRemaining: gold - definition.cost,
-    goldSpent: definition.cost,
-    strGained: gains.str,
-    conGained: gains.con,
-    defGained: gains.def,
-    dexGained: gains.dex,
-    status: `You equip ${definition.name}. ${specialEquipmentStatLine(gains)}.`,
+    offerId: 'weaponUpgrade',
+    weaponId,
+    goldRemaining: gold - cost,
+    goldSpent: cost,
+    attackBonus: weapon.attackBonus,
+    defenceBonus: 0,
+    status: `You equip ${title}. +${weapon.attackBonus} ATK.`,
+  };
+}
+
+export function applyShieldTierPurchase(
+  merchant: Merchant | null,
+  gold: number,
+  shieldTierIndex: number,
+): ShopPurchaseResult {
+  const evaluation = evaluateShieldOffer(merchant, gold, shieldTierIndex);
+  if (!evaluation.available) {
+    return emptyPurchase(gold, evaluation.reason ?? 'noShop', 'shieldUpgrade');
+  }
+  const nextIndex = nextWeaponTierIndex(shieldTierIndex);
+  const shieldId = KNIGHT_SHIELD_PROGRESSION[nextIndex]!;
+  const shield = shieldCatalogEntry(shieldId);
+  const cost = weaponTierCost(nextIndex);
+  const title = KNIGHT_SHIELD_TIER_NAMES[nextIndex] ?? shieldId;
+  return {
+    success: true,
+    offerId: 'shieldUpgrade',
+    shieldId,
+    goldRemaining: gold - cost,
+    goldSpent: cost,
+    attackBonus: 0,
+    defenceBonus: shield.defenceBonus,
+    status: `You equip ${title}. +${shield.defenceBonus} DEF.`,
   };
 }
 
@@ -252,17 +293,16 @@ export function applyPotionPurchase(
 function emptyPurchase(
   gold: number,
   reason: ShopUnavailableReason,
+  offerId: 'weaponUpgrade' | 'shieldUpgrade',
 ): ShopPurchaseResult {
   return {
     success: false,
-    offerId: 'specialEquipment',
+    offerId,
     reason,
     goldRemaining: gold,
     goldSpent: 0,
-    strGained: 0,
-    conGained: 0,
-    defGained: 0,
-    dexGained: 0,
+    attackBonus: 0,
+    defenceBonus: 0,
     status: unavailableReasonText(reason),
   };
 }
@@ -314,30 +354,65 @@ function buildPotionOfferView(
   };
 }
 
-function buildSpecialEquipmentOfferView(
+function buildWeaponOfferView(
   merchant: Merchant,
   classId: PlayerClassId,
   gold: number,
-  owned: boolean,
-): ShopSpecialOfferView {
-  const definition = specialEquipmentForClass(classId);
-  const displayedGains = owned
-    ? definition.gains
-    : applicableSpecialEquipmentGains(definition.gains);
-  const evaluation = evaluateSpecialEquipmentOffer(
+  weaponTierIndex: number,
+): ShopWeaponOfferView {
+  const ladder = PLAYER_WEAPON_PROGRESSION[classId];
+  const complete = isWeaponLadderComplete(classId, weaponTierIndex);
+  const displayIndex = complete
+    ? ladder.length - 1
+    : nextWeaponTierIndex(weaponTierIndex);
+  const weaponId = ladder[displayIndex]!;
+  const weapon = weaponCatalogEntry(weaponId);
+  const evaluation = evaluateWeaponOffer(
     merchant,
     classId,
     gold,
-    owned,
+    weaponTierIndex,
   );
   return {
-    id: 'specialEquipment',
-    equipmentId: definition.id,
-    title: definition.name,
-    description: definition.flavour,
-    statLine: specialEquipmentStatLine(displayedGains),
+    id: 'weaponUpgrade',
+    weaponId,
+    title: PLAYER_WEAPON_TIER_NAMES[classId][displayIndex] ?? weaponId,
+    description:
+      PLAYER_WEAPON_TIER_FLAVOUR[classId][displayIndex] ??
+      'A hard-won upgrade.',
+    statLine: `+${weapon.attackBonus} ATK`,
     classId,
-    cost: definition.cost,
+    cost: weaponTierCost(displayIndex),
+    tierIndex: displayIndex,
+    available: evaluation.available,
+    reason: evaluation.reason,
+    reasonText: evaluation.reason
+      ? unavailableReasonText(evaluation.reason)
+      : undefined,
+  };
+}
+
+function buildShieldOfferView(
+  merchant: Merchant,
+  gold: number,
+  shieldTierIndex: number,
+): ShopShieldOfferView {
+  const complete = isShieldLadderComplete(shieldTierIndex);
+  const displayIndex = complete
+    ? KNIGHT_SHIELD_PROGRESSION.length - 1
+    : nextWeaponTierIndex(shieldTierIndex);
+  const shieldId = KNIGHT_SHIELD_PROGRESSION[displayIndex]!;
+  const shield = shieldCatalogEntry(shieldId);
+  const evaluation = evaluateShieldOffer(merchant, gold, shieldTierIndex);
+  return {
+    id: 'shieldUpgrade',
+    shieldId,
+    title: KNIGHT_SHIELD_TIER_NAMES[displayIndex] ?? shieldId,
+    description:
+      KNIGHT_SHIELD_TIER_FLAVOUR[displayIndex] ?? 'A hard-won upgrade.',
+    statLine: `+${shield.defenceBonus} DEF`,
+    cost: weaponTierCost(displayIndex),
+    tierIndex: displayIndex,
     available: evaluation.available,
     reason: evaluation.reason,
     reasonText: evaluation.reason

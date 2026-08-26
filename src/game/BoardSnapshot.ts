@@ -91,6 +91,8 @@ export interface PlayerSnapshot {
   readonly experience: number;
   readonly nextLevelExperience: number | null;
   readonly stats: Readonly<CombatStats>;
+  readonly weaponAttackBonus: number;
+  readonly shieldDefenceBonus: number;
 }
 
 export interface CollectibleSnapshot {

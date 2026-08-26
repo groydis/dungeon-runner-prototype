@@ -11,7 +11,6 @@ import {
 import {
   applyPotionPurchase,
   buildShopView,
-  shopStatSnapshot,
 } from './shop';
 import { Player } from './Player';
 
@@ -95,10 +94,11 @@ describe('Merchant potion purchases', () => {
     const early = buildShopView(
       new Merchant('m-14', 14, 1),
       player.gold,
-      shopStatSnapshot(player),
       player.classId,
-      false,
+      -1,
+      -1,
       player.stats.health,
+      player.stats.maxHealth,
     );
     expect(early?.potionOffers.map((offer) => offer.id)).toEqual(['small']);
     expect(early?.potionOffers[0]).toMatchObject({
@@ -110,10 +110,11 @@ describe('Merchant potion purchases', () => {
     const deep = buildShopView(
       new Merchant('m-42', 42, 1),
       player.gold,
-      shopStatSnapshot(player),
       player.classId,
-      false,
+      -1,
+      -1,
       player.stats.health,
+      player.stats.maxHealth,
     );
     expect(deep?.potionOffers.map((offer) => offer.id)).toEqual([
       'small',

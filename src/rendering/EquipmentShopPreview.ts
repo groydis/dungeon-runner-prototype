@@ -5,21 +5,26 @@ import {
   Group,
   Vector3,
 } from 'three';
-import { type PlayerClassId } from '../game/definitions/classes';
 import {
-  PLAYER_SPECIAL_EQUIPMENT_LOADOUTS,
+  PLAYER_WEAPON_PROGRESSION,
+  weaponCatalogEntry,
+} from '../game/definitions/playerWeaponProgression';
+import { type ShopWeaponOfferView } from '../game/shop';
+import {
   loadPlayerEquipmentTemplate,
+  type PlayerEquipmentAssetKey,
 } from './playerEquipment';
 import { PreviewStage } from './PreviewStage';
 
 const PREVIEW_EXTENT = 1.62;
 
-/** Transparent, slowly turning product view for the current class shop item. */
+/** Transparent, slowly turning product view for the next purchasable weapon tier. */
 export class EquipmentShopPreview {
   private readonly stage: PreviewStage;
   private readonly presentation = new Group();
   private readonly content = new Group();
-  private classId: PlayerClassId | null = null;
+  private assetKey: PlayerEquipmentAssetKey | null = null;
+  private classId: ShopWeaponOfferView['classId'] | null = null;
   private loadToken = 0;
   private clock = 0;
 
@@ -39,22 +44,28 @@ export class EquipmentShopPreview {
     this.stage.scene.add(rimLight);
   }
 
-  setClassId(classId: PlayerClassId | null): void {
-    if (classId === this.classId) {
+  setWeaponOffer(offer: ShopWeaponOfferView | null): void {
+    if (!offer) {
+      this.clearOffer();
       return;
     }
-    this.classId = classId;
+    const weaponId =
+      PLAYER_WEAPON_PROGRESSION[offer.classId][offer.tierIndex] ?? offer.weaponId;
+    const assetKey = weaponCatalogEntry(weaponId).assetKey;
+    if (assetKey === this.assetKey && offer.classId === this.classId) {
+      return;
+    }
+    this.assetKey = assetKey;
+    this.classId = offer.classId;
     this.loadToken += 1;
     this.clearContent();
     delete this.canvas.dataset.ready;
     delete this.canvas.dataset.failed;
-    if (classId) {
-      void this.loadClassEquipment(classId, this.loadToken);
-    }
+    void this.loadAsset(assetKey, offer.classId, this.loadToken);
   }
 
   update(dt: number): void {
-    if (!this.classId) {
+    if (!this.assetKey) {
       return;
     }
     this.clock += dt;
@@ -62,7 +73,7 @@ export class EquipmentShopPreview {
   }
 
   render(): void {
-    this.stage.renderWhen(this.classId !== null);
+    this.stage.renderWhen(this.assetKey !== null);
   }
 
   dispose(): void {
@@ -71,55 +82,53 @@ export class EquipmentShopPreview {
     this.stage.dispose();
   }
 
-  private async loadClassEquipment(
-    classId: PlayerClassId,
+  private clearOffer(): void {
+    if (this.assetKey === null && this.classId === null) {
+      return;
+    }
+    this.assetKey = null;
+    this.classId = null;
+    this.loadToken += 1;
+    this.clearContent();
+    delete this.canvas.dataset.ready;
+    delete this.canvas.dataset.failed;
+  }
+
+  private async loadAsset(
+    assetKey: PlayerEquipmentAssetKey,
+    classId: ShopWeaponOfferView['classId'],
     token: number,
   ): Promise<void> {
-    const loadout = PLAYER_SPECIAL_EQUIPMENT_LOADOUTS[classId];
     try {
-      const templates = await Promise.all(
-        loadout.map((visual) => loadPlayerEquipmentTemplate(visual.assetKey)),
-      );
+      const template = await loadPlayerEquipmentTemplate(assetKey);
       if (
         this.stage.isDisposed ||
         token !== this.loadToken ||
-        classId !== this.classId
+        assetKey !== this.assetKey
       ) {
         return;
       }
-      templates.forEach((template, index) => {
-        const model = template.clone(true);
-        model.name = `shopEquipmentPreview-${loadout[index].assetKey}`;
-        this.layoutModel(model, classId, index, templates.length);
-        this.content.add(model);
-      });
+      const model = template.clone(true);
+      model.name = `shopEquipmentPreview-${assetKey}`;
+      this.layoutModel(model, classId);
+      this.content.add(model);
       this.fitContent();
       this.canvas.dataset.ready = 'true';
     } catch (error) {
       if (token !== this.loadToken) {
         return;
       }
-      console.error(`Failed to load ${classId} shop equipment preview`, error);
+      console.error(`Failed to load shop weapon preview '${assetKey}'`, error);
       this.canvas.dataset.failed = 'true';
     }
   }
 
   private layoutModel(
     model: Group,
-    classId: PlayerClassId,
-    index: number,
-    count: number,
+    classId: ShopWeaponOfferView['classId'],
   ): void {
     if (classId === 'ranger') {
       model.rotation.x = Math.PI / 2;
-      return;
-    }
-    if (count === 2) {
-      model.position.x = index === 0 ? -0.42 : 0.48;
-      model.rotation.z = index === 0 ? -0.15 : 0.04;
-      if (index === 1) {
-        model.scale.setScalar(0.9);
-      }
       return;
     }
     model.rotation.z = -0.14;

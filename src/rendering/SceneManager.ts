@@ -296,7 +296,8 @@ export class SceneManager {
   private playerEquipmentMounts: Group[] = [];
   private playerEquipmentUpgrades: PlayerEquipmentUpgradeLevels =
     NO_EQUIPMENT_UPGRADES;
-  private playerSpecialEquipmentEquipped = false;
+  private playerWeaponTierIndex = -1;
+  private playerShieldTierIndex = -1;
   private playerEquipmentLoadToken = 0;
   private playerAttackSequence = 0;
   private playerLoadToken = 0;
@@ -533,7 +534,8 @@ export class SceneManager {
     this.playerRenderKey = renderKey;
     if (!renderKey) {
       this.playerEquipmentUpgrades = NO_EQUIPMENT_UPGRADES;
-      this.playerSpecialEquipmentEquipped = false;
+      this.playerWeaponTierIndex = -1;
+      this.playerShieldTierIndex = -1;
       this.playerAttackSequence = 0;
     }
     this.playerLoadToken += 1;
@@ -546,6 +548,7 @@ export class SceneManager {
     const projectileKind = playerProjectileKind(
       renderKey,
       this.playerEquipmentUpgrades,
+      this.playerWeaponTierIndex,
     );
     if (projectileKind) {
       void this.prepareProjectilePool(projectileKind);
@@ -570,6 +573,7 @@ export class SceneManager {
     const projectileKind = playerProjectileKind(
       this.playerRenderKey,
       this.playerEquipmentUpgrades,
+      this.playerWeaponTierIndex,
     );
     if (projectileKind) {
       void this.prepareProjectilePool(projectileKind);
@@ -583,11 +587,25 @@ export class SceneManager {
     }
   }
 
-  setPlayerSpecialEquipmentEquipped(equipped: boolean): void {
-    if (equipped === this.playerSpecialEquipmentEquipped) {
+  setPlayerWeaponTiers(weaponIndex: number, shieldIndex: number): void {
+    const weaponTierIndex = Math.max(-1, weaponIndex);
+    const shieldTierIndex = Math.max(-1, shieldIndex);
+    if (
+      weaponTierIndex === this.playerWeaponTierIndex &&
+      shieldTierIndex === this.playerShieldTierIndex
+    ) {
       return;
     }
-    this.playerSpecialEquipmentEquipped = equipped;
+    this.playerWeaponTierIndex = weaponTierIndex;
+    this.playerShieldTierIndex = shieldTierIndex;
+    const projectileKind = playerProjectileKind(
+      this.playerRenderKey,
+      this.playerEquipmentUpgrades,
+      this.playerWeaponTierIndex,
+    );
+    if (projectileKind) {
+      void this.prepareProjectilePool(projectileKind);
+    }
     if (this.playerModel && this.playerRenderKey) {
       void this.installPlayerEquipmentLoadout(
         this.playerModel,
@@ -2585,7 +2603,8 @@ export class SceneManager {
     const loadout = playerEquipmentLoadout(
       key,
       this.playerEquipmentUpgrades,
-      this.playerSpecialEquipmentEquipped,
+      this.playerWeaponTierIndex,
+      this.playerShieldTierIndex,
     );
     await Promise.all(
       loadout.map((visual) =>
@@ -2813,6 +2832,7 @@ export class SceneManager {
     const kind = playerProjectileKind(
       this.playerRenderKey,
       this.playerEquipmentUpgrades,
+      this.playerWeaponTierIndex,
     );
     if (!kind) {
       return;

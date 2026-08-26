@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getPlayerClassDefinition, PLAYER_RENDER_KEYS } from '../game/definitions/classes';
 import { GameState } from '../game/GameState';
 import {
-  equipmentUpgradeLevelsFromAttributes,
+  NO_EQUIPMENT_UPGRADES,
   PLAYER_EQUIPMENT_LOADOUTS,
   PLAYER_EQUIPMENT_URLS,
-  PLAYER_SPECIAL_EQUIPMENT_LOADOUTS,
+  equipmentUpgradeLevelsFromAttributes,
   isPlayerEquipmentAssetKey,
   playerEquipmentLoadout,
   playerEquipmentMountNames,
@@ -138,31 +138,27 @@ describe('player equipment registry', () => {
     ).toEqual({ sharpened: 0, armoured: 8 });
   });
 
-  it('replaces each class loadout with its purchased Fantasy Weapons Bits set', () => {
+  it('resolves purchased weapon tiers into catalog asset keys', () => {
     expect(
-      Object.fromEntries(
-        PLAYER_RENDER_KEYS.map((key) => [
-          key,
-          playerEquipmentLoadout(
-            key,
-            { sharpened: 8, armoured: 8 },
-            true,
-          ).map((visual) => visual.assetKey),
-        ]),
+      playerEquipmentLoadout('rogue', NO_EQUIPMENT_UPGRADES, 0).map(
+        (visual) => visual.assetKey,
       ),
-    ).toEqual({
-      rogue: ['fantasyDaggerC'],
-      ranger: ['fantasyBowAWithString'],
-      mage: ['fantasyStaffD'],
-      knight: ['fantasySwordG', 'fantasyShieldA'],
-      barbarian: ['fantasyHammerD'],
-      lorekeeper: ['fantasyStaffC'],
-    });
-    for (const visual of Object.values(PLAYER_SPECIAL_EQUIPMENT_LOADOUTS).flat()) {
-      expect(PLAYER_EQUIPMENT_URLS[visual.assetKey]).toMatch(
-        /^\/models\/players\/kaykit\/weapons\/fantasy_bits\/.+\.glb$/,
-      );
-    }
+    ).toEqual(['dagger']);
+    expect(
+      playerEquipmentLoadout('ranger', NO_EQUIPMENT_UPGRADES, 2).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['crossbow2H']);
+    expect(
+      playerEquipmentLoadout('knight', NO_EQUIPMENT_UPGRADES, 1, 3).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['sword2H', 'fantasyShieldD']);
+    expect(
+      playerEquipmentLoadout('barbarian', NO_EQUIPMENT_UPGRADES, 2).map(
+        (visual) => visual.assetKey,
+      ),
+    ).toEqual(['fantasyHammerD']);
   });
 
   it('supports both authored hand slots and gives every class equipment', () => {

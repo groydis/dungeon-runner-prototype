@@ -3,6 +3,12 @@ import {
   PLAYER_RENDER_KEYS,
   type PlayerRenderKey,
 } from '../game/definitions/classes';
+import {
+  KNIGHT_SHIELD_PROGRESSION,
+  PLAYER_WEAPON_PROGRESSION,
+  shieldCatalogEntry,
+  weaponCatalogEntry,
+} from '../game/definitions/playerWeaponProgression';
 import { loadGltfScene } from './rigMediumAnimations';
 
 export type PlayerEquipmentAssetKey =
@@ -259,35 +265,6 @@ export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
   lorekeeper: [{ assetKey: 'staff', ...RIGHT_HAND_DEFAULT }],
 };
 
-/** One-time class shop equipment from KayKit Fantasy Weapons Bits 1.0. */
-export const PLAYER_SPECIAL_EQUIPMENT_LOADOUTS: Readonly<
-  Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>
-> = {
-  rogue: [{ assetKey: 'fantasyDaggerC', ...RIGHT_HAND_DEFAULT }],
-  ranger: [
-    {
-      assetKey: 'fantasyBowAWithString',
-      mount: 'handslot.r',
-      position: [0, 0, 0],
-      rotation: [0, Math.PI / 2, 0],
-      scale: 1,
-    },
-  ],
-  mage: [{ assetKey: 'fantasyStaffD', ...RIGHT_HAND_DEFAULT }],
-  knight: [
-    {
-      assetKey: 'fantasySwordG',
-      mount: 'handslot.r',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: 0.82,
-    },
-    { assetKey: 'fantasyShieldA', ...LEFT_HAND_DEFAULT },
-  ],
-  barbarian: [{ assetKey: 'fantasyHammerD', ...RIGHT_HAND_DEFAULT }],
-  lorekeeper: [{ assetKey: 'fantasyStaffC', ...RIGHT_HAND_DEFAULT }],
-};
-
 export function isPlayerEquipmentAssetKey(
   value: string,
 ): value is PlayerEquipmentAssetKey {
@@ -298,16 +275,56 @@ export function playerEquipmentUrl(assetKey: PlayerEquipmentAssetKey): string {
   return PLAYER_EQUIPMENT_URLS[assetKey];
 }
 
+function purchasedWeaponVisual(
+  key: PlayerRenderKey,
+  weaponTierIndex: number,
+): PlayerEquipmentVisual {
+  const weaponId = PLAYER_WEAPON_PROGRESSION[key][weaponTierIndex]!;
+  const assetKey = weaponCatalogEntry(weaponId).assetKey;
+  if (key === 'ranger' && assetKey === 'bowWithString') {
+    return {
+      assetKey,
+      mount: 'handslot.r',
+      position: [0, 0, 0],
+      rotation: [0, Math.PI / 2, 0],
+      scale: 1,
+    };
+  }
+  return { assetKey, ...RIGHT_HAND_DEFAULT };
+}
+
+function purchasedShieldVisual(shieldTierIndex: number): PlayerEquipmentVisual {
+  const shieldId = KNIGHT_SHIELD_PROGRESSION[shieldTierIndex]!;
+  return {
+    assetKey: shieldCatalogEntry(shieldId).assetKey,
+    ...LEFT_HAND_DEFAULT,
+  };
+}
+
 export function playerEquipmentLoadout(
   key: PlayerRenderKey | null | undefined,
   upgrades: PlayerEquipmentUpgradeLevels = NO_EQUIPMENT_UPGRADES,
-  specialEquipmentEquipped = false,
+  weaponTierIndex = -1,
+  shieldTierIndex = -1,
 ): readonly PlayerEquipmentVisual[] {
   if (!key) {
     return [];
   }
-  if (specialEquipmentEquipped) {
-    return PLAYER_SPECIAL_EQUIPMENT_LOADOUTS[key];
+  if (weaponTierIndex >= 0) {
+    const loadout: PlayerEquipmentVisual[] = [
+      purchasedWeaponVisual(key, weaponTierIndex),
+    ];
+    if (key === 'knight') {
+      loadout.push(
+        shieldTierIndex >= 0
+          ? purchasedShieldVisual(shieldTierIndex)
+          : {
+              assetKey: 'shieldBadge',
+              ...LEFT_HAND_DEFAULT,
+            },
+      );
+    }
+    return loadout;
   }
   const sharpened = Math.max(0, upgrades.sharpened);
   const armoured = Math.max(0, upgrades.armoured);
@@ -366,9 +383,14 @@ export function playerEquipmentLoadout(
 export function playerProjectileKind(
   key: PlayerRenderKey | null | undefined,
   upgrades: PlayerEquipmentUpgradeLevels = NO_EQUIPMENT_UPGRADES,
+  weaponTierIndex = -1,
 ): 'bow' | 'crossbow' | undefined {
   if (key !== 'ranger') {
     return undefined;
+  }
+  if (weaponTierIndex >= 0) {
+    const weaponId = PLAYER_WEAPON_PROGRESSION.ranger[weaponTierIndex];
+    return weaponId === 'bowWithString' ? 'bow' : 'crossbow';
   }
   return upgrades.sharpened > 0 ? 'crossbow' : 'bow';
 }

@@ -7,11 +7,12 @@ import {
 import { type Player } from './Player';
 import {
   applyPotionPurchase,
-  applySpecialEquipmentPurchase,
+  applyShieldTierPurchase,
+  applyWeaponTierPurchase,
   buildShopView,
   createActiveShop,
-  evaluateSpecialEquipmentOffer,
-  shopStatSnapshot,
+  evaluateShieldOffer,
+  evaluateWeaponOffer,
   type ActiveShop,
   type PotionPurchaseResult,
   type ShopPurchaseResult,
@@ -19,12 +20,13 @@ import {
 } from './shop';
 
 /**
- * Run-owned Merchant session: open visit and one-time special-equipment
- * ownership. Pricing stays in `shop.ts`.
+ * Run-owned Merchant session: open visit and in-run weapon/shield upgrade
+ * ladders. Pricing stays in `shop.ts`.
  */
 export class ShopSession {
   private active: ActiveShop | null = null;
-  private specialOwned = false;
+  private weaponTierIndex = -1;
+  private shieldTierIndex = -1;
 
   get isOpen(): boolean {
     return this.active !== null;
@@ -35,8 +37,12 @@ export class ShopSession {
     return this.active?.merchant ?? null;
   }
 
-  get hasSpecialEquipment(): boolean {
-    return this.specialOwned;
+  get weaponTierIndexValue(): number {
+    return this.weaponTierIndex;
+  }
+
+  get shieldTierIndexValue(): number {
+    return this.shieldTierIndex;
   }
 
   open(merchant: Merchant): void {
@@ -49,7 +55,8 @@ export class ShopSession {
 
   reset(): void {
     this.active = null;
-    this.specialOwned = false;
+    this.weaponTierIndex = -1;
+    this.shieldTierIndex = -1;
   }
 
   getShopView(player: Player | null): ShopView | null {
@@ -59,47 +66,116 @@ export class ShopSession {
     return buildShopView(
       this.active.merchant,
       player.gold,
-      shopStatSnapshot(player),
       player.classId,
-      this.specialOwned,
+      this.weaponTierIndex,
+      this.shieldTierIndex,
       player.stats.health,
+      player.stats.maxHealth,
     );
   }
 
-  canBuySpecialEquipment(player: Player | null): boolean {
+  canBuyWeaponTier(player: Player | null): boolean {
     if (!player || !this.active) {
       return false;
     }
-    return evaluateSpecialEquipmentOffer(
+    return evaluateWeaponOffer(
       this.active.merchant,
       player.classId,
       player.gold,
-      this.specialOwned,
+      this.weaponTierIndex,
     ).available;
   }
 
-  buySpecialEquipment(player: Player | null): ShopPurchaseResult {
+  canBuyShieldTier(player: Player | null): boolean {
+    if (!player || !this.active || player.classId !== 'knight') {
+      return false;
+    }
+    return evaluateShieldOffer(
+      this.active.merchant,
+      player.gold,
+      this.shieldTierIndex,
+    ).available;
+  }
+
+  buyWeaponTier(player: Player | null): ShopPurchaseResult {
     if (!player) {
-      return rejectedPurchase(0, 'noClass', 'Choose a class first.');
+      return rejectedPurchase(0, 'noClass', 'Choose a class first.', 'weaponUpgrade');
     }
     if (!this.active) {
       return rejectedPurchase(
         player.gold,
         'noShop',
         'There is no merchant here.',
+        'weaponUpgrade',
       );
     }
-    const result = applySpecialEquipmentPurchase(
+    const result = applyWeaponTierPurchase(
       this.active.merchant,
       player.classId,
       player.gold,
-      this.specialOwned,
+      this.weaponTierIndex,
     );
-    if (result.success) {
-      applyPurchaseToPlayer(player, result);
-      this.specialOwned = true;
+    if (!result.success) {
+      return result;
     }
-    return result;
+    if (!player.trySpendGold(result.goldSpent)) {
+      return rejectedPurchase(
+        player.gold,
+        'unaffordable',
+        'Not enough gold',
+        'weaponUpgrade',
+      );
+    }
+    player.setWeaponAttackBonus(result.attackBonus);
+    this.weaponTierIndex += 1;
+    return {
+      ...result,
+      goldRemaining: player.gold,
+    };
+  }
+
+  buyShieldTier(player: Player | null): ShopPurchaseResult {
+    if (!player) {
+      return rejectedPurchase(0, 'noClass', 'Choose a class first.', 'shieldUpgrade');
+    }
+    if (!this.active) {
+      return rejectedPurchase(
+        player.gold,
+        'noShop',
+        'There is no merchant here.',
+        'shieldUpgrade',
+      );
+    }
+    if (player.classId !== 'knight') {
+      return rejectedPurchase(
+        player.gold,
+        'noClass',
+        'Shield upgrades are for knights only.',
+        'shieldUpgrade',
+      );
+    }
+    const result = applyShieldTierPurchase(
+      this.active.merchant,
+      player.gold,
+      this.shieldTierIndex,
+    );
+    if (!result.success) {
+      return result;
+    }
+    if (!player.trySpendGold(result.goldSpent)) {
+      return rejectedPurchase(
+        player.gold,
+        'unaffordable',
+        'Not enough gold',
+        'shieldUpgrade',
+      );
+    }
+    player.setShieldDefenceBonus(result.defenceBonus);
+    this.shieldTierIndex += 1;
+    return {
+      ...result,
+      goldRemaining: player.gold,
+    };
   }
 
   buyPotion(
@@ -162,29 +238,20 @@ export class ShopSession {
   }
 }
 
-function applyPurchaseToPlayer(player: Player, result: ShopPurchaseResult): void {
-  player.trySpendGold(result.goldSpent);
-  player.increaseStr(result.strGained);
-  player.increaseCon(result.conGained);
-  player.increaseDef(result.defGained);
-  player.increaseDex(result.dexGained);
-}
-
 function rejectedPurchase(
   goldRemaining: number,
   reason: ShopPurchaseResult['reason'],
   status: string,
+  offerId: 'weaponUpgrade' | 'shieldUpgrade',
 ): ShopPurchaseResult {
   return {
     success: false,
-    offerId: 'specialEquipment',
+    offerId,
     reason,
     goldRemaining,
     goldSpent: 0,
-    strGained: 0,
-    conGained: 0,
-    defGained: 0,
-    dexGained: 0,
+    attackBonus: 0,
+    defenceBonus: 0,
     status,
   };
 }

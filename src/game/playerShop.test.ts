@@ -9,22 +9,21 @@ import {
   PLAYER_CLASS_IDS,
   getPlayerClassDefinition,
 } from './definitions/classes';
+import {
+  PLAYER_WEAPON_PROGRESSION,
+  PLAYER_WEAPON_TIER_NAMES,
+  weaponCatalogEntry,
+  weaponTierCost,
+} from './definitions/playerWeaponProgression';
 import { GameState, type GameStateOptions } from './GameState';
 import { Merchant } from './Merchant';
 import { Player } from './Player';
 import { mulberry32 } from './random';
 import {
-  applySpecialEquipmentPurchase,
+  applyWeaponTierPurchase,
   buildShopView,
-  evaluateSpecialEquipmentOffer,
-  shopStatSnapshot,
-  type ShopStatSnapshot,
+  evaluateWeaponOffer,
 } from './shop';
-import {
-  applicableSpecialEquipmentGains,
-  specialEquipmentForClass,
-} from './specialEquipment';
-
 function playerOf(state: GameState) {
   const snapshot = state.getPlayerSnapshot();
   if (!snapshot) {
@@ -111,10 +110,6 @@ function openSeededShop(state: GameState = seededState()): GameState {
   return state;
 }
 
-function baseStats(): ShopStatSnapshot {
-  return shopStatSnapshot(new Player('ranger'));
-}
-
 describe('Player', () => {
   it('cannot heal above max HP', () => {
     const player = new Player('ranger');
@@ -182,22 +177,18 @@ describe('Player', () => {
 });
 
 describe('shop inventory', () => {
-  it('exposes potions and class equipment without run-upgrade offers', () => {
+  it('exposes potions and class weapon upgrades without run-upgrade offers', () => {
     const merchant = new Merchant('merchant-14', 14, 1);
-    const view = buildShopView(
-      merchant,
-      50,
-      baseStats(),
-      'ranger',
-      false,
-      15,
-    );
+    const view = buildShopView(merchant, 50, 'ranger', -1, -1, 15, 20);
     expect(view).not.toBeNull();
     expect(view!.potionOffers.map((offer) => offer.id)).toEqual(['small']);
-    expect(view!.specialOffer).toMatchObject({
+    expect(view!.weaponOffer).toMatchObject({
       classId: 'ranger',
       available: true,
+      cost: 15,
+      weaponId: 'bowWithString',
     });
+    expect(view!.shieldOffer).toBeNull();
     expect(view).not.toHaveProperty('offers');
   });
 });
@@ -218,7 +209,7 @@ describe('GameState shop flow', () => {
       status: 'Bought Small Potion. Restored 4 HP.',
     });
     expect(early.getHudSnapshot().health).toBe(damaged + 4);
-    expect(early.getShopView()?.specialOffer?.available).toBe(false);
+    expect(early.getShopView()?.weaponOffer?.available).toBe(false);
     expect(early.buyPotionOffer('medium').reason).toBe('notInStock');
 
     const deep = createState({
@@ -246,7 +237,7 @@ describe('GameState shop flow', () => {
     expect(deep.buyPotionOffer('small').reason).toBe('fullHealth');
   });
 
-  it('offers and equips only the selected class special equipment', () => {
+  it('offers and equips the first weapon tier for each class', () => {
     for (const classId of PLAYER_CLASS_IDS) {
       const state = openSeededShop(
         createState({
@@ -255,104 +246,110 @@ describe('GameState shop flow', () => {
           rollAvoidance: () => true,
         }),
       );
-      const definition = specialEquipmentForClass(classId);
-      expect(state.getShopView()?.specialOffer).toMatchObject({
-        equipmentId: definition.id,
+      const weaponId = PLAYER_WEAPON_PROGRESSION[classId][0]!;
+      const weapon = weaponCatalogEntry(weaponId);
+      const cost = weaponTierCost(0);
+      expect(state.getShopView()?.weaponOffer).toMatchObject({
+        weaponId,
         classId,
-        title: definition.name,
-        cost: definition.cost,
+        title: PLAYER_WEAPON_TIER_NAMES[classId][0],
+        cost,
         available: false,
         reason: 'unaffordable',
       });
 
-      state.addGold(definition.cost);
-      const before = playerOf(state);
-      const expectedGains = applicableSpecialEquipmentGains(definition.gains);
-      expect(state.canBuySpecialEquipment()).toBe(true);
-      expect(state.buySpecialEquipment()).toMatchObject({
+      state.addGold(cost);
+      const beforeAttack = playerOf(state).stats.attack;
+      expect(state.canBuyWeaponTier()).toBe(true);
+      expect(state.buyWeaponTier()).toMatchObject({
         success: true,
-        offerId: 'specialEquipment',
-        specialEquipmentId: definition.id,
-        goldSpent: definition.cost,
-        strGained: expectedGains.str,
-        conGained: expectedGains.con,
-        defGained: expectedGains.def,
-        dexGained: expectedGains.dex,
+        offerId: 'weaponUpgrade',
+        weaponId,
+        goldSpent: cost,
+        attackBonus: weapon.attackBonus,
       });
-      const after = playerOf(state);
-      expect(after.stats.str).toBe(before.stats.str + expectedGains.str);
-      expect(after.stats.con).toBe(before.stats.con + expectedGains.con);
-      expect(after.stats.defence).toBe(before.stats.defence + expectedGains.def);
-      expect(after.stats.dex).toBe(before.stats.dex + expectedGains.dex);
-      expect(state.hasSpecialEquipment).toBe(true);
-      expect(state.getShopView()?.specialOffer).toMatchObject({
-        available: false,
-        reason: 'owned',
-        reasonText: 'Already equipped',
-        statLine: expect.stringMatching(/\+\d+ (STR|CON|DEF|DEX)/),
-      });
-      expect(state.buySpecialEquipment()).toMatchObject({
-        success: false,
-        reason: 'owned',
-      });
+      expect(playerOf(state).stats.attack).toBe(beforeAttack + weapon.attackBonus);
+      expect(playerOf(state).weaponAttackBonus).toBe(weapon.attackBonus);
+      expect(state.weaponTierIndex).toBe(0);
+
+      const ladderLength = PLAYER_WEAPON_PROGRESSION[classId].length;
+      if (ladderLength === 1) {
+        expect(state.getShopView()?.weaponOffer).toMatchObject({
+          available: false,
+          reason: 'owned',
+          reasonText: 'Fully upgraded.',
+        });
+        expect(state.buyWeaponTier()).toMatchObject({
+          success: false,
+          reason: 'owned',
+        });
+      } else {
+        expect(state.getShopView()?.weaponOffer).toMatchObject({
+          available: false,
+          reason: 'unaffordable',
+          tierIndex: 1,
+        });
+      }
 
       state.reset();
-      expect(state.hasSpecialEquipment).toBe(false);
+      expect(state.weaponTierIndex).toBe(-1);
+      expect(playerOf(state).weaponAttackBonus).toBe(0);
     }
   });
 
-  it('keeps the special purchase unavailable without a merchant, and still available after high stats', () => {
-    const player = new Player('knight');
-    const definition = specialEquipmentForClass('knight');
-    expect(
-      evaluateSpecialEquipmentOffer(null, 'knight', definition.cost, false).reason,
-    ).toBe('noShop');
-
-    player.increaseStr(100);
-    player.increaseDef(100);
+  it('keeps weapon purchases unavailable without a merchant', () => {
+    expect(evaluateWeaponOffer(null, 'knight', 15, -1).reason).toBe('noShop');
     const merchant = new Merchant('merchant-special', 14, 1);
-    expect(
-      evaluateSpecialEquipmentOffer(
-        merchant,
-        'knight',
-        definition.cost,
-        false,
-      ).available,
-    ).toBe(true);
-    expect(
-      applySpecialEquipmentPurchase(
-        merchant,
-        'knight',
-        definition.cost,
-        false,
-      ),
-    ).toMatchObject({
+    expect(evaluateWeaponOffer(merchant, 'knight', 15, -1).available).toBe(true);
+    expect(applyWeaponTierPurchase(merchant, 'knight', 15, -1)).toMatchObject({
       success: true,
-      defGained: 3,
-      strGained: 0,
-      conGained: 0,
-      dexGained: 0,
+      attackBonus: 2,
+      defenceBonus: 0,
+      weaponId: 'sword1H',
     });
   });
 
-  it('equips special gear and resets ownership on run reset', () => {
+  it('buys knight shield tiers separately from weapons', () => {
+    const state = openSeededShop(
+      createState({
+        playerClass: 'knight',
+        createRng: () => mulberry32(123),
+        rollAvoidance: () => true,
+      }),
+    );
+    expect(state.getShopView()?.shieldOffer).toMatchObject({
+      shieldId: 'shieldRound',
+      cost: 15,
+      available: false,
+      reason: 'unaffordable',
+    });
+    state.addGold(15);
+    const beforeDef = playerOf(state).stats.defence;
+    expect(state.buyShieldTier()).toMatchObject({
+      success: true,
+      offerId: 'shieldUpgrade',
+      defenceBonus: 2,
+    });
+    expect(playerOf(state).stats.defence).toBe(beforeDef + 2);
+    expect(state.shieldTierIndex).toBe(0);
+  });
+
+  it('equips a weapon tier and resets ownership on run reset', () => {
     const state = openSeededShop();
     expect(state.shopOpen).toBe(true);
-    expect(state.getShopView()?.specialOffer?.available).toBe(false);
-    expect(state.canBuySpecialEquipment()).toBe(false);
+    expect(state.getShopView()?.weaponOffer?.available).toBe(false);
+    expect(state.canBuyWeaponTier()).toBe(false);
 
-    const special = specialEquipmentForClass('ranger');
-    state.addGold(special.cost);
-    expect(state.canBuySpecialEquipment()).toBe(true);
-    expect(state.buySpecialEquipment().success).toBe(true);
-    expect(state.hasSpecialEquipment).toBe(true);
+    state.addGold(15);
+    expect(state.canBuyWeaponTier()).toBe(true);
+    expect(state.buyWeaponTier().success).toBe(true);
+    expect(state.weaponTierIndex).toBe(0);
     expect(state.gold).toBe(0);
-    expect(state.canBuySpecialEquipment()).toBe(false);
+    expect(state.canBuyWeaponTier()).toBe(false);
 
     state.reset();
     expect(playerOf(state).stats).toEqual(rangerClass().startingStats);
-    
-    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.weaponTierIndex).toBe(-1);
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
   });
@@ -389,37 +386,35 @@ describe('GameState shop flow', () => {
     walkTo(state, 13, 1);
     const col = shopColAt(state, 14);
     state.resolveCompletedMove(col);
-    const special = specialEquipmentForClass('ranger');
-    state.addGold(special.cost);
-    expect(state.buySpecialEquipment().success).toBe(true);
+    state.addGold(15);
+    expect(state.buyWeaponTier().success).toBe(true);
     expect(state.leaveShop()).toEqual({ row: 14, col });
     expect(state.shopOpen).toBe(false);
     expect(state.status).toBe('You leave the merchant behind.');
 
     state.reset();
     expect(playerOf(state).stats).toEqual(rangerClass().startingStats);
-    
     expect(state.gold).toBe(0);
     expect(state.shopOpen).toBe(false);
-    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.weaponTierIndex).toBe(-1);
 
     const restored = openSeededShop(state);
     expect(restored.shopOpen).toBe(true);
-    expect(restored.getShopView()?.specialOffer).toMatchObject({
+    expect(restored.getShopView()?.weaponOffer).toMatchObject({
       available: false,
       reason: 'unaffordable',
     });
-    restored.addGold(special.cost);
-    expect(restored.canBuySpecialEquipment()).toBe(true);
+    restored.addGold(15);
+    expect(restored.canBuyWeaponTier()).toBe(true);
   });
 
   it('rejects shop actions before a class is selected', () => {
     const state = new GameState();
     expect(state.shopOpen).toBe(false);
-    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.weaponTierIndex).toBe(-1);
     expect(state.getShopView()).toBeNull();
-    expect(state.canBuySpecialEquipment()).toBe(false);
-    expect(state.buySpecialEquipment()).toMatchObject({
+    expect(state.canBuyWeaponTier()).toBe(false);
+    expect(state.buyWeaponTier()).toMatchObject({
       success: false,
       reason: 'noClass',
       goldRemaining: 0,
@@ -436,7 +431,7 @@ describe('GameState shop flow', () => {
     state.dismissOpenShop();
     expect(state.shopOpen).toBe(false);
     expect(state.getShopView()).toBeNull();
-    expect(state.buySpecialEquipment()).toMatchObject({
+    expect(state.buyWeaponTier()).toMatchObject({
       success: false,
       reason: 'noShop',
       status: 'There is no merchant here.',
@@ -445,13 +440,12 @@ describe('GameState shop flow', () => {
     expect(state.getTile(row, col)?.content.type).toBe('shop');
   });
 
-  it('marks the Merchant used when leaving; special ownership persists for the run', () => {
+  it('marks the Merchant used when leaving; weapon tier persists for the run', () => {
     const state = openSeededShop();
     const firstCol = playerOf(state).col;
-    const special = specialEquipmentForClass('ranger');
-    state.addGold(special.cost);
-    expect(state.buySpecialEquipment().success).toBe(true);
-    expect(state.hasSpecialEquipment).toBe(true);
+    state.addGold(15);
+    expect(state.buyWeaponTier().success).toBe(true);
+    expect(state.weaponTierIndex).toBe(0);
 
     expect(state.leaveShop()).toEqual({ row: 14, col: firstCol });
     expect(state.shopOpen).toBe(false);
@@ -463,33 +457,33 @@ describe('GameState shop flow', () => {
     const secondCol = shopColAt(state, 28);
     state.resolveCompletedMove(secondCol);
     expect(state.shopOpen).toBe(true);
-    expect(state.hasSpecialEquipment).toBe(true);
-    expect(state.getShopView()?.specialOffer).toMatchObject({
+    expect(state.weaponTierIndex).toBe(0);
+    expect(state.getShopView()?.weaponOffer).toMatchObject({
       available: false,
-      reason: 'owned',
+      reason: 'unaffordable',
+      tierIndex: 1,
     });
   });
 
-  it('clears special ownership on class reselection', () => {
+  it('clears weapon tiers on class reselection', () => {
     const state = openSeededShop();
-    const special = specialEquipmentForClass('ranger');
-    state.addGold(special.cost);
-    expect(state.buySpecialEquipment().success).toBe(true);
-    expect(state.hasSpecialEquipment).toBe(true);
+    state.addGold(15);
+    expect(state.buyWeaponTier().success).toBe(true);
+    expect(state.weaponTierIndex).toBe(0);
 
     state.clearSelectedClass();
     expect(state.hasSelectedClass).toBe(false);
     expect(state.shopOpen).toBe(false);
-    expect(state.hasSpecialEquipment).toBe(false);
+    expect(state.weaponTierIndex).toBe(-1);
 
     state.selectClass('ranger');
     const again = openSeededShop(state);
-    expect(again.hasSpecialEquipment).toBe(false);
-    expect(again.canBuySpecialEquipment()).toBe(false);
-    again.addGold(special.cost);
-    expect(again.canBuySpecialEquipment()).toBe(true);
-    expect(again.buySpecialEquipment().success).toBe(true);
-    expect(again.hasSpecialEquipment).toBe(true);
+    expect(again.weaponTierIndex).toBe(-1);
+    expect(again.canBuyWeaponTier()).toBe(false);
+    again.addGold(15);
+    expect(again.canBuyWeaponTier()).toBe(true);
+    expect(again.buyWeaponTier().success).toBe(true);
+    expect(again.weaponTierIndex).toBe(0);
   });
 });
 
@@ -498,7 +492,8 @@ describe('GameState shop ownership', () => {
     expect(gameStateSource).toMatch(/new ShopSession/);
     expect(gameStateSource).not.toMatch(/private activeShop/);
     expect(gameStateSource).not.toMatch(/private shopProgress/);
-    expect(gameStateSource).not.toMatch(/private specialEquipmentOwned/);
+    expect(gameStateSource).not.toMatch(/private weaponTierIndex/);
+    expect(gameStateSource).toMatch(/this\.shopSession\.weaponTierIndexValue/);
     expect(gameStateSource).not.toMatch(/get shopSession/);
     expect(gameStateSource).not.toMatch(/export \{ ShopSession/);
   });
@@ -507,7 +502,6 @@ describe('GameState shop ownership', () => {
 describe('dex HUD', () => {
   it('displays DEX without a percent sign', () => {
     expect(evadeHudText(1)).toBe('DEX: 1');
-    expect(evadeHudText(16)).toBe('DEX: 16');
-    expect(evadeHudText(1)).not.toContain('%');
+    expect(evadeHudText(6)).toBe('DEX: 6');
   });
 });

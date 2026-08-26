@@ -580,26 +580,44 @@
               <p class="shop-speech">What can I help you with?</p>
             </aside>
             <section class="shop-inventory" aria-label="Merchant inventory">
-              <p class="shop-section-title">CLASS EQUIPMENT</p>
+              <p class="shop-section-title">WEAPON UPGRADES</p>
               <button
                 type="button"
-                id="shop-special-equipment"
+                id="shop-weapon-upgrade"
                 class="shop-special-offer"
-                aria-label="Class equipment"
+                aria-label="Weapon upgrade"
               >
                 <span class="shop-special-copy">
                   <span class="shop-special-heading">
-                    <span id="shop-special-class" class="shop-special-class">RANGER ONLY</span>
-                    <span id="shop-special-cost" class="shop-offer-cost">50 G</span>
+                    <span id="shop-weapon-class" class="shop-special-class">RANGER WEAPON</span>
+                    <span id="shop-weapon-cost" class="shop-offer-cost">15 G</span>
                   </span>
-                  <span id="shop-special-title" class="shop-special-title">Moonpiercer Bow</span>
-                  <span id="shop-special-desc" class="shop-special-desc">An ornate bow balanced for a sure release.</span>
-                  <span id="shop-special-stats" class="shop-special-stats">+3 DEX</span>
-                  <span id="shop-special-reason" class="shop-special-reason"></span>
+                  <span id="shop-weapon-title" class="shop-special-title">Hunter Bow</span>
+                  <span id="shop-weapon-desc" class="shop-special-desc">A reliable bow for the long road.</span>
+                  <span id="shop-weapon-stats" class="shop-special-stats">+2 ATK</span>
+                  <span id="shop-weapon-reason" class="shop-special-reason"></span>
                 </span>
                 <span class="shop-special-preview-stage" aria-hidden="true">
-                  <canvas id="shop-special-preview"></canvas>
+                  <canvas id="shop-weapon-preview"></canvas>
                   <span class="shop-special-preview-loading">ITEM</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                id="shop-shield-upgrade"
+                class="shop-special-offer"
+                hidden
+                aria-label="Shield upgrade"
+              >
+                <span class="shop-special-copy">
+                  <span class="shop-special-heading">
+                    <span class="shop-special-class">KNIGHT SHIELD</span>
+                    <span id="shop-shield-cost" class="shop-offer-cost">15 G</span>
+                  </span>
+                  <span id="shop-shield-title" class="shop-special-title">Round Shield</span>
+                  <span id="shop-shield-desc" class="shop-special-desc">A light round shield for early scrapes.</span>
+                  <span id="shop-shield-stats" class="shop-special-stats">+2 DEF</span>
+                  <span id="shop-shield-reason" class="shop-special-reason"></span>
                 </span>
               </button>
               <p id="shop-potion-section-title" class="shop-section-title">HEALING POTIONS</p>

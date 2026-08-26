@@ -751,7 +751,7 @@ body {
   background: #2b2d2e;
 }
 
-#shop-special-preview {
+#shop-weapon-preview {
   position: relative;
   z-index: 1;
   display: block;
@@ -773,7 +773,7 @@ body {
   transition: opacity 180ms ease;
 }
 
-#shop-special-preview[data-ready="true"] + .shop-special-preview-loading {
+#shop-weapon-preview[data-ready="true"] + .shop-special-preview-loading {
   opacity: 0;
 }
 

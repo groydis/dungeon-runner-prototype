@@ -209,8 +209,12 @@ export class GameState {
     return this.shopSession.isOpen;
   }
 
-  get hasSpecialEquipment(): boolean {
-    return this.shopSession.hasSpecialEquipment;
+  get weaponTierIndex(): number {
+    return this.shopSession.weaponTierIndexValue;
+  }
+
+  get shieldTierIndex(): number {
+    return this.shopSession.shieldTierIndexValue;
   }
 
   get levelUpOpen(): boolean {
@@ -279,6 +283,8 @@ export class GameState {
       experience: this._player.experience,
       nextLevelExperience: this._player.nextLevelExperience,
       stats: this._player.stats,
+      weaponAttackBonus: this._player.weaponAttackBonus,
+      shieldDefenceBonus: this._player.shieldDefenceBonus,
     });
   }
 
@@ -402,12 +408,24 @@ export class GameState {
     return this.shopSession.getShopView(this._player);
   }
 
-  canBuySpecialEquipment(): boolean {
-    return this.shopSession.canBuySpecialEquipment(this._player);
+  canBuyWeaponTier(): boolean {
+    return this.shopSession.canBuyWeaponTier(this._player);
   }
 
-  buySpecialEquipment(): ShopPurchaseResult {
-    const result = this.shopSession.buySpecialEquipment(this._player);
+  buyWeaponTier(): ShopPurchaseResult {
+    const result = this.shopSession.buyWeaponTier(this._player);
+    if (this._player && this.shopSession.isOpen) {
+      this._status = result.status;
+    }
+    return result;
+  }
+
+  canBuyShieldTier(): boolean {
+    return this.shopSession.canBuyShieldTier(this._player);
+  }
+
+  buyShieldTier(): ShopPurchaseResult {
+    const result = this.shopSession.buyShieldTier(this._player);
     if (this._player && this.shopSession.isOpen) {
       this._status = result.status;
     }
@@ -472,6 +490,7 @@ export class GameState {
       { id: monster.id, name: monster.name },
       undefined,
       monster.weaponVariant?.attackBonus ?? 0,
+      player.weaponAttackBonus,
     );
   }
 

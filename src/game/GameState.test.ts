@@ -27,7 +27,11 @@ import {
   type RowRecipeFactory,
 } from './rowGeneration';
 import { evadeHudText } from '../ui/HudView';
-import { specialEquipmentForClass } from './specialEquipment';
+import {
+  PLAYER_WEAPON_PROGRESSION,
+  weaponCatalogEntry,
+  weaponTierCost,
+} from './definitions/playerWeaponProgression';
 
 
 function playerOf(state: GameState) {
@@ -1235,14 +1239,16 @@ describe('player class selection', () => {
 
     walkTo(state, 13, 1);
     state.resolveCompletedMove(shopColAt(state, 14));
-    const special = specialEquipmentForClass('ranger');
-    expect(state.getShopView()?.specialOffer?.cost).toBe(special.cost);
-    state.addGold(special.cost);
-    expect(state.buySpecialEquipment().success).toBe(true);
+    const weaponId = PLAYER_WEAPON_PROGRESSION.ranger[0]!;
+    const weapon = weaponCatalogEntry(weaponId);
+    const cost = weaponTierCost(0);
+    expect(state.getShopView()?.weaponOffer?.cost).toBe(cost);
+    state.addGold(cost);
+    expect(state.buyWeaponTier().success).toBe(true);
     // Level-up auto +1 STR/+1 DEX (+2 ATK); free points went to DEF;
-    // special Moonpiercer: +3 DEX → +3 ATK.
+    // first weapon tier adds catalog attackBonus.
     expect(playerOf(state).stats.attack).toBe(
-      getPlayerClassDefinition('ranger').startingStats.attack + 5,
+      getPlayerClassDefinition('ranger').startingStats.attack + 2 + weapon.attackBonus,
     );
 
     const knight = getPlayerClassDefinition('knight');
@@ -1266,7 +1272,7 @@ describe('player class selection', () => {
 
     walkTo(state, 13, 1);
     state.resolveCompletedMove(shopColAt(state, 14));
-    expect(state.getShopView()?.specialOffer?.classId).toBe('knight');
+    expect(state.getShopView()?.weaponOffer?.classId).toBe('knight');
     expect(state.getShopView()?.potionOffers.map((offer) => offer.id)).toEqual([
       'small',
     ]);
@@ -1453,8 +1459,8 @@ describe('board snapshots and no-class APIs', () => {
   it('keeps shop read/purchase APIs safe before a class is selected', () => {
     const state = new GameState();
     expect(state.getShopView()).toBeNull();
-    expect(state.canBuySpecialEquipment()).toBe(false);
-    expect(state.buySpecialEquipment()).toMatchObject({
+    expect(state.canBuyWeaponTier()).toBe(false);
+    expect(state.buyWeaponTier()).toMatchObject({
       success: false,
       reason: 'noClass',
       goldRemaining: 0,

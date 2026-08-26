@@ -27,6 +27,7 @@ describe('preview stage composition', () => {
     expect(merchantSource).toMatch(/loadMerchantTemplate/);
     expect(merchantSource).toMatch(/isDisposed/);
     expect(equipmentSource).toMatch(/loadToken/);
-    expect(equipmentSource).toMatch(/PLAYER_SPECIAL_EQUIPMENT_LOADOUTS/);
+    expect(equipmentSource).toMatch(/setWeaponOffer/);
+    expect(equipmentSource).toMatch(/weaponCatalogEntry/);
   });
 });
