@@ -127,14 +127,12 @@ import {
   loadMerchantTemplate,
 } from './merchantAssets';
 import {
-  NO_EQUIPMENT_UPGRADES,
   PLAYER_WEAPON_MOUNT_NAME,
   loadPlayerEquipmentTemplate,
   playerEquipmentLoadout,
   playerEquipmentMountNames,
   playerEquipmentUrl,
   playerProjectileKind,
-  type PlayerEquipmentUpgradeLevels,
   type PlayerEquipmentVisual,
 } from './playerEquipment';
 import { type RigMediumClipMap } from './rigMediumAnimations';
@@ -294,10 +292,8 @@ export class SceneManager {
   private playerModelMaterials: MeshStandardMaterial[] = [];
   private playerRenderKey: PlayerRenderKey | null = null;
   private playerEquipmentMounts: Group[] = [];
-  private playerEquipmentUpgrades: PlayerEquipmentUpgradeLevels =
-    NO_EQUIPMENT_UPGRADES;
-  private playerWeaponTierIndex = -1;
-  private playerShieldTierIndex = -1;
+  private playerWeaponTierIndex = 0;
+  private playerShieldTierIndex = 0;
   private playerEquipmentLoadToken = 0;
   private playerAttackSequence = 0;
   private playerLoadToken = 0;
@@ -533,9 +529,8 @@ export class SceneManager {
     }
     this.playerRenderKey = renderKey;
     if (!renderKey) {
-      this.playerEquipmentUpgrades = NO_EQUIPMENT_UPGRADES;
-      this.playerWeaponTierIndex = -1;
-      this.playerShieldTierIndex = -1;
+      this.playerWeaponTierIndex = 0;
+      this.playerShieldTierIndex = 0;
       this.playerAttackSequence = 0;
     }
     this.playerLoadToken += 1;
@@ -547,7 +542,6 @@ export class SceneManager {
     }
     const projectileKind = playerProjectileKind(
       renderKey,
-      this.playerEquipmentUpgrades,
       this.playerWeaponTierIndex,
     );
     if (projectileKind) {
@@ -556,40 +550,9 @@ export class SceneManager {
     void this.installPlayerModel(renderKey, this.playerLoadToken);
   }
 
-  setPlayerEquipmentUpgradeLevels(
-    upgrades: PlayerEquipmentUpgradeLevels,
-  ): void {
-    const normalized = {
-      sharpened: Math.max(0, upgrades.sharpened),
-      armoured: Math.max(0, upgrades.armoured),
-    };
-    if (
-      normalized.sharpened === this.playerEquipmentUpgrades.sharpened &&
-      normalized.armoured === this.playerEquipmentUpgrades.armoured
-    ) {
-      return;
-    }
-    this.playerEquipmentUpgrades = normalized;
-    const projectileKind = playerProjectileKind(
-      this.playerRenderKey,
-      this.playerEquipmentUpgrades,
-      this.playerWeaponTierIndex,
-    );
-    if (projectileKind) {
-      void this.prepareProjectilePool(projectileKind);
-    }
-    if (this.playerModel && this.playerRenderKey) {
-      void this.installPlayerEquipmentLoadout(
-        this.playerModel,
-        this.playerRenderKey,
-        this.playerLoadToken,
-      );
-    }
-  }
-
   setPlayerWeaponTiers(weaponIndex: number, shieldIndex: number): void {
-    const weaponTierIndex = Math.max(-1, weaponIndex);
-    const shieldTierIndex = Math.max(-1, shieldIndex);
+    const weaponTierIndex = Math.max(0, weaponIndex);
+    const shieldTierIndex = Math.max(0, shieldIndex);
     if (
       weaponTierIndex === this.playerWeaponTierIndex &&
       shieldTierIndex === this.playerShieldTierIndex
@@ -600,7 +563,6 @@ export class SceneManager {
     this.playerShieldTierIndex = shieldTierIndex;
     const projectileKind = playerProjectileKind(
       this.playerRenderKey,
-      this.playerEquipmentUpgrades,
       this.playerWeaponTierIndex,
     );
     if (projectileKind) {
@@ -645,7 +607,7 @@ export class SceneManager {
       this.playerRenderKey,
       this.playerClips,
       this.playerAttackSequence,
-      this.playerEquipmentUpgrades.sharpened,
+      this.playerWeaponTierIndex,
     );
     this.playerAttackSequence += 1;
     this.playPlayerOneShot(clip, 'attack');
@@ -2602,7 +2564,6 @@ export class SceneManager {
     this.removePlayerEquipment();
     const loadout = playerEquipmentLoadout(
       key,
-      this.playerEquipmentUpgrades,
       this.playerWeaponTierIndex,
       this.playerShieldTierIndex,
     );
@@ -2831,7 +2792,6 @@ export class SceneManager {
   private launchPlayerProjectile(target: Group): void {
     const kind = playerProjectileKind(
       this.playerRenderKey,
-      this.playerEquipmentUpgrades,
       this.playerWeaponTierIndex,
     );
     if (!kind) {

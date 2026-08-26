@@ -3,6 +3,7 @@ import {
   PLAYER_RENDER_KEYS,
   type PlayerRenderKey,
 } from '../game/definitions/classes';
+import { PLAYER_WEAPON_PROGRESSION } from '../game/definitions/playerWeaponProgression';
 import {
   loadGltfScene,
   loadRigMediumClips,
@@ -80,12 +81,18 @@ export function playerAttackClip(
   key: PlayerRenderKey | null | undefined,
   clips: PlayerClipMap,
   sequenceIndex = 0,
-  sharpenedLevel = 0,
+  weaponTierIndex = 0,
 ) {
-  if (key === 'ranger' && sharpenedLevel > 0) {
-    return sharpenedLevel === 1
-      ? clips.ranged1HShoot
-      : clips.ranged2HShoot;
+  if (key === 'ranger') {
+    const ladder = PLAYER_WEAPON_PROGRESSION.ranger;
+    const index = Math.max(0, Math.min(weaponTierIndex, ladder.length - 1));
+    const weaponId = ladder[index]!;
+    if (weaponId === 'crossbow1H') {
+      return clips.ranged1HShoot;
+    }
+    if (weaponId === 'crossbow2H') {
+      return clips.ranged2HShoot;
+    }
   }
   const choices = key ? PLAYER_ATTACK_CLIPS[key] : undefined;
   if (!choices || choices.length === 0) {

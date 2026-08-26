@@ -15,7 +15,6 @@ import {
   avoidanceOverrideFromSearch,
 } from './encounters';
 import {
-  getPlayerClassDefinition,
   PLAYER_CLASS_IDS,
   type PlayerClassId,
 } from './definitions/classes';
@@ -48,10 +47,6 @@ import {
   preloadCharacterSelectionBackgroundAssets,
   preloadClassGameplayAssets,
 } from '../rendering/preloadAssets';
-import {
-  equipmentUpgradeLevelsFromAttributes,
-  NO_EQUIPMENT_UPGRADES,
-} from '../rendering/playerEquipment';
 import { SceneManager } from '../rendering/SceneManager';
 import { reportRunDeath } from '../telemetry/runDeath';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
@@ -715,26 +710,9 @@ export class Game {
     this.scene.refreshHighlights(this.state.getBoardSnapshot(), { interactive });
   }
 
-  private syncPlayerEquipmentVisuals(): void {
-    const player = this.state.getPlayerSnapshot();
-    if (!player) {
-      this.scene.setPlayerEquipmentUpgradeLevels(NO_EQUIPMENT_UPGRADES);
-      return;
-    }
-    const starting = getPlayerClassDefinition(player.classId).startingStats;
-    this.scene.setPlayerEquipmentUpgradeLevels(
-      equipmentUpgradeLevelsFromAttributes(
-        player.renderKey,
-        player.stats,
-        starting,
-      ),
-    );
-  }
-
   private updateHud(): void {
     this.hud.update(this.state.getHudSnapshot());
     const shopView = this.state.getShopView();
-    this.syncPlayerEquipmentVisuals();
     this.scene.setPlayerWeaponTiers(
       this.state.weaponTierIndex,
       this.state.shieldTierIndex,

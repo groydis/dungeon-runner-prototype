@@ -15,12 +15,14 @@ export class ShopOverlayView {
   private readonly weaponButton: HTMLButtonElement;
   private readonly weaponClassEl: HTMLElement;
   private readonly weaponTitleEl: HTMLElement;
+  private readonly weaponCurrentEl: HTMLElement;
   private readonly weaponDescEl: HTMLElement;
   private readonly weaponStatsEl: HTMLElement;
   private readonly weaponCostEl: HTMLElement;
   private readonly weaponReasonEl: HTMLElement;
   private readonly shieldButton: HTMLButtonElement;
   private readonly shieldTitleEl: HTMLElement;
+  private readonly shieldCurrentEl: HTMLElement;
   private readonly shieldDescEl: HTMLElement;
   private readonly shieldStatsEl: HTMLElement;
   private readonly shieldCostEl: HTMLElement;
@@ -48,6 +50,7 @@ export class ShopOverlayView {
     ) as HTMLButtonElement;
     this.weaponClassEl = requireElement(root, '#shop-weapon-class');
     this.weaponTitleEl = requireElement(root, '#shop-weapon-title');
+    this.weaponCurrentEl = requireElement(root, '#shop-weapon-current');
     this.weaponDescEl = requireElement(root, '#shop-weapon-desc');
     this.weaponStatsEl = requireElement(root, '#shop-weapon-stats');
     this.weaponCostEl = requireElement(root, '#shop-weapon-cost');
@@ -57,6 +60,7 @@ export class ShopOverlayView {
       '#shop-shield-upgrade',
     ) as HTMLButtonElement;
     this.shieldTitleEl = requireElement(root, '#shop-shield-title');
+    this.shieldCurrentEl = requireElement(root, '#shop-shield-current');
     this.shieldDescEl = requireElement(root, '#shop-shield-desc');
     this.shieldStatsEl = requireElement(root, '#shop-shield-stats');
     this.shieldCostEl = requireElement(root, '#shop-shield-cost');
@@ -153,6 +157,7 @@ export class ShopOverlayView {
     }
     this.weaponClassEl.textContent = `${offer.classId.toUpperCase()} WEAPON`;
     this.weaponTitleEl.textContent = offer.title;
+    this.weaponCurrentEl.textContent = `Equipped: ${offer.currentTitle}`;
     this.weaponDescEl.textContent = offer.description;
     this.weaponStatsEl.textContent = offer.statLine;
     this.weaponCostEl.textContent = `${offer.cost} G`;
@@ -172,6 +177,7 @@ export class ShopOverlayView {
       return;
     }
     this.shieldTitleEl.textContent = offer.title;
+    this.shieldCurrentEl.textContent = `Equipped: ${offer.currentTitle}`;
     this.shieldDescEl.textContent = offer.description;
     this.shieldStatsEl.textContent = offer.statLine;
     this.shieldCostEl.textContent = `${offer.cost} G`;

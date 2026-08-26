@@ -95,8 +95,8 @@ describe('Merchant potion purchases', () => {
       new Merchant('m-14', 14, 1),
       player.gold,
       player.classId,
-      -1,
-      -1,
+      0,
+      0,
       player.stats.health,
       player.stats.maxHealth,
     );
@@ -111,8 +111,8 @@ describe('Merchant potion purchases', () => {
       new Merchant('m-42', 42, 1),
       player.gold,
       player.classId,
-      -1,
-      -1,
+      0,
+      0,
       player.stats.health,
       player.stats.maxHealth,
     );

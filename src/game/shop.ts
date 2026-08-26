@@ -2,17 +2,20 @@ import { type Merchant } from './Merchant';
 import { type PlayerClassId } from './definitions/classes';
 import {
   KNIGHT_SHIELD_PROGRESSION,
-  KNIGHT_SHIELD_TIER_FLAVOUR,
-  KNIGHT_SHIELD_TIER_NAMES,
   PLAYER_WEAPON_PROGRESSION,
-  PLAYER_WEAPON_TIER_FLAVOUR,
-  PLAYER_WEAPON_TIER_NAMES,
   isShieldLadderComplete,
   isWeaponLadderComplete,
   nextWeaponTierIndex,
   shieldCatalogEntry,
+  shieldTierBonus,
+  shieldTierCost,
+  shieldTierDisplayName,
+  shieldTierFlavour,
   weaponCatalogEntry,
+  weaponTierBonus,
   weaponTierCost,
+  weaponTierDisplayName,
+  weaponTierFlavour,
 } from './definitions/playerWeaponProgression';
 import {
   MERCHANT_POTION_CATALOG,
@@ -50,6 +53,7 @@ export interface ShopWeaponOfferView {
   weaponId: string;
   title: string;
   description: string;
+  currentTitle: string;
   statLine: string;
   classId: PlayerClassId;
   cost: number;
@@ -64,6 +68,7 @@ export interface ShopShieldOfferView {
   shieldId: string;
   title: string;
   description: string;
+  currentTitle: string;
   statLine: string;
   cost: number;
   tierIndex: number;
@@ -189,7 +194,7 @@ export function evaluateShieldOffer(
     return { available: false, reason: 'owned' };
   }
   const nextIndex = nextWeaponTierIndex(shieldTierIndex);
-  if (gold < weaponTierCost(nextIndex)) {
+  if (gold < shieldTierCost(nextIndex)) {
     return { available: false, reason: 'unaffordable' };
   }
   return { available: true };
@@ -212,18 +217,19 @@ export function applyWeaponTierPurchase(
   }
   const nextIndex = nextWeaponTierIndex(weaponTierIndex);
   const weaponId = PLAYER_WEAPON_PROGRESSION[classId][nextIndex]!;
-  const weapon = weaponCatalogEntry(weaponId);
+  weaponCatalogEntry(weaponId); // validate catalog id / asset exists
   const cost = weaponTierCost(nextIndex);
-  const title = PLAYER_WEAPON_TIER_NAMES[classId][nextIndex] ?? weaponId;
+  const bonus = weaponTierBonus(nextIndex);
+  const title = weaponTierDisplayName(classId, nextIndex);
   return {
     success: true,
     offerId: 'weaponUpgrade',
     weaponId,
     goldRemaining: gold - cost,
     goldSpent: cost,
-    attackBonus: weapon.attackBonus,
+    attackBonus: bonus,
     defenceBonus: 0,
-    status: `You equip ${title}. +${weapon.attackBonus} ATK.`,
+    status: `You equip ${title}. +${bonus} ATK.`,
   };
 }
 
@@ -238,9 +244,10 @@ export function applyShieldTierPurchase(
   }
   const nextIndex = nextWeaponTierIndex(shieldTierIndex);
   const shieldId = KNIGHT_SHIELD_PROGRESSION[nextIndex]!;
-  const shield = shieldCatalogEntry(shieldId);
-  const cost = weaponTierCost(nextIndex);
-  const title = KNIGHT_SHIELD_TIER_NAMES[nextIndex] ?? shieldId;
+  shieldCatalogEntry(shieldId); // validate catalog id / asset exists
+  const cost = shieldTierCost(nextIndex);
+  const bonus = shieldTierBonus(nextIndex);
+  const title = shieldTierDisplayName(nextIndex);
   return {
     success: true,
     offerId: 'shieldUpgrade',
@@ -248,8 +255,8 @@ export function applyShieldTierPurchase(
     goldRemaining: gold - cost,
     goldSpent: cost,
     attackBonus: 0,
-    defenceBonus: shield.defenceBonus,
-    status: `You equip ${title}. +${shield.defenceBonus} DEF.`,
+    defenceBonus: bonus,
+    status: `You equip ${title}. +${bonus} DEF.`,
   };
 }
 
@@ -354,6 +361,24 @@ function buildPotionOfferView(
   };
 }
 
+function attackDeltaLine(currentBonus: number, nextBonus: number): string {
+  const delta = nextBonus - currentBonus;
+  if (delta === 0) {
+    return `+${nextBonus} ATK`;
+  }
+  const sign = delta > 0 ? '+' : '';
+  return `${sign}${delta} ATK → +${nextBonus}`;
+}
+
+function defenceDeltaLine(currentBonus: number, nextBonus: number): string {
+  const delta = nextBonus - currentBonus;
+  if (delta === 0) {
+    return `+${nextBonus} DEF`;
+  }
+  const sign = delta > 0 ? '+' : '';
+  return `${sign}${delta} DEF → +${nextBonus}`;
+}
+
 function buildWeaponOfferView(
   merchant: Merchant,
   classId: PlayerClassId,
@@ -361,12 +386,13 @@ function buildWeaponOfferView(
   weaponTierIndex: number,
 ): ShopWeaponOfferView {
   const ladder = PLAYER_WEAPON_PROGRESSION[classId];
+  const currentIndex = Math.max(0, Math.min(weaponTierIndex, ladder.length - 1));
   const complete = isWeaponLadderComplete(classId, weaponTierIndex);
   const displayIndex = complete
     ? ladder.length - 1
     : nextWeaponTierIndex(weaponTierIndex);
   const weaponId = ladder[displayIndex]!;
-  const weapon = weaponCatalogEntry(weaponId);
+  weaponCatalogEntry(weaponId);
   const evaluation = evaluateWeaponOffer(
     merchant,
     classId,
@@ -376,11 +402,13 @@ function buildWeaponOfferView(
   return {
     id: 'weaponUpgrade',
     weaponId,
-    title: PLAYER_WEAPON_TIER_NAMES[classId][displayIndex] ?? weaponId,
-    description:
-      PLAYER_WEAPON_TIER_FLAVOUR[classId][displayIndex] ??
-      'A hard-won upgrade.',
-    statLine: `+${weapon.attackBonus} ATK`,
+    title: weaponTierDisplayName(classId, displayIndex),
+    description: weaponTierFlavour(classId, displayIndex),
+    currentTitle: weaponTierDisplayName(classId, currentIndex),
+    statLine: attackDeltaLine(
+      weaponTierBonus(currentIndex),
+      weaponTierBonus(displayIndex),
+    ),
     classId,
     cost: weaponTierCost(displayIndex),
     tierIndex: displayIndex,
@@ -397,21 +425,28 @@ function buildShieldOfferView(
   gold: number,
   shieldTierIndex: number,
 ): ShopShieldOfferView {
+  const currentIndex = Math.max(
+    0,
+    Math.min(shieldTierIndex, KNIGHT_SHIELD_PROGRESSION.length - 1),
+  );
   const complete = isShieldLadderComplete(shieldTierIndex);
   const displayIndex = complete
     ? KNIGHT_SHIELD_PROGRESSION.length - 1
     : nextWeaponTierIndex(shieldTierIndex);
   const shieldId = KNIGHT_SHIELD_PROGRESSION[displayIndex]!;
-  const shield = shieldCatalogEntry(shieldId);
+  shieldCatalogEntry(shieldId);
   const evaluation = evaluateShieldOffer(merchant, gold, shieldTierIndex);
   return {
     id: 'shieldUpgrade',
     shieldId,
-    title: KNIGHT_SHIELD_TIER_NAMES[displayIndex] ?? shieldId,
-    description:
-      KNIGHT_SHIELD_TIER_FLAVOUR[displayIndex] ?? 'A hard-won upgrade.',
-    statLine: `+${shield.defenceBonus} DEF`,
-    cost: weaponTierCost(displayIndex),
+    title: shieldTierDisplayName(displayIndex),
+    description: shieldTierFlavour(displayIndex),
+    currentTitle: shieldTierDisplayName(currentIndex),
+    statLine: defenceDeltaLine(
+      shieldTierBonus(currentIndex),
+      shieldTierBonus(displayIndex),
+    ),
+    cost: shieldTierCost(displayIndex),
     tierIndex: displayIndex,
     available: evaluation.available,
     reason: evaluation.reason,

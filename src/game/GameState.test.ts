@@ -29,7 +29,7 @@ import {
 import { evadeHudText } from '../ui/HudView';
 import {
   PLAYER_WEAPON_PROGRESSION,
-  weaponCatalogEntry,
+  weaponTierBonus,
   weaponTierCost,
 } from './definitions/playerWeaponProgression';
 
@@ -1239,16 +1239,17 @@ describe('player class selection', () => {
 
     walkTo(state, 13, 1);
     state.resolveCompletedMove(shopColAt(state, 14));
-    const weaponId = PLAYER_WEAPON_PROGRESSION.ranger[0]!;
-    const weapon = weaponCatalogEntry(weaponId);
-    const cost = weaponTierCost(0);
+    const weaponId = PLAYER_WEAPON_PROGRESSION.ranger[1]!;
+    const cost = weaponTierCost(1);
+    const bonus = weaponTierBonus(1);
     expect(state.getShopView()?.weaponOffer?.cost).toBe(cost);
+    expect(state.getShopView()?.weaponOffer?.weaponId).toBe(weaponId);
     state.addGold(cost);
     expect(state.buyWeaponTier().success).toBe(true);
     // Level-up auto +1 STR/+1 DEX (+2 ATK); free points went to DEF;
-    // first weapon tier adds catalog attackBonus.
+    // first purchasable weapon tier adds flat index-driven ATK bonus.
     expect(playerOf(state).stats.attack).toBe(
-      getPlayerClassDefinition('ranger').startingStats.attack + 2 + weapon.attackBonus,
+      getPlayerClassDefinition('ranger').startingStats.attack + 2 + bonus,
     );
 
     const knight = getPlayerClassDefinition('knight');

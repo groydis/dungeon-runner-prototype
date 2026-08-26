@@ -180,91 +180,6 @@ const LEFT_HAND_DEFAULT = {
   scale: 1,
 } as const;
 
-export interface PlayerEquipmentUpgradeLevels {
-  readonly sharpened: number;
-  readonly armoured: number;
-}
-
-export const NO_EQUIPMENT_UPGRADES: PlayerEquipmentUpgradeLevels = {
-  sharpened: 0,
-  armoured: 0,
-};
-
-const KNIGHT_SHIELD_TIERS: readonly PlayerEquipmentAssetKey[] = [
-  'shieldBadge',
-  'shieldBadgeColor',
-  'shieldRound',
-  'shieldRoundBarbarian',
-  'shieldRoundColor',
-  'shieldSquare',
-  'shieldSquareColor',
-  'shieldSpikes',
-  'shieldSpikesColor',
-];
-
-/** Max weapon visual tiers (0-based index) driven by primary-attribute growth. */
-function maxWeaponTier(classId: PlayerRenderKey): number {
-  switch (classId) {
-    case 'rogue':
-      return 1;
-    case 'ranger':
-    case 'mage':
-    case 'lorekeeper':
-    case 'barbarian':
-      return 2;
-    case 'knight':
-      return 0;
-  }
-}
-
-/**
- * Cosmetic weapon/shield tiers from attribute growth vs class starting values.
- * Weapon: +1 tier per +3 in primary damage attr (dex for mage, str otherwise).
- * Armour: +1 tier per +2 DEF growth, capped at knight shield tiers.
- */
-export function equipmentUpgradeLevelsFromAttributes(
-  classId: PlayerRenderKey,
-  current: Readonly<{ str: number; dex: number; defence: number }>,
-  starting: Readonly<{ str: number; dex: number; defence: number }>,
-): PlayerEquipmentUpgradeLevels {
-  const primaryGrowth =
-    classId === 'mage'
-      ? current.dex - starting.dex
-      : current.str - starting.str;
-  const defenceGrowth = current.defence - starting.defence;
-  return {
-    sharpened: Math.min(
-      maxWeaponTier(classId),
-      Math.max(0, Math.floor(primaryGrowth / 3)),
-    ),
-    armoured: Math.min(
-      KNIGHT_SHIELD_TIERS.length - 1,
-      Math.max(0, Math.floor(defenceGrowth / 2)),
-    ),
-  };
-}
-
-/** Visual equipment only; these entries never alter combat stats or game rules. */
-export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
-  Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>
-> = {
-  rogue: [{ assetKey: 'dagger', ...RIGHT_HAND_DEFAULT }],
-  ranger: [{ assetKey: 'bowWithString', ...RIGHT_HAND_DEFAULT }],
-  mage: [{ assetKey: 'staff', ...RIGHT_HAND_DEFAULT }],
-  knight: [
-    { assetKey: 'sword1H', ...RIGHT_HAND_DEFAULT },
-    {
-      assetKey: 'shieldBadge',
-      mount: 'handslot.l',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: 1,
-    },
-  ],
-  barbarian: [{ assetKey: 'axe2H', ...RIGHT_HAND_DEFAULT }],
-  lorekeeper: [{ assetKey: 'staff', ...RIGHT_HAND_DEFAULT }],
-};
-
 export function isPlayerEquipmentAssetKey(
   value: string,
 ): value is PlayerEquipmentAssetKey {
@@ -275,12 +190,13 @@ export function playerEquipmentUrl(assetKey: PlayerEquipmentAssetKey): string {
   return PLAYER_EQUIPMENT_URLS[assetKey];
 }
 
-function purchasedWeaponVisual(
+function weaponVisual(
   key: PlayerRenderKey,
   weaponTierIndex: number,
 ): PlayerEquipmentVisual {
-  const weaponId = PLAYER_WEAPON_PROGRESSION[key][weaponTierIndex]!;
-  const assetKey = weaponCatalogEntry(weaponId).assetKey;
+  const ladder = PLAYER_WEAPON_PROGRESSION[key];
+  const index = Math.max(0, Math.min(weaponTierIndex, ladder.length - 1));
+  const assetKey = weaponCatalogEntry(ladder[index]!).assetKey;
   if (key === 'ranger' && assetKey === 'bowWithString') {
     return {
       assetKey,
@@ -293,106 +209,60 @@ function purchasedWeaponVisual(
   return { assetKey, ...RIGHT_HAND_DEFAULT };
 }
 
-function purchasedShieldVisual(shieldTierIndex: number): PlayerEquipmentVisual {
-  const shieldId = KNIGHT_SHIELD_PROGRESSION[shieldTierIndex]!;
+function shieldVisual(shieldTierIndex: number): PlayerEquipmentVisual {
+  const index = Math.max(
+    0,
+    Math.min(shieldTierIndex, KNIGHT_SHIELD_PROGRESSION.length - 1),
+  );
   return {
-    assetKey: shieldCatalogEntry(shieldId).assetKey,
+    assetKey: shieldCatalogEntry(KNIGHT_SHIELD_PROGRESSION[index]!).assetKey,
     ...LEFT_HAND_DEFAULT,
   };
 }
 
+/**
+ * Visual equipment from the in-run weapon/shield ladder.
+ * Index 0 is the free starter for each class.
+ */
 export function playerEquipmentLoadout(
   key: PlayerRenderKey | null | undefined,
-  upgrades: PlayerEquipmentUpgradeLevels = NO_EQUIPMENT_UPGRADES,
-  weaponTierIndex = -1,
-  shieldTierIndex = -1,
+  weaponTierIndex = 0,
+  shieldTierIndex = 0,
 ): readonly PlayerEquipmentVisual[] {
   if (!key) {
     return [];
   }
-  if (weaponTierIndex >= 0) {
-    const loadout: PlayerEquipmentVisual[] = [
-      purchasedWeaponVisual(key, weaponTierIndex),
-    ];
-    if (key === 'knight') {
-      loadout.push(
-        shieldTierIndex >= 0
-          ? purchasedShieldVisual(shieldTierIndex)
-          : {
-              assetKey: 'shieldBadge',
-              ...LEFT_HAND_DEFAULT,
-            },
-      );
-    }
-    return loadout;
-  }
-  const sharpened = Math.max(0, upgrades.sharpened);
-  const armoured = Math.max(0, upgrades.armoured);
-  if (key === 'rogue') {
-    return [
-      {
-        assetKey: sharpened > 0 ? 'axe1H' : 'dagger',
-        ...RIGHT_HAND_DEFAULT,
-      },
-    ];
-  }
-  if (key === 'ranger') {
-    const assetKey =
-      sharpened === 0
-        ? 'bowWithString'
-        : sharpened === 1
-          ? 'crossbow1H'
-          : 'crossbow2H';
-    return [{ assetKey, ...RIGHT_HAND_DEFAULT }];
-  }
-  if (key === 'mage' || key === 'lorekeeper') {
-    const loadout: PlayerEquipmentVisual[] = [
-      {
-        assetKey: sharpened > 0 ? 'wand' : 'staff',
-        ...RIGHT_HAND_DEFAULT,
-      },
-    ];
-    if (sharpened > 0) {
-      loadout.push({
-        assetKey: sharpened > 1 ? 'spellbookOpen' : 'spellbookClosed',
-        ...LEFT_HAND_DEFAULT,
-      });
-    }
-    return loadout;
-  }
+  const loadout: PlayerEquipmentVisual[] = [
+    weaponVisual(key, weaponTierIndex),
+  ];
   if (key === 'knight') {
-    return [
-      { assetKey: 'sword1H', ...RIGHT_HAND_DEFAULT },
-      {
-        assetKey: KNIGHT_SHIELD_TIERS[
-          Math.min(armoured, KNIGHT_SHIELD_TIERS.length - 1)
-        ],
-        ...LEFT_HAND_DEFAULT,
-      },
-    ];
+    loadout.push(shieldVisual(shieldTierIndex));
   }
-  const assetKey =
-    sharpened === 0
-      ? 'axe2H'
-      : sharpened === 1
-        ? 'sword2H'
-        : 'sword2HColor';
-  return [{ assetKey, ...RIGHT_HAND_DEFAULT }];
+  return loadout;
 }
+
+/** Starter loadouts = progression index 0 (and knight shield index 0). */
+export const PLAYER_EQUIPMENT_LOADOUTS: Readonly<
+  Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>
+> = Object.freeze(
+  Object.fromEntries(
+    PLAYER_RENDER_KEYS.map((key) => [key, playerEquipmentLoadout(key, 0, 0)]),
+  ) as Record<PlayerRenderKey, readonly PlayerEquipmentVisual[]>,
+);
 
 export function playerProjectileKind(
   key: PlayerRenderKey | null | undefined,
-  upgrades: PlayerEquipmentUpgradeLevels = NO_EQUIPMENT_UPGRADES,
-  weaponTierIndex = -1,
+  weaponTierIndex = 0,
 ): 'bow' | 'crossbow' | undefined {
   if (key !== 'ranger') {
     return undefined;
   }
-  if (weaponTierIndex >= 0) {
-    const weaponId = PLAYER_WEAPON_PROGRESSION.ranger[weaponTierIndex];
-    return weaponId === 'bowWithString' ? 'bow' : 'crossbow';
-  }
-  return upgrades.sharpened > 0 ? 'crossbow' : 'bow';
+  const ladder = PLAYER_WEAPON_PROGRESSION.ranger;
+  const index = Math.max(0, Math.min(weaponTierIndex, ladder.length - 1));
+  const weaponId = ladder[index]!;
+  return weaponId === 'crossbow1H' || weaponId === 'crossbow2H'
+    ? 'crossbow'
+    : 'bow';
 }
 
 export function loadPlayerEquipmentTemplate(
@@ -411,6 +281,6 @@ export function playerEquipmentMountNames(
 
 export function playerRenderKeysWithoutEquipment(): PlayerRenderKey[] {
   return PLAYER_RENDER_KEYS.filter(
-    (key) => PLAYER_EQUIPMENT_LOADOUTS[key].length === 0,
+    (key) => playerEquipmentLoadout(key).length === 0,
   );
 }

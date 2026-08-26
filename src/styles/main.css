@@ -715,6 +715,12 @@ body {
   font-weight: 700;
 }
 
+.shop-special-current {
+  color: #9a9084;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
 .shop-special-desc {
   color: #bdb3a6;
   font-size: 0.78rem;
@@ -780,6 +786,11 @@ body {
 .shop-special-offer:disabled {
   opacity: 0.68;
   cursor: not-allowed;
+}
+
+.shop-special-offer[hidden],
+.shop-potion-offer[hidden] {
+  display: none;
 }
 
 .shop-special-offer + .shop-section-title,

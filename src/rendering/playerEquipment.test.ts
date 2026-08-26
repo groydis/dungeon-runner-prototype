@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getPlayerClassDefinition, PLAYER_RENDER_KEYS } from '../game/definitions/classes';
+import { PLAYER_RENDER_KEYS } from '../game/definitions/classes';
 import { GameState } from '../game/GameState';
 import {
-  NO_EQUIPMENT_UPGRADES,
   PLAYER_EQUIPMENT_LOADOUTS,
   PLAYER_EQUIPMENT_URLS,
-  equipmentUpgradeLevelsFromAttributes,
   isPlayerEquipmentAssetKey,
   playerEquipmentLoadout,
   playerEquipmentMountNames,
@@ -53,112 +51,25 @@ describe('player equipment registry', () => {
     }
   });
 
-  it('maps attribute-growth upgrade levels to visible equipment tiers', () => {
-    expect(
-      playerEquipmentLoadout('rogue', { sharpened: 1, armoured: 0 }).map(
-        (visual) => visual.assetKey,
-      ),
-    ).toEqual(['axe1H']);
-    expect(
-      playerEquipmentLoadout('ranger', { sharpened: 1, armoured: 0 })[0]
-        ?.assetKey,
-    ).toBe('crossbow1H');
-    expect(
-      playerEquipmentLoadout('ranger', { sharpened: 2, armoured: 0 })[0]
-        ?.assetKey,
-    ).toBe('crossbow2H');
-    expect(
-      playerEquipmentLoadout('mage', { sharpened: 2, armoured: 0 }).map(
-        (visual) => visual.assetKey,
-      ),
-    ).toEqual(['wand', 'spellbookOpen']);
-    expect(
-      playerEquipmentLoadout('lorekeeper', { sharpened: 2, armoured: 0 }).map(
-        (visual) => visual.assetKey,
-      ),
-    ).toEqual(['wand', 'spellbookOpen']);
-    expect(
-      playerEquipmentLoadout('barbarian', { sharpened: 2, armoured: 0 })[0]
-        ?.assetKey,
-    ).toBe('sword2HColor');
-    expect(
-      playerEquipmentLoadout('knight', { sharpened: 0, armoured: 8 }).map(
-        (visual) => visual.assetKey,
-      ),
-    ).toEqual(['sword1H', 'shieldSpikesColor']);
-  });
-
-  it('derives upgrade tiers from primary-attr and DEF growth', () => {
-    const rangerStart = getPlayerClassDefinition('ranger').startingStats;
-    expect(
-      equipmentUpgradeLevelsFromAttributes('ranger', rangerStart, rangerStart),
-    ).toEqual({ sharpened: 0, armoured: 0 });
-    expect(
-      equipmentUpgradeLevelsFromAttributes(
-        'ranger',
-        { ...rangerStart, str: rangerStart.str + 3 },
-        rangerStart,
-      ),
-    ).toEqual({ sharpened: 1, armoured: 0 });
-    expect(
-      equipmentUpgradeLevelsFromAttributes(
-        'ranger',
-        { ...rangerStart, str: rangerStart.str + 6 },
-        rangerStart,
-      ),
-    ).toEqual({ sharpened: 2, armoured: 0 });
-    expect(
-      equipmentUpgradeLevelsFromAttributes(
-        'ranger',
-        { ...rangerStart, str: rangerStart.str + 9 },
-        rangerStart,
-      ),
-    ).toEqual({ sharpened: 2, armoured: 0 });
-
-    const mageStart = getPlayerClassDefinition('mage').startingStats;
-    expect(
-      equipmentUpgradeLevelsFromAttributes(
-        'mage',
-        { ...mageStart, dex: mageStart.dex + 6, str: mageStart.str + 9 },
-        mageStart,
-      ),
-    ).toEqual({ sharpened: 2, armoured: 0 });
-
-    const knightStart = getPlayerClassDefinition('knight').startingStats;
-    expect(
-      equipmentUpgradeLevelsFromAttributes(
-        'knight',
-        {
-          ...knightStart,
-          str: knightStart.str + 9,
-          defence: knightStart.defence + 16,
-        },
-        knightStart,
-      ),
-    ).toEqual({ sharpened: 0, armoured: 8 });
-  });
-
   it('resolves purchased weapon tiers into catalog asset keys', () => {
     expect(
-      playerEquipmentLoadout('rogue', NO_EQUIPMENT_UPGRADES, 0).map(
-        (visual) => visual.assetKey,
-      ),
+      playerEquipmentLoadout('rogue', 0).map((visual) => visual.assetKey),
     ).toEqual(['dagger']);
     expect(
-      playerEquipmentLoadout('ranger', NO_EQUIPMENT_UPGRADES, 2).map(
-        (visual) => visual.assetKey,
-      ),
+      playerEquipmentLoadout('rogue', 3).map((visual) => visual.assetKey),
+    ).toEqual(['fantasyDaggerC']);
+    expect(
+      playerEquipmentLoadout('ranger', 5).map((visual) => visual.assetKey),
     ).toEqual(['crossbow2H']);
     expect(
-      playerEquipmentLoadout('knight', NO_EQUIPMENT_UPGRADES, 1, 3).map(
-        (visual) => visual.assetKey,
-      ),
-    ).toEqual(['sword2H', 'fantasyShieldD']);
+      playerEquipmentLoadout('knight', 1, 3).map((visual) => visual.assetKey),
+    ).toEqual(['fantasySwordA', 'shieldSpikesColor']);
     expect(
-      playerEquipmentLoadout('barbarian', NO_EQUIPMENT_UPGRADES, 2).map(
-        (visual) => visual.assetKey,
-      ),
+      playerEquipmentLoadout('barbarian', 6).map((visual) => visual.assetKey),
     ).toEqual(['fantasyHammerD']);
+    expect(
+      playerEquipmentLoadout('mage', 7).map((visual) => visual.assetKey),
+    ).toEqual(['fantasyWandA']);
   });
 
   it('supports both authored hand slots and gives every class equipment', () => {

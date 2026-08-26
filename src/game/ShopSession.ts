@@ -25,8 +25,8 @@ import {
  */
 export class ShopSession {
   private active: ActiveShop | null = null;
-  private weaponTierIndex = -1;
-  private shieldTierIndex = -1;
+  private weaponTierIndex = 0;
+  private shieldTierIndex = 0;
 
   get isOpen(): boolean {
     return this.active !== null;
@@ -55,8 +55,8 @@ export class ShopSession {
 
   reset(): void {
     this.active = null;
-    this.weaponTierIndex = -1;
-    this.shieldTierIndex = -1;
+    this.weaponTierIndex = 0;
+    this.shieldTierIndex = 0;
   }
 
   getShopView(player: Player | null): ShopView | null {
