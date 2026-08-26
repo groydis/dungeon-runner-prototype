@@ -1421,7 +1421,7 @@ describe('board snapshots and no-class APIs', () => {
     const before = state.getBoardSnapshot();
     expect(before.originRow).toBe(0);
     expect(before.rows.map((row) => row.row)).toEqual([
-      -1, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+      -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     ]);
     expect(tileAt(before, -1, 1)?.content.type).toBe('empty');
 
@@ -1429,10 +1429,10 @@ describe('board snapshots and no-class APIs', () => {
     const after = state.getBoardSnapshot();
     expect(after.originRow).toBe(1);
     expect(after.rows.map((row) => row.row)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     ]);
     expect(after.rows.filter((row) => row.row < after.playerRow)).toHaveLength(1);
-    expect(after.rows.filter((row) => row.row > after.playerRow)).toHaveLength(8);
+    expect(after.rows.filter((row) => row.row > after.playerRow)).toHaveLength(15);
   });
 
   it('clears stale world entities when a class is reselected', () => {
@@ -1738,4 +1738,3 @@ function summarizeEncounters(encounters: EncounterEvent[]) {
       : { kind: event.kind, approach: event.approach, monsterId: event.monster.id },
   );
 }
-

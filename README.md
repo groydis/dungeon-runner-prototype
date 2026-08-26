@@ -49,8 +49,8 @@ Included:
 - A full-screen **Choose Your Class** carousel with animated KayKit model previews; board input stays locked until a class is selected
 - HUD with class name (`CLASS: Rogue`), distance, level, XP, gold, attack, evade (`EVA: 6`, no `%`), HP text/bar, and status
 - Run-scoped XP and a four-choice level-up overlay
-- A rare Travelling Merchant shop overlay with an animated Hoarder portrait, speech bubble, gold purse, class equipment product preview, healing-potion shelf with GLB previews, and compact two-column upgrade inventory
-- One-time class equipment offers from KayKit Fantasy Weapons Bits: each class sees only its own named weapon/set with a live 3D product preview, receives a multi-stat bonus on purchase, and visibly equips it for the rest of that run
+- A rare Travelling Merchant shop overlay with an animated Hoarder portrait, speech bubble, gold purse, class weapon/shield previews, and a healing-potion shelf with GLB previews
+- In-run equipment ladders from the KayKit weapon catalogs: every class can advance its weapon, Knights can also advance their shield, and each purchase visibly equips the new tier
 - Death overlay; Restart Run returns to class selection without reloading the page
 - Anonymous death telemetry: player level at death is posted to a Cloudflare D1 table (no accounts, cookies, or other identifiers)
 - iOS waitlist: emails stored in the same D1 database, plus public Privacy and Support pages
@@ -59,7 +59,7 @@ Included:
 
 Not included:
 
-- Gameplay equipment, skill trees, crits, unique enemy abilities, or an inventory screen
+- Lootable equipment, skill trees, crits, unique enemy abilities, or an inventory screen
 - Damaging traps, extra trap kinds, doors, random shop stock, or meta progression
 - Authored biomes beyond the current weights
 - Environment art beyond the current simple tiles
@@ -162,7 +162,7 @@ src/
   game/
     Game.ts               Animation, input, and view/render orchestration
     GameState.ts          Single-run aggregate and public rule boundary
-    ShopSession.ts        Run-owned Merchant visit, prices, and special ownership
+    ShopSession.ts        Run-owned Merchant visit and equipment-tier progress
     presentationPhase.ts  Game.ts board-interactivity and overlay phase
     turnResults.ts        Move, trap, turn, and combat-finish result contracts
     RunWorld.ts           Grid, recipes, entities, and board snapshots
@@ -174,7 +174,7 @@ src/
     Trap.ts               Alarm Trap entity and consume state
     alarm.ts              Closest-enemy pick and one-tile advance
     Merchant.ts           Shop entity, used/purchased state
-    shop.ts               Stat-upgrade offers, escalating prices, potions, and shop views
+    shop.ts               Weapon/shield tier offers, potions, and shop views
     merchantPotions.ts    Distance-banded Merchant potion catalog and eligibility
     progression.ts        Cumulative XP thresholds and level progress
     levelUp.ts            Level-up choices, views, and Player applications
@@ -235,7 +235,7 @@ migrations/               D1 schema (run_deaths, ios_waitlist)
 
 This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 
-- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visit, upgrade price tracks, and one-time special-equipment ownership live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress. Move, trap, turn, and combat-finish result contracts live in `turnResults.ts` so presentation code can type those payloads without importing `GameState`. `GameState` still re-exports them.
+- **GameState** is the sole public run mutation boundary. Live `Player` and `Monster` instances stay private. Callers read frozen `PlayerSnapshot`, `BoardSnapshot`, HUD, and encounter views, and mutate only through typed GameState actions. Until `selectClass()` runs, movement throws `Cannot move before a class is selected`, player/board reads are empty or null, and shop APIs return a typed `noClass` result. Merchant visits and weapon/shield tier progress live on a private `ShopSession`; GameState shop methods stay thin facades and never expose the live Merchant or mutable progress. Move, trap, turn, and combat-finish result contracts live in `turnResults.ts` so presentation code can type those payloads without importing `GameState`. `GameState` still re-exports them.
 - **RunWorld** is private to GameState. It owns the mutable board: Grid, recipes, entity maps, tile materialisation, prepare/prune, lookups, alarm movement, world reset, and snapshot construction.
 - **Frozen read models** (`BoardSnapshot`, `PlayerSnapshot`, `EncounterMonsterView`) cross into UI, animation, and rendering. Combat playback correlates with entities by immutable target id; it never receives a live Monster. Enemy snapshots carry a definition-layer `EnemyRenderKey`, not an unconstrained string.
 - **Game.ts** owns overlay order, animation, and input-lock state through an explicit presentation phase. Only `idle` enables board highlights and raycast input; class selection, movement, trap, encounter, combat, drop FX, shop, level-up, and game-over all lock the board. It shows **Choose Your Class** after Play and after Restart Run, then asks GameState for a board snapshot and tells `SceneManager` whether the board is interactive. It does not store that flag on `GameState`. It consumes `finishCombat()`’s typed drop and level-up result so drop-spawn playback can finish before a level-up overlay opens. Restart and dispose bump a generation token so a stale class-preload cannot reopen the board.
@@ -247,7 +247,7 @@ This is a hybrid OOP / data-driven layout, not an ECS or event-bus design.
 - **iOS waitlist** posts `{ email }` to `/api/waitlist`. The Worker stores a normalised address in `ios_waitlist` (`INSERT OR IGNORE`, so duplicates still succeed). A filled honeypot field is discarded with the same 204. No IP is stored. Privacy and Support pages live at `/privacy` and `/support`. The class gallery lives at `/classes`.
 - **Class and enemy definitions** are deeply frozen static records. `Player.definition` and `Monster.definition` expose those read-only records; live combat stats are cloned onto instances. `?fatal=1` still overrides Skeleton Minion attack on top of the immutable base.
 - **SceneManager** remains rendering-only. It consumes board snapshots, encounter views, and one-shot FX results. It does not import `GameState`, `Player`, `Monster`, or `RunWorld`.
-- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots, derives visual weapon/shield tiers from successful Sharpened and Armoured purchases, and swaps in purchased catalog weapons/shields from the in-run weapon-upgrade ladder (`playerWeaponProgression.ts`). Equipment meshes remain presentation-only; shop rules own the attack/defence bonuses and run-scoped tier indices.
+- **Player presentation** uses KayKit Adventurers GLBs. Class definitions own a `renderKey`; frozen `PlayerSnapshot` / `BoardSnapshot` expose that key. `playerAssets.ts` maps keys to model URLs. `playerEquipment.ts` mounts class equipment on authored hand slots and swaps in purchased catalog weapons/shields from the in-run equipment ladders (`playerWeaponProgression.ts`). Equipment meshes remain presentation-only; shop rules own the attack/defence bonuses and run-scoped tier indices.
 - **Enemy presentation** maps definition-layer `EnemyRenderKey` values (currently one per `EnemyType`) to KayKit GLBs in `enemyAssets.ts`. Skeleton Mage appears from row 20 and Necromancer is a rare elite from row 60. Both use ranged presentation clips only; they still resolve with the same cardinal-plus encounter and combat rules as every other enemy. Placeholders remain as loading/failure fallbacks. Rendering stays presentation-only and does not own the key union.
 - **Shared Rig_Medium animations** live in `rigMediumAnimations.ts`. The boot carousel requests only `Idle_A` from the general bundle. General, basic movement, melee, and skeleton clips then share one background-warmed cache. Ranger, Mage, Lorekeeper, Skeleton Mage, and Necromancer add the ranged bundle only when relevant. Attacks cycle compatible variants; pickups, potion use, Knight blocks, skeleton spawns/taunts, and Necromancer resurrection/summoning use authored clips.
 - **Ranged presentation** uses a four-object KayKit arrow pool. Ranger bow and crossbow projectiles are reused during combat playback rather than allocated per attack; combat outcomes remain immediate and deterministic in GameState.
@@ -433,11 +433,11 @@ Classes are starting stats and presentation only. Ranger arrows, Mage and Loreke
 | `barbarian` | Barbarian | 28 | 7 | 0 | 0 | Huge health and damage, with no defensive tricks. |
 | `lorekeeper` | Lorekeeper | 22 | 5 | 2 | 2 | A seasoned scholar balancing resilience, armour, and magic. |
 
-`src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, Merchant prices, pending level-ups, entities, or RNG state.
+`src/game/definitions/classes.ts` is the only source of those packages. Restarting a run with the same class restores that class’s original bases, level 1, 0 XP, 0 gold, and starting Evade. Selecting a different class starts a clean run: no leftover XP, gold, equipment-tier progress, pending level-ups, entities, or RNG state.
 
 **Choose Your Class** appears full-screen after **Play** and the measured boot preload, and again after Restart Run. It presents one class at a time with a live idle preview and supports arrow buttons, keyboard arrows, and horizontal swipes. Gameplay assets continue warming while the player browses. If the highlighted class is not ready when selected, its button temporarily reads `Preparing [class]…`. Until that class is ready and selected, the board has no legal highlights and `GameState` rejects movement.
 
-Merchant upgrades grant +1. Level-up Vitality / Sharpened / Armoured grant +1. Evasive grants +5. There are no hard run caps on those stats. Vitality still raises max HP only and does not heal current HP.
+Level-up Vitality / Sharpened / Armoured grant +1. Evasive grants +5. There are no hard run caps on those stats. Vitality still raises max HP only and does not heal current HP. Merchant weapon and shield tiers maintain separate cumulative equipment bonuses.
 
 ## Travelling Merchant
 
@@ -445,7 +445,7 @@ Landing on a Merchant tile pauses the run and opens a centred shop overlay. The 
 
 Each Merchant may be used once. After Leave, the Merchant is marked used and removed from the board. Movement then continues from that tile. Returning in normal forward play is impossible; leftover state still treats a used Merchant as empty.
 
-Opening the shop does not spend gold. Each visit offers healing potions (stocked by Merchant distance), the selected class’s special equipment, and four run-scoped stat upgrades. Upgrade purchases add exactly `+1` to that stat. Each upgrade has its own escalating price track: only that stat’s next price increases by 1 gold. Potion prices stay fixed. Prices for upgrades persist for the run, not for a single Merchant visit.
+Opening the shop does not spend gold. Each visit offers healing potions (stocked by Merchant distance) and the selected class’s next weapon tier. Knights also see their next shield tier. The Merchant does not sell direct Vitality, Sharpened, Armoured, or Evasive upgrades; those remain free level-up choices. Equipment-tier progress persists for the run, while potion prices stay fixed.
 
 ### Healing potions
 
@@ -459,28 +459,18 @@ Immediate-use shelf stock. Buying a potion spends gold and heals now — there i
 
 Potion buttons disable at full health or when gold is short. Each offer shows a spinning KayKit red potion GLB preview (same PreviewStage pattern as class equipment): small / medium / large / huge for Greater.
 
-### Run upgrades
+### Equipment upgrades
 
-| Offer | Effect | First price |
-|---|---|---:|
-| Vitality | +1 max HP; current HP is unchanged | 2 |
-| Sharpened | +1 attack | 3 |
-| Armoured | +1 defence | 3 |
-| Evasive | +1 Evade | 2 |
-| Leave | Close the shop and continue | 0 |
-
-Example Attack prices: `3 → 4 → 5 → …` with no upper limit. Example Evade prices: `2 → 3 → 4 → …` with no upper limit. Starting values come from the selected class, not from a single default package.
+Every class has a definition-owned weapon ladder whose free starter occupies tier 0. A successful purchase equips the next catalog model and raises the run's cumulative weapon bonus by one attack. Knights have a separate shield ladder that raises the cumulative shield bonus by one defence. Tier prices begin at 15 gold and follow the shared authored progression (`15 → 20 → 25 → 30 → …`); a completed ladder remains visible as fully upgraded.
 
 Rules:
 
 - Purchase buttons disable when the player cannot afford the offer.
 - Gold never becomes negative. Unaffordable offers cannot be purchased.
-- Vitality never heals current HP.
-- A successful purchase deducts gold and applies the effect immediately. The overlay stays open so other stats and potions can still be bought.
-- Successful Sharpened purchases also advance class-specific visual weapon tiers: Rogue dagger→axe, Ranger bow→crossbows, Mage staff→wand/spellbook, and Barbarian axe→two-handed swords. Successful Armoured purchases advance the Knight through the retained shield variants. These swaps do not add stats beyond the existing shop purchase.
-- Shop costs, eligibility, and stat changes live in `src/game/shop.ts` and `src/game/merchantPotions.ts`. Rendering only shows the resulting view.
+- A successful equipment purchase deducts gold, applies the new cumulative bonus, and equips the next model immediately. The overlay stays open so other available equipment and potions can still be bought.
+- Weapon and shield ladders, costs, eligibility, and bonuses live in `src/game/definitions/playerWeaponProgression.ts` and `src/game/shop.ts`; potion rules live in `src/game/merchantPotions.ts`. Rendering only shows the resulting view.
 
-Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, Merchant prices and purchase counts, merchant entities, and meshes.
+Death or Restart Run while the shop is open closes the overlay and clears shop state. Restart Run then returns to class selection; the next class choice starts an untouched fresh run: gold, class base stats, equipment tiers, merchant entities, and meshes.
 
 ## Monster encounters
 
@@ -609,7 +599,7 @@ The overlay shows:
 - final distance
 - Restart Run
 
-Restart Run clears the prior run and returns to **Choose Your Class** without reloading the page. Selecting any class then starts a clean run: class base stats, level 1, 0 XP, 0 gold, reset Merchant prices, no pending level-ups, and rebuilt generation / drop / evade streams. The game-over overlay sits above the level-up and Merchant overlays if they would otherwise be visible.
+Restart Run clears the prior run and returns to **Choose Your Class** without reloading the page. Selecting any class then starts a clean run: class base stats, level 1, 0 XP, 0 gold, reset equipment tiers, no pending level-ups, and rebuilt generation / drop / evade streams. The game-over overlay sits above the level-up and Merchant overlays if they would otherwise be visible.
 
 ## Intended next steps
 

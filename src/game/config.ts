@@ -1,5 +1,5 @@
 export const LANE_COUNT = 3;
-export const VISIBLE_ROWS = 8;
+export const VISIBLE_ROWS = 15;
 
 /** Floor rows kept behind the player so the near edge of the screen stays filled. */
 export const TRAILING_ROW_COUNT = 1;
