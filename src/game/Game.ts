@@ -491,6 +491,7 @@ export class Game {
       this.requirePlayerSnapshot().col,
       playback.target.row,
       playback.target.col,
+      this.lastTimeMs / 1000,
     );
   }
 

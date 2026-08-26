@@ -120,6 +120,7 @@ describe('enemy definitions', () => {
   it('spawns the demo Skeleton Minion from the enemy definition', () => {
     const state = createState({
       createRng: () => mulberry32(1),
+      createWeaponRng: () => () => 0,
       rollAvoidance: () => true,
     });
 
@@ -135,7 +136,9 @@ describe('enemy definitions', () => {
   });
 
   it('does not need a separate Skeleton Minion stats factory for default spawning', () => {
-    const state = createState();
+    const state = createState({
+      createWeaponRng: () => () => 0,
+    });
     const monster = state.getMonsterAt(DEMO_MONSTER_ROW, DEMO_MONSTER_COL);
     expect(monster?.stats).toEqual(ENEMY_DEFINITIONS.skeletonMinion.startingStats);
   });
@@ -1542,6 +1545,7 @@ describe('immutable encounter and player boundaries', () => {
           attacker: 'player',
           target: 'monster',
           damage: 6,
+          bonusDamage: 0,
           isSurpriseStrike: false,
           targetHealthAfter: 0,
         },

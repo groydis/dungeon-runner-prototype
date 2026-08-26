@@ -3,6 +3,7 @@ import {
   AnimationMixer,
   Box3,
   BoxGeometry,
+  CanvasTexture,
   CapsuleGeometry,
   CircleGeometry,
   Color,
@@ -24,6 +25,8 @@ import {
   Scene,
   SphereGeometry,
   SpotLight,
+  Sprite,
+  SpriteMaterial,
   Vector3,
   WebGLRenderer,
   type AnimationAction,
@@ -35,6 +38,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
   COLLECT_FX_SEC,
   COMBAT_HIT_SEC,
+  DAMAGE_NUMBER_FX_SEC,
   ENCOUNTER_FX_SEC,
   ENEMY_DEATH_FADE_SEC,
   LANE_COUNT,
@@ -217,6 +221,11 @@ interface CombatHitFx {
   playerBaseRotationY: number;
 }
 
+interface DamageNumberFx {
+  readonly sprites: Sprite[];
+  readonly startedAt: number;
+}
+
 interface CollectFx {
   kind: CollectibleKind;
   mesh: Mesh;
@@ -319,6 +328,7 @@ export class SceneManager {
   private readonly highlightCols = new Set<number>();
   private encounterFx: EncounterFxView[] = [];
   private combatHit: CombatHitFx | null = null;
+  private readonly damageNumbers: DamageNumberFx[] = [];
   private collectFx: CollectFx[] = [];
   private merchantLeaveFx: MerchantLeaveFx[] = [];
   private readonly merchantPresentations = new WeakMap<
@@ -798,6 +808,7 @@ export class SceneManager {
     this.updateMerchantMixers(dt);
     this.updateMerchantLeaveFx(elapsedSec);
     this.updateDungeonTorchFlicker(elapsedSec);
+    this.updateDamageNumbers(elapsedSec);
   }
 
   beginCollectFx(pickup: PickupResult): void {
@@ -1062,6 +1073,7 @@ export class SceneManager {
     playerCol: number,
     monsterRow: number,
     monsterCol: number,
+    elapsedSec: number,
   ): void {
     const mesh = this.findMonsterMesh(monsterRow, monsterCol);
     if (!mesh) {
@@ -1085,6 +1097,16 @@ export class SceneManager {
     if (entry.attacker === 'player') {
       this.launchPlayerProjectile(mesh);
     }
+
+    const targetMesh = entry.target === 'player' ? this.playerMesh : mesh;
+    const headPosition = new Box3().setFromObject(targetMesh).max.clone();
+    headPosition.y += 0.15;
+    this.spawnDamageNumber(
+      headPosition,
+      entry.damage - entry.bonusDamage,
+      entry.bonusDamage,
+      elapsedSec,
+    );
   }
 
   updateCombatHit(t: number): void {
@@ -1208,7 +1230,118 @@ export class SceneManager {
         projectile.removeFromParent();
       }
     }
+    for (const entry of this.damageNumbers) {
+      this.disposeDamageNumberFx(entry);
+    }
+    this.damageNumbers.length = 0;
     this.renderer.dispose();
+  }
+
+  private spawnDamageNumber(
+    headPosition: Vector3,
+    baseAmount: number,
+    bonusAmount: number,
+    elapsedSec: number,
+  ): void {
+    const jitterX = (Math.random() * 2 - 1) * 0.1;
+    const base = this.createDamageNumberSprite(`-${baseAmount}`, '#ff3b3b');
+    base.position.set(
+      headPosition.x + jitterX,
+      headPosition.y,
+      headPosition.z,
+    );
+    base.userData.baseY = base.position.y;
+    this.scene.add(base);
+
+    const sprites: Sprite[] = [base];
+    if (bonusAmount > 0) {
+      const bonus = this.createDamageNumberSprite(`-${bonusAmount}`, '#ffa53b');
+      bonus.position.set(
+        headPosition.x + jitterX + 0.15,
+        headPosition.y - 0.18,
+        headPosition.z,
+      );
+      bonus.userData.baseY = bonus.position.y;
+      this.scene.add(bonus);
+      sprites.push(bonus);
+    }
+
+    this.damageNumbers.push({
+      sprites,
+      startedAt: elapsedSec,
+    });
+  }
+
+  private createDamageNumberSprite(text: string, colorHex: string): Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Failed to create 2D canvas context for damage numbers');
+    }
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.font = 'bold 72px sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.lineWidth = 10;
+    context.strokeStyle = '#1a120c';
+    context.fillStyle = colorHex;
+    context.strokeText(text, canvas.width / 2, canvas.height / 2);
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new Sprite(material);
+    // First-pass world size — tune in-scene if text looks too large/small.
+    sprite.scale.set(0.6, 0.3, 1);
+    return sprite;
+  }
+
+  private updateDamageNumbers(elapsedSec: number): void {
+    const remaining: DamageNumberFx[] = [];
+    for (const entry of this.damageNumbers) {
+      const t = Math.min(
+        1,
+        (elapsedSec - entry.startedAt) / DAMAGE_NUMBER_FX_SEC,
+      );
+      const rise = t * (2 - t);
+      for (const sprite of entry.sprites) {
+        const baseY =
+          typeof sprite.userData.baseY === 'number'
+            ? sprite.userData.baseY
+            : sprite.position.y;
+        sprite.position.y = baseY + rise * 0.6;
+        const material = sprite.material;
+        if (material instanceof SpriteMaterial) {
+          material.opacity = 1 - t;
+        }
+      }
+      if (t >= 1) {
+        this.disposeDamageNumberFx(entry);
+        continue;
+      }
+      remaining.push(entry);
+    }
+    this.damageNumbers.length = 0;
+    this.damageNumbers.push(...remaining);
+  }
+
+  private disposeDamageNumberFx(entry: DamageNumberFx): void {
+    for (const sprite of entry.sprites) {
+      sprite.removeFromParent();
+      const material = sprite.material;
+      if (material instanceof SpriteMaterial) {
+        material.map?.dispose();
+        material.dispose();
+      }
+    }
   }
 
   private addLights(): void {

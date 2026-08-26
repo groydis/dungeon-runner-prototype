@@ -470,6 +470,8 @@ export class GameState {
       monster.stats,
       event.approach,
       { id: monster.id, name: monster.name },
+      undefined,
+      monster.weaponVariant?.attackBonus ?? 0,
     );
   }
 

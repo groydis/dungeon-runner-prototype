@@ -7,6 +7,8 @@ export interface CombatLogEntry {
   attacker: 'player' | 'monster';
   target: 'player' | 'monster';
   damage: number;
+  /** Portion of `damage` attributed to a weapon attack bonus (display-only). */
+  bonusDamage: number;
   isSurpriseStrike: boolean;
   targetHealthAfter: number;
 }
@@ -37,6 +39,8 @@ export function resolveAutomaticCombat(
   approach: CombatApproach,
   identity: { id: string; name: string },
   maxRounds: number = MAX_COMBAT_ROUNDS,
+  monsterAttackBonus: number = 0,
+  playerAttackBonus: number = 0,
 ): CombatResult {
   let playerHealth = Math.max(0, player.health);
   let monsterHealth = Math.max(0, monster.health);
@@ -51,6 +55,9 @@ export function resolveAutomaticCombat(
     const damage = surprise
       ? calculateSurpriseDamage(attack, defence)
       : calculateDamage(attack, defence);
+    const attackBonus =
+      attacker === 'player' ? playerAttackBonus : monsterAttackBonus;
+    const bonusDamage = Math.max(0, Math.min(attackBonus, damage - 1));
 
     if (attacker === 'player') {
       monsterHealth = Math.max(0, monsterHealth - damage);
@@ -58,6 +65,7 @@ export function resolveAutomaticCombat(
         attacker,
         target: 'monster',
         damage,
+        bonusDamage,
         isSurpriseStrike: surprise,
         targetHealthAfter: monsterHealth,
       });
@@ -69,6 +77,7 @@ export function resolveAutomaticCombat(
       attacker,
       target: 'player',
       damage,
+      bonusDamage,
       isSurpriseStrike: false,
       targetHealthAfter: playerHealth,
     });

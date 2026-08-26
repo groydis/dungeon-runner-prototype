@@ -28,17 +28,38 @@ describe('combat', () => {
     expect(result.log.map((entry) => ({
       attacker: entry.attacker,
       damage: entry.damage,
+      bonusDamage: entry.bonusDamage,
       targetHealthAfter: entry.targetHealthAfter,
       isSurpriseStrike: entry.isSurpriseStrike,
     }))).toEqual([
-      { attacker: 'player', damage: 4, targetHealthAfter: 11, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, targetHealthAfter: 16, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, targetHealthAfter: 7, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, targetHealthAfter: 12, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, targetHealthAfter: 3, isSurpriseStrike: false },
-      { attacker: 'monster', damage: 4, targetHealthAfter: 8, isSurpriseStrike: false },
-      { attacker: 'player', damage: 4, targetHealthAfter: 0, isSurpriseStrike: false },
+      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 11, isSurpriseStrike: false },
+      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 16, isSurpriseStrike: false },
+      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 7, isSurpriseStrike: false },
+      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 12, isSurpriseStrike: false },
+      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 3, isSurpriseStrike: false },
+      { attacker: 'monster', damage: 4, bonusDamage: 0, targetHealthAfter: 8, isSurpriseStrike: false },
+      { attacker: 'player', damage: 4, bonusDamage: 0, targetHealthAfter: 0, isSurpriseStrike: false },
     ]);
+  });
+
+  it('attributes clamped weapon bonus damage on monster strikes', () => {
+    const armed = {
+      ...skeletonMinion,
+      attack: skeletonMinion.attack + 3,
+    };
+    const result = resolveAutomaticCombat(
+      player,
+      armed,
+      'frontOn',
+      { id: 'armed-minion', name: 'Skeleton Minion' },
+      undefined,
+      3,
+    );
+    const monsterHit = result.log.find((entry) => entry.attacker === 'monster');
+    expect(monsterHit).toMatchObject({
+      damage: 7,
+      bonusDamage: 3,
+    });
   });
 
   it('gives Surprise Attack the existing 150% rounded opening hit', () => {
@@ -52,6 +73,7 @@ describe('combat', () => {
     expect(result.log[0]).toMatchObject({
       attacker: 'player',
       damage: 6,
+      bonusDamage: 0,
       isSurpriseStrike: true,
       targetHealthAfter: 9,
     });
@@ -103,6 +125,7 @@ describe('combat', () => {
     expect(result.log[1]).toMatchObject({
       attacker: 'monster',
       damage: 98,
+      bonusDamage: 0,
       targetHealthAfter: 0,
     });
   });
