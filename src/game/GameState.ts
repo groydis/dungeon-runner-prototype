@@ -8,6 +8,7 @@ import {
   type CollectibleSnapshot,
   type EncounterTarget,
   type MonsterSnapshot,
+  type MoveThreatPreview,
   type PickupResult,
   type PlayerSnapshot,
   type TileSnapshot,
@@ -16,6 +17,7 @@ import {
   encounterMonsterView,
   freezeReadModel,
 } from './BoardSnapshot';
+import { buildCharacterSheetView, type CharacterSheetView } from './characterSheet';
 import {
   LANE_COUNT,
   gameplayVisibleRowRange,
@@ -50,6 +52,7 @@ import {
   combatVictoryText,
   encounterStartText,
   findAlignedMonsterEncounters,
+  previewAlignedMonsterThreats,
 } from './encounters';
 import { type Monster } from './Monster';
 import {
@@ -114,6 +117,10 @@ export interface HudSnapshot {
   attack: number;
   defence: number;
   ward?: number;
+  might: number;
+  finesse: number;
+  vigor: number;
+  will: number;
   dex: number;
   /** Baseline side-pass chance against an unaware target (matches iOS HUD EVA). */
   evade: number;
@@ -124,6 +131,8 @@ export interface HudSnapshot {
   health: number;
   maxHealth: number;
   status: string;
+  /** Monotonic event identity so repeated text can still be shown once per event. */
+  statusVersion?: number;
 }
 
 export interface GameStateOptions {
@@ -150,6 +159,7 @@ export class GameState {
 
   private _distance = 0;
   private _status = '';
+  private _statusVersion = 0;
   private _runOver = false;
 
   private readonly forceAvoidance: AvoidanceRoll | undefined;
@@ -238,6 +248,10 @@ export class GameState {
         attack: 0,
         defence: 0,
         ward: 0,
+        might: 0,
+        finesse: 0,
+        vigor: 0,
+        will: 0,
         dex: 0,
         evade: 0,
         evadeBonus: 0,
@@ -247,6 +261,7 @@ export class GameState {
         health: 0,
         maxHealth: 0,
         status: this._status,
+        statusVersion: this._statusVersion,
       };
     }
     const stats = this._player.stats;
@@ -258,6 +273,10 @@ export class GameState {
       attack: stats.attack,
       defence: stats.defence,
       ward: stats.ward,
+      might: stats.might,
+      finesse: stats.finesse,
+      vigor: stats.vigor,
+      will: stats.will,
       dex: stats.dex,
       evade: calculateEvadeChance(stats.dex, 0, stats.evadeBonus),
       evadeBonus: stats.evadeBonus,
@@ -267,6 +286,7 @@ export class GameState {
       health: stats.health,
       maxHealth: stats.maxHealth,
       status: this._status,
+      statusVersion: this._statusVersion,
     };
   }
 
@@ -280,7 +300,12 @@ export class GameState {
       hasSelectedClass: true,
       playerRenderKey: this._player.renderKey,
       legalMoveCols: this.legalMoveCols(),
+      moveThreats: this.moveThreatPreviews(),
     });
+  }
+
+  getCharacterSheetView(): CharacterSheetView | null {
+    return this._player ? buildCharacterSheetView(this._player) : null;
   }
 
   getPlayerSnapshot(): PlayerSnapshot | null {
@@ -430,7 +455,7 @@ export class GameState {
   buyWeaponTier(): ShopPurchaseResult {
     const result = this.shopSession.buyWeaponTier(this._player);
     if (this._player && this.shopSession.isOpen) {
-      this._status = result.status;
+      this.setStatus(result.status);
     }
     return result;
   }
@@ -442,7 +467,7 @@ export class GameState {
   buyShieldTier(): ShopPurchaseResult {
     const result = this.shopSession.buyShieldTier(this._player);
     if (this._player && this.shopSession.isOpen) {
-      this._status = result.status;
+      this.setStatus(result.status);
     }
     return result;
   }
@@ -450,7 +475,7 @@ export class GameState {
   buyPotionOffer(offerId: PotionOfferId): PotionPurchaseResult {
     const result = this.shopSession.buyPotion(this._player, offerId);
     if (this._player && this.shopSession.isOpen) {
-      this._status = result.status;
+      this.setStatus(result.status);
     }
     return result;
   }
@@ -467,7 +492,7 @@ export class GameState {
       this.world.clearContent(row, col);
     }
     this.shopSession.close();
-    this._status = 'You leave the merchant behind.';
+    this.setStatus('You leave the merchant behind.');
     return { row, col };
   }
 
@@ -478,10 +503,10 @@ export class GameState {
 
   applyEvade(target: EncounterTarget): void {
     const monster = this.requireActiveMonster(target.id);
-    this._status = encounterStartText({
+    this.setStatus(encounterStartText({
       kind: 'evade',
       monster: encounterMonsterView(monster),
-    });
+    }));
     const gain = this.requirePlayer().addExperience(Math.floor(monster.experience / 2));
     this.pendingLevelUps.push(...gain.levelsReached);
     this.world.removeMonster(monster);
@@ -553,13 +578,14 @@ export class GameState {
           )
         : { gained: 0, levelsReached: [] as number[] };
       this.pendingLevelUps.push(...xpGain.levelsReached);
-      this._status = combatVictoryText(result.monsterName);
+      let status = combatVictoryText(result.monsterName);
       if (drop) {
-        this._status +=
+        status +=
           drop.kind === 'gold'
             ? ` It drops ${goldGrantAmount(drop.pickupId)} gold.`
             : ` It drops a ${pickupDefinition(drop.pickupId).name.toLowerCase()}.`;
       }
+      this.setStatus(status);
       return {
         drop,
         experienceGained: xpGain.gained,
@@ -570,7 +596,7 @@ export class GameState {
 
     player.applyHealth(0);
     this._runOver = true;
-    this._status = combatDefeatText(result.monsterName);
+    this.setStatus(combatDefeatText(result.monsterName));
     return {
       drop: null,
       experienceGained: 0,
@@ -637,7 +663,7 @@ export class GameState {
       };
     }
     this.pendingLevelUps.shift();
-    this._status = applied.status;
+    this.setStatus(applied.status);
     return {
       success: true,
       ...applied,
@@ -702,7 +728,7 @@ export class GameState {
 
   private clearRunSession(): void {
     this._distance = 0;
-    this._status = '';
+    this.setStatus('');
     this._runOver = false;
     this.shopSession.reset();
     this.pendingLevelUps.length = 0;
@@ -714,6 +740,11 @@ export class GameState {
     this.dropRng = this.createDropRng();
     this.evadeRng = this.createEvadeRng();
     this.weaponRng = this.createWeaponRng();
+  }
+
+  private setStatus(status: string): void {
+    this._status = status;
+    this._statusVersion += 1;
   }
 
   private legalMoveCols(): number[] {
@@ -728,6 +759,23 @@ export class GameState {
       }
     }
     return cols;
+  }
+
+  private moveThreatPreviews(): MoveThreatPreview[] {
+    if (!this._player) return [];
+    const nextRow = this._player.row + 1;
+    return this.legalMoveCols().map((col) => ({
+      col,
+      threats: previewAlignedMonsterThreats(
+        {
+          row: nextRow,
+          col,
+          dex: this._player!.stats.dex,
+          evadeBonus: this._player!.stats.evadeBonus,
+        },
+        this.world.livingMonsters(),
+      ),
+    })).filter((preview) => preview.threats.length > 0);
   }
 
   private commitMove(toCol: number): MoveResult {
@@ -778,7 +826,7 @@ export class GameState {
     if (collectible.kind === 'gold') {
       const gained = goldGrantAmount(collectible.pickupId);
       player.addGold(gained);
-      this._status = `You found ${gained} gold.`;
+      this.setStatus(`You found ${gained} gold.`);
       return {
         kind: 'gold',
         pickupId: collectible.pickupId,
@@ -793,10 +841,11 @@ export class GameState {
 
     const heal = potionHealAmount(collectible.pickupId);
     const restored = player.healPotion(heal);
-    this._status =
+    this.setStatus(
       restored > 0
         ? `You drink a ${pickupDefinition(collectible.pickupId).name.toLowerCase()} and restore ${restored} HP.`
-        : `You find a ${pickupDefinition(collectible.pickupId).name.toLowerCase()}, but are already at full health.`;
+        : `You find a ${pickupDefinition(collectible.pickupId).name.toLowerCase()}, but are already at full health.`,
+    );
 
     return {
       kind: 'potion',
@@ -839,7 +888,7 @@ export class GameState {
     );
     if (!enemy) {
       const message = alarmTrapMessage({ moved: false });
-      this._status = message;
+      this.setStatus(message);
       return {
         trapId: trap.id,
         kind: trap.kind,
@@ -853,7 +902,7 @@ export class GameState {
     );
     if (!dest) {
       const message = alarmTrapMessage({ enemyName: enemy.name, moved: false });
-      this._status = message;
+      this.setStatus(message);
       return {
         trapId: trap.id,
         kind: trap.kind,
@@ -867,7 +916,7 @@ export class GameState {
       moved: true,
       consumed,
     });
-    this._status = message;
+    this.setStatus(message);
     return {
       trapId: trap.id,
       kind: trap.kind,
@@ -903,7 +952,7 @@ export class GameState {
       this.evadeRng,
     );
     if (events.length > 0) {
-      this._status = events.map(encounterStartText).join(' ');
+      this.setStatus(events.map(encounterStartText).join(' '));
     }
     return events;
   }
@@ -927,7 +976,7 @@ export class GameState {
     }
 
     this.shopSession.open(merchant);
-    this._status = 'A travelling merchant beckons.';
+    this.setStatus('A travelling merchant beckons.');
     return true;
   }
 

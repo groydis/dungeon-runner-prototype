@@ -18,6 +18,7 @@ describe('level and XP presentation', () => {
       expect.objectContaining({ id: 'ranger-vigor', title: 'Trail Hardened', available: true }),
       expect.objectContaining({ id: 'piercing', title: 'Piercing', available: true }),
     ]);
+    expect(view.choices[0]!.impact).toContain('FIN 15 → 17');
   });
 
   it('changes the choice set at specialization and capstone levels', () => {

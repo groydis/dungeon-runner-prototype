@@ -14,6 +14,7 @@ export class LevelUpOverlayView {
   private readonly buttons: HTMLButtonElement[];
   private readonly titleEls: HTMLElement[];
   private readonly descriptionEls: HTMLElement[];
+  private readonly impactEls: HTMLElement[];
   private readonly confirmButton: HTMLButtonElement;
   private selectedChoiceId: LevelUpChoiceId | null = null;
   private confirmHandler: (() => void) | null = null;
@@ -27,6 +28,7 @@ export class LevelUpOverlayView {
     this.buttons = [0, 1, 2].map((index) => requireElement(root, `#level-up-choice-${index}`) as HTMLButtonElement);
     this.titleEls = [0, 1, 2].map((index) => requireElement(root, `#level-up-choice-${index}-title`));
     this.descriptionEls = [0, 1, 2].map((index) => requireElement(root, `#level-up-choice-${index}-desc`));
+    this.impactEls = [0, 1, 2].map((index) => requireElement(root, `#level-up-choice-${index}-impact`));
     this.confirmButton = requireElement(root, '#level-up-confirm') as HTMLButtonElement;
     this.buttons.forEach((button, index) => button.addEventListener('click', () => this.selectIndex(index)));
     this.overlayEl.addEventListener('pointerdown', this.blockPointer);
@@ -55,6 +57,7 @@ export class LevelUpOverlayView {
       button.setAttribute('aria-pressed', 'false');
       this.titleEls[index]!.textContent = choice?.title ?? '';
       this.descriptionEls[index]!.textContent = choice?.description ?? '';
+      this.impactEls[index]!.textContent = choice?.impact ?? '';
     });
     this.confirmButton.disabled = true;
   }

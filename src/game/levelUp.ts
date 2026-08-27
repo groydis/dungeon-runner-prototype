@@ -15,6 +15,7 @@ export interface LevelUpChoiceView {
   title: string;
   description: string;
   available: boolean;
+  impact: string;
 }
 export interface LevelUpView {
   level: number;
@@ -67,8 +68,42 @@ export function buildLevelUpView(level: number, experience: number, subject: Pla
   return {
     level, experience, nextLevelExperience: nextLevelExperience(experience), freePoints: 0,
     attributes: playerAttributeSnapshot(player),
-    choices: definitions.map((choice) => ({ ...choice, available: choiceAvailable(player, choice) })),
+    choices: definitions.map((choice) => {
+      const available = choiceAvailable(player, choice);
+      return { ...choice, available, impact: available ? previewChoiceImpact(player, level, choice.id) : 'Maximum reached.' };
+    }),
   };
+}
+
+function previewChoiceImpact(player: Player, level: number, choiceId: string): string {
+  const preview = player.cloneForPreview();
+  const before = progressionValues(player);
+  applyLevelUpChoice(preview, level, choiceId);
+  const after = progressionValues(preview);
+  const changes = before.flatMap((entry, index) => {
+    const next = after[index]!;
+    return entry.value === next.value ? [] : [`${entry.label} ${entry.value} → ${next.value}`];
+  });
+  return changes.join(' · ') || 'Build feature unlocked.';
+}
+
+function progressionValues(player: Player): { label: string; value: string }[] {
+  const a = player.attributes;
+  const s = player.stats;
+  return [
+    { label: 'MIG', value: String(a.might) }, { label: 'FIN', value: String(a.finesse) },
+    { label: 'VIG', value: String(a.vigor) }, { label: 'WIL', value: String(a.will) },
+    { label: 'HP', value: String(s.maxHealth) }, { label: 'Power', value: String(s.attack) },
+    { label: 'Armor', value: String(s.armor) }, { label: 'Ward', value: String(s.ward) },
+    { label: 'Crit', value: `${s.critChance}%` }, { label: 'Pierce', value: `${s.pierce}%` },
+    { label: 'EVA bonus', value: `${s.evadeBonus}%` },
+    { label: 'Opening damage', value: `${Math.round((s.openingDamageMultiplier - 1) * 100)}%` },
+    { label: 'Opening pierce', value: `${s.openingPierce}%` },
+    { label: 'First-hit reduction', value: `${s.firstIncomingReduction}%` },
+    { label: 'Bloodied damage', value: `${Math.round((s.bloodiedMultiplier - 1) * 100)}%` },
+    { label: 'Extra strike', value: `${s.extraStrikeChance}%` },
+    { label: 'Potion healing', value: `${player.potionHealingBonusPercent}%` },
+  ];
 }
 
 export function applyLevelUpChoice(player: Player, level: number, choiceId: LevelUpChoiceId): Omit<LevelUpResult, 'success' | 'pendingRemaining'> | null {

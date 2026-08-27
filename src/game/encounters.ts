@@ -1,6 +1,7 @@
 import {
   encounterMonsterView,
   type EncounterMonsterView,
+  type MoveThreat,
 } from './BoardSnapshot';
 import { type Monster } from './Monster';
 import { type Player } from './Player';
@@ -148,6 +149,31 @@ export function findAlignedMonsterEncounters(
   }
 
   return events;
+}
+
+/** Exact, RNG-free preview of encounters a candidate lane would create. */
+export function previewAlignedMonsterThreats(
+  player: Pick<Player, 'row' | 'col'> & { dex: number; evadeBonus?: number },
+  monsters: Iterable<Monster>,
+): MoveThreat[] {
+  const threats: MoveThreat[] = [];
+  for (const monster of monsters) {
+    if (monster.encounterResolved) continue;
+    const onTile = isOnMonsterTile(player, monster);
+    if (!onTile && !isMonsterAttackPosition(player, monster)) continue;
+    const sidePass = !onTile && monster.row === player.row && monster.col !== player.col;
+    threats.push({
+      monsterId: monster.id,
+      monsterName: monster.name,
+      channel: monster.stats.damageChannel,
+      elite: monster.elite,
+      approach: sidePass ? 'sidePass' : 'frontOn',
+      evadeChance: sidePass
+        ? calculateEvadeChance(player.dex, monster.stats.awareness, player.evadeBonus ?? 0)
+        : null,
+    });
+  }
+  return threats;
 }
 
 export function encounterStartText(event: EncounterEvent): string {

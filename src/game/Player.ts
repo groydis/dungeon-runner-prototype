@@ -74,6 +74,27 @@ export class Player {
   get shieldTierIndex(): number { return this._shieldTierIndex; }
   get weaponAttackBonus(): number { return this._weaponTierIndex; }
   get shieldDefenceBonus(): number { return this._shieldTierIndex; }
+  get potionHealingBonusPercent(): number { return Math.round((this.potionMultiplier - 1) * 100); }
+  get techniqueRanks(): ReadonlyMap<string, number> { return new Map(this._techniqueRanks); }
+
+  /** Isolated copy used to preview progression choices without mutating the run. */
+  cloneForPreview(): Player {
+    const clone = new Player(this._classId);
+    clone._row = this._row;
+    clone._col = this._col;
+    clone._gold = this._gold;
+    clone._experience = this._experience;
+    clone._attributes = { ...this._attributes };
+    clone._health = this._health;
+    clone._weaponTierIndex = this._weaponTierIndex;
+    clone._shieldTierIndex = this._shieldTierIndex;
+    clone._armorUpgrades = this._armorUpgrades;
+    clone._wardUpgrades = this._wardUpgrades;
+    for (const [id, rank] of this._techniqueRanks) clone._techniqueRanks.set(id, rank);
+    clone._specialization = this._specialization;
+    clone._capstone = this._capstone;
+    return clone;
+  }
 
   moveTo(row: number, col: number): void { this._row = row; this._col = col; }
   addGold(amount: number): number {
@@ -208,14 +229,14 @@ export class Player {
       attack: weapon.basePower + proficiencyBonus(this.level) + attributeModifier(scaling) + powerBonus + (mastery && spec === 'knightDuelist' ? 1 : 0),
       armor: clamp(armor, 0, ARMOR_CAP), ward: clamp(ward, 0, WARD_CAP),
       ...this._attributes, damageChannel: weapon.channel,
-      critChance: clamp(weapon.critChance + (d.feature === 'shadowStep' ? 5 : 0) + critSpec + critMastery, 0, CRIT_CAP),
+      critChance: clamp(weapon.critChance + (d.feature === 'shadowStep' ? 5 : 0) + this.techniqueRank('shadowcraft') * 5 + critSpec + critMastery, 0, CRIT_CAP),
       pierce: clamp(weapon.pierce + pierceSpec + pierceMastery + this.techniqueRank('piercing') * 5, 0, PIERCE_CAP),
       openingDamageMultiplier: 1 + (d.feature === 'arcaneSurge' ? 0.2 : 0) + this.techniqueRank('arcaneSurge') * 0.05 + (spec === 'evoker' ? 0.15 : 0) + (mastery && spec === 'evoker' ? 0.1 : 0),
       openingPierce: d.feature === 'piercingShot' ? 20 : 0,
       firstIncomingReduction: (d.feature === 'guardedOpening' ? 30 : 0) + this.techniqueRank('bulwark') * 5 + (spec === 'seer' ? 25 : 0) + (mastery && spec === 'seer' ? 15 : 0),
       bloodiedMultiplier: 1 + (d.feature === 'bloodied' ? 0.2 : 0) + this.techniqueRank('fury') * 0.05 + (spec === 'berserker' ? 0.1 : 0) + (mastery && spec === 'berserker' ? 0.1 : 0),
       extraStrikeChance: clamp((spec === 'channeler' ? 15 : 0) + (mastery && spec === 'channeler' ? 10 : 0), 0, EXTRA_STRIKE_CAP),
-      evadeBonus: clamp((d.feature === 'shadowStep' ? 15 : 0) + this.techniqueRank('shadowcraft') * 5 + evadeSpec + evadeMastery, 0, EVADE_BONUS_CAP),
+      evadeBonus: clamp((d.feature === 'shadowStep' ? 15 : 0) + evadeSpec + evadeMastery, 0, EVADE_BONUS_CAP),
     });
   }
 }

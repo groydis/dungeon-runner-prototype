@@ -4,6 +4,7 @@ import {
   avoidanceRollerFromSearch,
   encounterStartText,
   findAlignedMonsterEncounters,
+  previewAlignedMonsterThreats,
   rollEvadeContest,
 } from './encounters';
 import { createMonster } from './Monster';
@@ -82,6 +83,19 @@ describe('encounters', () => {
 });
 
 describe('FIN and awareness evade contest', () => {
+  it('previews guaranteed fights and actual enemy-specific evade chances', () => {
+    const front = createMonster('front-1', 'skeletonMage', 6, 1);
+    const side = createMonster('side-1', 'cryptGuard', 5, 2);
+    const threats = previewAlignedMonsterThreats(
+      { row: 5, col: 1, dex: 16, evadeBonus: 10 },
+      [front, side],
+    );
+    expect(threats).toEqual([
+      expect.objectContaining({ monsterId: 'front-1', channel: 'arcane', approach: 'frontOn', evadeChance: null }),
+      expect.objectContaining({ monsterId: 'side-1', channel: 'physical', approach: 'sidePass', evadeChance: 65 }),
+    ]);
+  });
+
   it('rolls once against the bounded percentage chance', () => {
     let calls = 0;
     expect(rollEvadeContest(10, 0, () => { calls += 1; return 0.49; })).toBe(true);

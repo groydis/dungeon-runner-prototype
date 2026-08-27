@@ -510,11 +510,12 @@
       <div id="hud" data-has-run="false">
         <header class="hud-top">
           <div id="hud-frame" class="hud-frame" hidden>
-            <div
+            <button
+              type="button"
+              id="hud-character"
               class="hud-portrait"
-              aria-hidden="false"
-              role="img"
-              aria-label="Character portrait"
+              aria-label="Open character sheet"
+              title="Open character sheet"
             >
               <div class="hud-portrait-disc">
                 <img
@@ -548,7 +549,7 @@
                 />
               </svg>
               <span id="level" class="hud-level">LV 1</span>
-            </div>
+            </button>
 
             <div class="hud-details">
               <div class="hud-summary">
@@ -597,62 +598,26 @@
                   <div id="health-fill" class="health-fill"></div>
                   <p id="health-text">20/20</p>
                 </div>
-                <div class="hud-stats" aria-label="Combat stats">
-                  <div class="hud-stat">
-                    <div class="hud-stat-value">
-                      <img
-                        class="hud-icon"
-                        src="/images/hud/attack.png"
-                        alt=""
-                        width="22"
-                        height="22"
-                        draggable="false"
-                      />
-                      <span id="attack">—</span>
-                    </div>
-                    <span class="hud-stat-label">ATK</span>
+                <div class="hud-attributes" aria-label="Core attributes">
+                  <div class="hud-attribute" aria-label="Might">
+                    <img src="/images/hud/might.png" alt="" width="20" height="20" draggable="false" />
+                    <span id="hud-might" class="hud-attribute-value">—</span>
+                    <span class="hud-attribute-label">MIG</span>
                   </div>
-                  <div class="hud-stat">
-                    <div class="hud-stat-value">
-                      <img
-                        class="hud-icon"
-                        src="/images/hud/defence.png"
-                        alt=""
-                        width="22"
-                        height="22"
-                        draggable="false"
-                      />
-                      <span id="defence">—</span>
-                    </div>
-                    <span class="hud-stat-label">ARM</span>
+                  <div class="hud-attribute" aria-label="Finesse">
+                    <img src="/images/hud/finesse.png" alt="" width="20" height="20" draggable="false" />
+                    <span id="hud-finesse" class="hud-attribute-value">—</span>
+                    <span class="hud-attribute-label">FIN</span>
                   </div>
-                  <div class="hud-stat">
-                    <div class="hud-stat-value">
-                      <img
-                        class="hud-icon"
-                        src="/images/hud/defence.png"
-                        alt=""
-                        width="22"
-                        height="22"
-                        draggable="false"
-                      />
-                      <span id="ward">—</span>
-                    </div>
-                    <span class="hud-stat-label">WRD</span>
+                  <div class="hud-attribute" aria-label="Vigor">
+                    <img src="/images/hud/vigor.png" alt="" width="20" height="20" draggable="false" />
+                    <span id="hud-vigor" class="hud-attribute-value">—</span>
+                    <span class="hud-attribute-label">VIG</span>
                   </div>
-                  <div class="hud-stat">
-                    <div class="hud-stat-value">
-                      <img
-                        class="hud-icon"
-                        src="/images/hud/evasion.png"
-                        alt=""
-                        width="22"
-                        height="22"
-                        draggable="false"
-                      />
-                      <span id="evade">—</span>
-                    </div>
-                    <span class="hud-stat-label">EVA</span>
+                  <div class="hud-attribute" aria-label="Will">
+                    <img src="/images/hud/will.png" alt="" width="20" height="20" draggable="false" />
+                    <span id="hud-will" class="hud-attribute-value">—</span>
+                    <span class="hud-attribute-label">WIL</span>
                   </div>
                 </div>
               </div>
@@ -660,8 +625,41 @@
           </div>
         </header>
         <div class="hud-bottom">
+          <div id="threat-preview" class="threat-preview" hidden aria-live="polite"></div>
           <p id="instruction">Tap a glowing tile to advance one row</p>
-          <p id="status" aria-live="polite"></p>
+          <p id="status" data-visible="false" aria-live="polite"></p>
+        </div>
+      </div>
+      <div
+        id="character-sheet"
+        class="character-sheet"
+        hidden
+        role="dialog"
+        aria-labelledby="character-sheet-title"
+        aria-modal="true"
+      >
+        <div class="character-sheet-card">
+          <header class="character-sheet-header">
+            <h2 id="character-sheet-title">Character</h2>
+            <button type="button" id="character-sheet-close" aria-label="Close character sheet">×</button>
+          </header>
+          <p id="character-sheet-feature" class="character-sheet-feature"></p>
+          <section aria-labelledby="character-sheet-equipment-title">
+            <h3 id="character-sheet-equipment-title">Equipment</h3>
+            <div id="character-sheet-equipment"></div>
+          </section>
+          <section aria-labelledby="character-sheet-attributes-title">
+            <h3 id="character-sheet-attributes-title">Attributes</h3>
+            <div id="character-sheet-attributes" class="character-sheet-grid character-sheet-attributes"></div>
+          </section>
+          <section aria-labelledby="character-sheet-combat-title">
+            <h3 id="character-sheet-combat-title">Combat</h3>
+            <div id="character-sheet-combat" class="character-sheet-grid character-sheet-combat"></div>
+          </section>
+          <section id="character-sheet-progression-section" aria-labelledby="character-sheet-progression-title">
+            <h3 id="character-sheet-progression-title">Progression</h3>
+            <div id="character-sheet-progression"></div>
+          </section>
         </div>
       </div>
       <div
@@ -856,9 +854,9 @@
           <p id="level-up-xp">XP: 3 / 7</p>
           <p id="level-up-points">Choose one way to grow.</p>
           <div id="level-up-choices" class="level-up-choices">
-            <button type="button" id="level-up-choice-0" class="level-up-choice"><strong id="level-up-choice-0-title"></strong><span id="level-up-choice-0-desc"></span></button>
-            <button type="button" id="level-up-choice-1" class="level-up-choice"><strong id="level-up-choice-1-title"></strong><span id="level-up-choice-1-desc"></span></button>
-            <button type="button" id="level-up-choice-2" class="level-up-choice"><strong id="level-up-choice-2-title"></strong><span id="level-up-choice-2-desc"></span></button>
+            <button type="button" id="level-up-choice-0" class="level-up-choice"><strong id="level-up-choice-0-title"></strong><span id="level-up-choice-0-desc"></span><small id="level-up-choice-0-impact" class="level-up-choice-impact"></small></button>
+            <button type="button" id="level-up-choice-1" class="level-up-choice"><strong id="level-up-choice-1-title"></strong><span id="level-up-choice-1-desc"></span><small id="level-up-choice-1-impact" class="level-up-choice-impact"></small></button>
+            <button type="button" id="level-up-choice-2" class="level-up-choice"><strong id="level-up-choice-2-title"></strong><span id="level-up-choice-2-desc"></span><small id="level-up-choice-2-impact" class="level-up-choice-impact"></small></button>
           </div>
           <button type="button" id="level-up-confirm" class="level-up-confirm" disabled>
             Confirm

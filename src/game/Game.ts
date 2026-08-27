@@ -50,6 +50,7 @@ import {
 import { SceneManager } from '../rendering/SceneManager';
 import { reportRunDeath } from '../telemetry/runDeath';
 import { ClassSelectionView } from '../ui/ClassSelectionView';
+import { CharacterSheetOverlayView } from '../ui/CharacterSheetOverlayView';
 import { GameOverView } from '../ui/GameOverView';
 import { HudView } from '../ui/HudView';
 import { LevelUpOverlayView } from '../ui/LevelUpOverlayView';
@@ -70,6 +71,7 @@ export class Game {
   private readonly input: InputController;
   private readonly canvas: HTMLCanvasElement;
   private readonly hud: HudView;
+  private readonly characterSheet: CharacterSheetOverlayView;
   private readonly gameOver: GameOverView;
   private readonly shop: ShopOverlayView;
   private readonly merchantShopPreview: MerchantShopPreview;
@@ -99,6 +101,7 @@ export class Game {
     );
 
     this.hud = new HudView();
+    this.characterSheet = new CharacterSheetOverlayView();
     this.gameOver = new GameOverView();
     this.shop = new ShopOverlayView();
     const merchantPreviewCanvas =
@@ -143,6 +146,8 @@ export class Game {
     });
     this.gameOver.onRestart(() => this.returnToClassSelection());
     this.hud.onReturn(() => this.returnToClassSelection());
+    this.hud.onCharacterSheet(() => this.openCharacterSheet());
+    this.characterSheet.onClose(() => this.closeCharacterSheet());
     for (const classId of PLAYER_CLASS_IDS) {
       this.classSelect.onSelect(classId, () => this.selectClass(classId));
     }
@@ -188,6 +193,7 @@ export class Game {
     this.classSelect.dispose();
     this.classSelectionPreview.dispose();
     this.hud.dispose();
+    this.characterSheet.dispose();
     this.input.dispose();
     this.scene.dispose();
   }
@@ -604,6 +610,7 @@ export class Game {
     this.equipmentShopPreview.setWeaponOffer(null);
     this.potionShopPreview.setActiveOffers([]);
     this.levelUp.hide();
+    this.characterSheet.hide();
     this.gameOver.hide();
     this.state.clearSelectedClass();
     this.scene.bindWindow(this.state.getBoardSnapshot(), { interactive: false });
@@ -711,15 +718,34 @@ export class Game {
     return player;
   }
 
+  private openCharacterSheet(): void {
+    if (this.phase.kind !== 'idle') return;
+    const view = this.state.getCharacterSheetView();
+    if (!view) return;
+    this.characterSheet.show(view);
+    this.setPhase({ kind: 'characterSheet' });
+  }
+
+  private closeCharacterSheet(): void {
+    if (this.phase.kind !== 'characterSheet') return;
+    this.characterSheet.hide();
+    this.setPhase({ kind: 'idle' });
+    this.updateHud();
+  }
+
   private setPhase(phase: PresentationPhase): void {
     this.phase = phase;
     const interactive = isBoardInteractive(phase);
     this.input.setEnabled(interactive);
-    this.scene.refreshHighlights(this.state.getBoardSnapshot(), { interactive });
+    const board = this.state.getBoardSnapshot();
+    this.scene.refreshHighlights(board, { interactive });
+    this.hud.updateThreats(interactive ? board.moveThreats : []);
   }
 
   private updateHud(): void {
     this.hud.update(this.state.getHudSnapshot());
+    const board = this.state.getBoardSnapshot();
+    this.hud.updateThreats(this.phase.kind === 'idle' ? board.moveThreats : []);
     const shopView = this.state.getShopView();
     this.scene.setPlayerWeaponTiers(
       this.state.weaponTierIndex,

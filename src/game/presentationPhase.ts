@@ -38,6 +38,7 @@ export type PresentationPhase =
   | { kind: 'drop'; elapsed: number }
   | { kind: 'shop' }
   | { kind: 'levelUp' }
+  | { kind: 'characterSheet' }
   | { kind: 'gameOver' };
 
 export type PresentationKind = PresentationPhase['kind'];
@@ -52,6 +53,7 @@ export const PRESENTATION_KINDS: readonly PresentationKind[] = [
   'drop',
   'shop',
   'levelUp',
+  'characterSheet',
   'gameOver',
 ];
 

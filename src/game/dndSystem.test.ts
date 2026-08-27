@@ -7,6 +7,7 @@ import { createEnemyStats, enemyExperienceAtRow, enemyRank } from './definitions
 import { calculateEvadeChance } from './encounters';
 import { applyLevelUpChoice, buildLevelUpView } from './levelUp';
 import { LEVEL_XP_THRESHOLDS } from './progression';
+import { buildCharacterSheetView } from './characterSheet';
 
 describe('D&D-style stat overhaul', () => {
   it('uses bounded D&D modifiers and 48-point class packages', () => {
@@ -60,6 +61,30 @@ describe('D&D-style stat overhaul', () => {
     expect(view.choices.map((choice) => choice.title)).toEqual(['Quick Hands', 'Hard to Kill', 'Shadowcraft']);
     expect(applyLevelUpChoice(rogue, 2, 'rogue-finesse')?.dexGained).toBe(2);
     expect(rogue.stats.finesse).toBe(18);
+  });
+
+  it('shows exact level-up effects and keeps the character sheet as the full build view', () => {
+    const ranger = new Player('ranger');
+    ranger.addExperience(3);
+    const finesse = buildLevelUpView(2, 3, ranger).choices[0]!;
+    expect(finesse.impact).toContain('FIN 15 → 17');
+    expect(finesse.impact).toContain('Power 8 → 9');
+
+    const sheet = buildCharacterSheetView(ranger);
+    expect(sheet).toMatchObject({
+      className: 'Ranger', level: 2, damageChannel: 'physical', shieldName: null,
+    });
+    expect(sheet.attributes.map((attribute) => attribute.label)).toEqual(['Might', 'Finesse', 'Vigor', 'Will']);
+    expect(sheet.combat).toContainEqual({ label: 'Evade vs Awareness 0', value: '60%' });
+  });
+
+  it('applies Shadowcraft to critical chance as authored', () => {
+    const rogue = new Player('rogue');
+    const critBefore = rogue.stats.critChance;
+    const evadeBefore = rogue.stats.evadeBonus;
+    applyLevelUpChoice(rogue, 2, 'shadowcraft');
+    expect(rogue.stats.critChance).toBe(critBefore + 5);
+    expect(rogue.stats.evadeBonus).toBe(evadeBefore);
   });
 
   it('extends the authored curve through level 10', () => {

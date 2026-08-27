@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildClassSelectionView,
   getPlayerClassDefinition,
   PLAYER_CLASS_IDS,
 } from '../game/definitions/classes';
-import { calculateEvadeChance } from '../game/encounters';
 import { GameOverView } from './GameOverView';
 import { HudView } from './HudView';
 import {
@@ -143,12 +142,11 @@ describe('class-selection overlay', () => {
   });
 });
 
-describe('HUD combat stats', () => {
-  it('renders iOS-style portrait vitals and combat stats', () => {
+describe('run HUD', () => {
+  it('renders portrait, progression, vitals, and run resources without persistent combat stats', () => {
     const root = createHudRoot();
     const hud = new HudView(root);
     const ranger = getPlayerClassDefinition('ranger');
-    const evade = calculateEvadeChance(ranger.startingStats.dex, 0, 0);
     hud.update({
       className: ranger.name,
       classId: 'ranger',
@@ -157,8 +155,12 @@ describe('HUD combat stats', () => {
       attack: ranger.startingStats.attack,
       defence: ranger.startingStats.defence,
       ward: ranger.startingStats.ward ?? 0,
+      might: ranger.startingStats.might,
+      finesse: ranger.startingStats.finesse,
+      vigor: ranger.startingStats.vigor,
+      will: ranger.startingStats.will,
       dex: ranger.startingStats.dex,
-      evade,
+      evade: 0,
       level: 1,
       experience: 0,
       nextLevelExperience: 3,
@@ -171,14 +173,19 @@ describe('HUD combat stats', () => {
     expect(root.text('distance')).toBe('0');
     expect(root.text('level')).toBe('LV 1');
     expect(root.text('gold')).toBe('0');
-    expect(root.text('attack')).toBe(String(ranger.startingStats.attack));
-    expect(root.text('defence')).toBe(String(ranger.startingStats.defence));
-    expect(root.text('ward')).toBe(String(ranger.startingStats.ward ?? 0));
-    expect(root.text('evade')).toBe(String(evade));
+    expect(root.text('hud-might')).toBe('10');
+    expect(root.text('hud-finesse')).toBe('15');
+    expect(root.text('hud-vigor')).toBe('12');
+    expect(root.text('hud-will')).toBe('11');
     expect(root.text('health-text')).toBe(
       `${ranger.startingStats.health}/${ranger.startingStats.maxHealth}`,
     );
     expect(root.element('hud-portrait-img').src).toBe('/images/classes/ranger.png');
+
+    let opened = false;
+    hud.onCharacterSheet(() => { opened = true; });
+    root.button('hud-character').click();
+    expect(opened).toBe(true);
     hud.dispose();
   });
 
@@ -193,6 +200,10 @@ describe('HUD combat stats', () => {
       attack: 0,
       defence: 0,
       ward: 0,
+      might: 0,
+      finesse: 0,
+      vigor: 0,
+      will: 0,
       dex: 0,
       evade: 0,
       level: 1,
@@ -204,6 +215,27 @@ describe('HUD combat stats', () => {
     });
     expect(root.element('hud-frame').hidden).toBe(true);
     hud.dispose();
+  });
+
+  it('treats narrative status as a temporary event notification', () => {
+    vi.useFakeTimers();
+    const root = createHudRoot();
+    const hud = new HudView(root);
+    const ranger = getPlayerClassDefinition('ranger');
+    hud.update({
+      className: ranger.name, classId: 'ranger', distance: 1, gold: 2,
+      attack: 8, defence: 1, ward: 0,
+      might: 10, finesse: 15, vigor: 12, will: 11, dex: 15, evade: 60,
+      level: 1, experience: 0, nextLevelExperience: 3,
+      health: 20, maxHealth: 20, status: 'You found 2 gold.',
+    });
+    expect(root.text('status')).toBe('You found 2 gold.');
+    expect(root.element('status').dataset.visible).toBe('true');
+    vi.advanceTimersByTime(3200);
+    expect(root.text('status')).toBe('');
+    expect(root.element('status').dataset.visible).toBe('false');
+    hud.dispose();
+    vi.useRealTimers();
   });
 });
 
@@ -262,13 +294,15 @@ function createHudRoot(): ParentNode & {
     'hud',
     'hud-frame',
     'hud-portrait-img',
+    'hud-character',
+    'hud-might',
+    'hud-finesse',
+    'hud-vigor',
+    'hud-will',
     'hud-xp-ring',
     'distance',
     'gold',
-    'attack',
-    'defence',
-    'ward',
-    'evade',
+    'threat-preview',
     'level',
     'status',
     'health-text',

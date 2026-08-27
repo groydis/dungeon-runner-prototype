@@ -1,6 +1,6 @@
 import { type AlarmConsumedKind } from './alarm';
 import { type CollectibleKind } from './Collectible';
-import { type CombatStats } from './Combatant';
+import { type CombatStats, type DamageChannel } from './Combatant';
 import {
   LANE_COUNT,
   ROW_POOL_SIZE,
@@ -50,7 +50,23 @@ export interface BoardSnapshot {
   readonly hasSelectedClass: boolean;
   readonly playerRenderKey: PlayerRenderKey | null;
   readonly legalMoveCols: readonly number[];
+  readonly moveThreats: readonly MoveThreatPreview[];
   readonly rows: readonly BoardRowSnapshot[];
+}
+
+export interface MoveThreat {
+  readonly monsterId: string;
+  readonly monsterName: string;
+  readonly channel: DamageChannel;
+  readonly elite: boolean;
+  readonly approach: 'frontOn' | 'sidePass';
+  /** Actual chance against this enemy. Null means the lane guarantees combat. */
+  readonly evadeChance: number | null;
+}
+
+export interface MoveThreatPreview {
+  readonly col: number;
+  readonly threats: readonly MoveThreat[];
 }
 
 export interface MonsterSnapshot {
@@ -136,6 +152,7 @@ export interface BoardViewInput {
   hasSelectedClass: boolean;
   playerRenderKey?: PlayerRenderKey | null;
   legalMoveCols: readonly number[];
+  moveThreats?: readonly MoveThreatPreview[];
   rowCount?: number;
 }
 
@@ -183,6 +200,10 @@ export function createBoardSnapshotFromTiles(
     hasSelectedClass: view.hasSelectedClass,
     playerRenderKey: view.hasSelectedClass ? (view.playerRenderKey ?? null) : null,
     legalMoveCols: [...view.legalMoveCols],
+    moveThreats: (view.moveThreats ?? []).map((preview) => ({
+      col: preview.col,
+      threats: preview.threats.map((threat) => ({ ...threat })),
+    })),
     rows,
   });
 }
