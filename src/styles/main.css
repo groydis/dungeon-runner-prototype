@@ -154,90 +154,252 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: calc(16px + var(--safe-top)) calc(18px + var(--safe-right))
-    calc(18px + var(--safe-bottom)) calc(18px + var(--safe-left));
+  padding: calc(4px + var(--safe-top)) calc(10px + var(--safe-right))
+    calc(18px + var(--safe-bottom)) calc(10px + var(--safe-left));
   color: var(--hud);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  text-shadow: none;
 }
 
 .hud-top {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  max-width: 12rem;
-}
-
-.hud-top .hud-title {
-  margin: 0;
-  font-size: clamp(1.25rem, 4.6vw, 1.85rem);
-  letter-spacing: 0.03em;
-  font-weight: 600;
-}
-
-.health {
+  align-items: center;
+  align-self: center;
   width: 100%;
-  max-width: 14rem;
+  max-width: min(100%, 26rem);
 }
 
-#health-text {
-  margin: 0 0 6px;
-  font-size: clamp(0.85rem, 3vw, 1rem);
+.hud-frame {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 116px;
+  padding: 5px 8px 0 2px;
+}
+
+.hud-frame[hidden] {
+  display: none;
+}
+
+.hud-portrait {
+  position: relative;
+  flex: 0 0 92px;
+  width: 92px;
+  height: 92px;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.65));
+}
+
+.hud-portrait-disc {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.12);
+  box-shadow:
+    inset 0 0 0 5px rgba(0, 0, 0, 0.92),
+    inset 0 0 0 7px rgba(255, 255, 255, 0.18);
+}
+
+.hud-portrait-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+  transform: scale(1.18);
+  pointer-events: none;
+}
+
+.hud-xp-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.hud-xp-ring {
+  fill: none;
+  stroke: rgb(237, 191, 107);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 240ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-xp-ring,
+  .health-fill {
+    transition: none;
+  }
+}
+
+.hud-level {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  z-index: 1;
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.9);
+  background: rgb(237, 191, 107);
+  color: #000;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-details {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.hud-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  color: rgb(199, 212, 222);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hud-coin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe29a 0%, #e0b04a 45%, #9a6f1e 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(60, 40, 10, 0.85);
+}
+
+.hud-return {
+  pointer-events: auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.hud-return img {
+  width: 17px;
+  height: 17px;
+  filter: invert(78%) sepia(42%) saturate(520%) hue-rotate(352deg) brightness(98%);
+}
+
+.hud-return:focus-visible {
+  outline: 2px solid rgb(237, 191, 107);
+  outline-offset: 2px;
+}
+
+.hud-vitals {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
 }
 
 .health-bar {
+  position: relative;
   width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
+  height: 25px;
+  border-radius: 3px;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(243, 239, 228, 0.18);
+  background: rgba(133, 143, 153, 0.78);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.95);
 }
 
 .health-fill {
   width: 100%;
   height: 100%;
-  border-radius: inherit;
-  background: #865e4c;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgb(245, 33, 26) 0%, rgb(194, 10, 13) 100%);
   transform-origin: left center;
+  transition: transform 200ms ease-out;
+}
+
+#health-text {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: #fff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
 
 .hud-stats {
   display: flex;
-  flex-direction: column;
   gap: 4px;
-  margin: 2px 0 0;
-}
-
-.hud-stats p {
   margin: 0;
-  color: var(--hud-accent);
-  font-size: clamp(0.95rem, 3.4vw, 1.15rem);
-  line-height: 1.25;
 }
 
-#level {
-  color: #c6b6a2;
+.hud-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
 }
 
-#experience {
-  color: #ad9679;
+.hud-stat-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-#gold {
-  color: #bea078;
+.hud-stat-value span {
+  min-width: 0;
 }
 
-#attack {
-  color: #b8a796;
+.hud-stat-label {
+  margin-top: 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
 }
 
-#defence {
-  color: #aeb4a4;
+.hud-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  filter: invert(78%) sepia(8%) saturate(320%) hue-rotate(169deg) brightness(95%);
+  pointer-events: none;
 }
 
-#evade {
-  color: #a99d90;
+.hud-summary .hud-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .hud-bottom {
@@ -250,6 +412,7 @@ body {
 #status {
   margin: 0;
   max-width: 28rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
 #instruction {
@@ -1312,8 +1475,12 @@ body {
 
 @media (min-width: 720px) {
   #hud {
-    padding: calc(24px + var(--safe-top)) calc(28px + var(--safe-right))
-      calc(28px + var(--safe-bottom)) calc(28px + var(--safe-left));
+    padding: calc(8px + var(--safe-top)) calc(16px + var(--safe-right))
+      calc(28px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  }
+
+  .hud-top {
+    max-width: 28rem;
   }
 }
 

@@ -142,6 +142,7 @@ export class Game {
       void preloadClassGameplayAssets(classId);
     });
     this.gameOver.onRestart(() => this.returnToClassSelection());
+    this.hud.onReturn(() => this.returnToClassSelection());
     for (const classId of PLAYER_CLASS_IDS) {
       this.classSelect.onSelect(classId, () => this.selectClass(classId));
     }
@@ -186,6 +187,7 @@ export class Game {
     this.levelUp.dispose();
     this.classSelect.dispose();
     this.classSelectionPreview.dispose();
+    this.hud.dispose();
     this.input.dispose();
     this.scene.dispose();
   }

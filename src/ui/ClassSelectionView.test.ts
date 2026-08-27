@@ -4,6 +4,7 @@ import {
   getPlayerClassDefinition,
   PLAYER_CLASS_IDS,
 } from '../game/definitions/classes';
+import { calculateEvadeChance } from '../game/encounters';
 import { GameOverView } from './GameOverView';
 import { HudView } from './HudView';
 import {
@@ -143,17 +144,21 @@ describe('class-selection overlay', () => {
 });
 
 describe('HUD combat stats', () => {
-  it('renders HP under the title and a side list of run stats', () => {
+  it('renders iOS-style portrait vitals and combat stats', () => {
     const root = createHudRoot();
     const hud = new HudView(root);
     const ranger = getPlayerClassDefinition('ranger');
+    const evade = calculateEvadeChance(ranger.startingStats.dex, 0, 0);
     hud.update({
       className: ranger.name,
+      classId: 'ranger',
       distance: 0,
       gold: 0,
       attack: ranger.startingStats.attack,
       defence: ranger.startingStats.defence,
+      ward: ranger.startingStats.ward ?? 0,
       dex: ranger.startingStats.dex,
+      evade,
       level: 1,
       experience: 0,
       nextLevelExperience: 3,
@@ -162,17 +167,43 @@ describe('HUD combat stats', () => {
       status: '',
     });
 
-    expect(root.text('distance')).toBe('Distance: 0');
-    expect(root.text('level')).toBe('LVL: 1');
-    expect(root.text('experience')).toBe('XP: 0 / 3');
-    expect(root.text('gold')).toBe('G: 0');
-    expect(root.text('attack')).toBe(`ATK: ${ranger.startingStats.attack}`);
-    expect(root.text('defence')).toBe(`ARM: ${ranger.startingStats.defence}`);
-    expect(root.text('evade')).toBe(`FIN: ${ranger.startingStats.dex}`);
-    expect(root.text('evade')).not.toContain('%');
+    expect(root.element('hud-frame').hidden).toBe(false);
+    expect(root.text('distance')).toBe('0');
+    expect(root.text('level')).toBe('LV 1');
+    expect(root.text('gold')).toBe('0');
+    expect(root.text('attack')).toBe(String(ranger.startingStats.attack));
+    expect(root.text('defence')).toBe(String(ranger.startingStats.defence));
+    expect(root.text('ward')).toBe(String(ranger.startingStats.ward ?? 0));
+    expect(root.text('evade')).toBe(String(evade));
     expect(root.text('health-text')).toBe(
-      `HP ${ranger.startingStats.health} / ${ranger.startingStats.maxHealth}`,
+      `${ranger.startingStats.health}/${ranger.startingStats.maxHealth}`,
     );
+    expect(root.element('hud-portrait-img').src).toBe('/images/classes/ranger.png');
+    hud.dispose();
+  });
+
+  it('hides the character frame before a class is chosen', () => {
+    const root = createHudRoot();
+    const hud = new HudView(root);
+    hud.update({
+      className: '',
+      classId: '',
+      distance: 0,
+      gold: 0,
+      attack: 0,
+      defence: 0,
+      ward: 0,
+      dex: 0,
+      evade: 0,
+      level: 1,
+      experience: 0,
+      nextLevelExperience: 3,
+      health: 0,
+      maxHealth: 0,
+      status: '',
+    });
+    expect(root.element('hud-frame').hidden).toBe(true);
+    hud.dispose();
   });
 });
 
@@ -228,22 +259,29 @@ function createHudRoot(): ParentNode & {
   element(id: string): FakeElement;
 } {
   const ids = [
+    'hud',
+    'hud-frame',
+    'hud-portrait-img',
+    'hud-xp-ring',
     'distance',
     'gold',
     'attack',
     'defence',
+    'ward',
     'evade',
     'level',
-    'experience',
     'status',
     'health-text',
     'health-bar',
     'health-fill',
+    'hud-return',
   ];
   const nodes = new Map<string, FakeElement>();
   for (const id of ids) {
     nodes.set(id, new FakeElement());
   }
+  nodes.get('hud-xp-ring')!.setAttribute('r', '43');
+  nodes.get('hud-frame')!.hidden = true;
   return fakeRoot(nodes);
 }
 
@@ -292,7 +330,18 @@ class FakeElement {
   hidden = true;
   disabled = false;
   textContent = '';
-  style: { transform: string } = { transform: '' };
+  src = '';
+  alt = '';
+  dataset: Record<string, string> = {};
+  style: {
+    transform: string;
+    strokeDasharray: string;
+    strokeDashoffset: string;
+  } = {
+    transform: '',
+    strokeDasharray: '',
+    strokeDashoffset: '',
+  };
   private readonly attrs = new Map<string, string>();
   private readonly listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
 
@@ -331,9 +380,15 @@ class FakeElement {
 
   setAttribute(name: string, value: string): void {
     this.attrs.set(name, value);
+    if (name === 'src') {
+      this.src = value;
+    }
   }
 
   getAttribute(name: string): string | null {
+    if (name === 'src' && this.src) {
+      return this.src;
+    }
     return this.attrs.get(name) ?? null;
   }
 }

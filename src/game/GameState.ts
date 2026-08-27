@@ -45,6 +45,7 @@ import {
 import {
   type AvoidanceRoll,
   type EncounterEvent,
+  calculateEvadeChance,
   combatDefeatText,
   combatVictoryText,
   encounterStartText,
@@ -106,12 +107,16 @@ export type {
 
 export interface HudSnapshot {
   className: string;
+  /** Class id for portrait assets; empty when no run is active. */
+  classId: string;
   distance: number;
   gold: number;
   attack: number;
   defence: number;
   ward?: number;
   dex: number;
+  /** Baseline side-pass chance against an unaware target (matches iOS HUD EVA). */
+  evade: number;
   evadeBonus?: number;
   level: number;
   experience: number;
@@ -227,12 +232,14 @@ export class GameState {
     if (!this._player) {
       return {
         className: '',
+        classId: '',
         distance: 0,
         gold: 0,
         attack: 0,
         defence: 0,
         ward: 0,
         dex: 0,
+        evade: 0,
         evadeBonus: 0,
         level: 1,
         experience: 0,
@@ -245,12 +252,14 @@ export class GameState {
     const stats = this._player.stats;
     return {
       className: this._player.className,
+      classId: this._player.classId,
       distance: this._distance,
       gold: this._player.gold,
       attack: stats.attack,
       defence: stats.defence,
       ward: stats.ward,
       dex: stats.dex,
+      evade: calculateEvadeChance(stats.dex, 0, stats.evadeBonus),
       evadeBonus: stats.evadeBonus,
       level: this._player.level,
       experience: this._player.experience,
